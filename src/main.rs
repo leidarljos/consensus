@@ -97,15 +97,26 @@ fn ballots_from_vissue(id: &str) -> Result<Vec<Ballot>> {
     if !which_ok("vissue") {
         bail!("vissue not on PATH; pass --ballots JSON");
     }
-    let out = Command::new("vissue")
+    // Prefer the ballot dump. Fall back to the DeGroot document, whose
+    // agents[].voted rows are the same ballots, so an older tracker that
+    // has consensus --json but not vote --json still feeds the model.
+    let vote = Command::new("vissue")
         .args(["vote", id, "--json"])
         .output()
         .context("run vissue vote --json")?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
+    if vote.status.success() {
+        let raw = String::from_utf8(vote.stdout).context("vissue vote --json stdout")?;
+        return ballots_from_json(&raw).map_err(|e| anyhow::anyhow!("{e}; pass --ballots JSON"));
+    }
+    let weighed = Command::new("vissue")
+        .args(["consensus", id, "--json"])
+        .output()
+        .context("run vissue consensus --json")?;
+    if !weighed.status.success() {
+        let err = String::from_utf8_lossy(&vote.stderr);
         bail!("vissue vote {id} --json failed; pass --ballots JSON\n{err}");
     }
-    let raw = String::from_utf8(out.stdout).context("vissue vote --json stdout")?;
+    let raw = String::from_utf8(weighed.stdout).context("vissue consensus --json stdout")?;
     ballots_from_json(&raw).map_err(|e| anyhow::anyhow!("{e}; pass --ballots JSON"))
 }
 

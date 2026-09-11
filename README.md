@@ -12,7 +12,9 @@ ljos-consensus settle --issue ID
 ljos-consensus settle --ballots '[...]' --trust '[{"from":"a","to":"b","weight":1.0}]' --seldon --out dir
 ```
 
-`--issue` reads `vissue vote ID --json` when that works. Otherwise pass `--ballots`.
+`--issue` reads `vissue vote ID --json` (an array of `{agent, choice}`).
+If that flag is missing it reads `vissue consensus ID --json` and takes
+`agents[].voted`. Otherwise pass `--ballots`.
 
 `--seldon` writes `config.toml` matching Seldon's DeGroot example, a network from the trust weights, and an opinions init from the ballots, then runs:
 
