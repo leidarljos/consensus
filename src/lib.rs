@@ -123,6 +123,52 @@ pub fn settle(
     }
 }
 
+/// Same DeGroot iteration as `Seldon::DeGrootModel`, via the C API.
+#[cfg(seldon_capi)]
+pub fn settle_seldon(
+    n_in: &[usize],
+    neigh: &[usize],
+    weight: &[f64],
+    opinions: &mut [f64],
+    tol: f64,
+    max_iter: i32,
+) -> Result<i32, i32> {
+    extern "C" {
+        fn seldon_degroot_settle(
+            n: usize,
+            n_in: *const usize,
+            neigh: *const usize,
+            weight: *const f64,
+            opinions: *mut f64,
+            tol: f64,
+            max_iter: i32,
+            rounds_out: *mut i32,
+        ) -> i32;
+    }
+    let n = opinions.len();
+    if n_in.len() != n {
+        return Err(-1);
+    }
+    let mut rounds = 0i32;
+    let rc = unsafe {
+        seldon_degroot_settle(
+            n,
+            n_in.as_ptr(),
+            neigh.as_ptr(),
+            weight.as_ptr(),
+            opinions.as_mut_ptr(),
+            tol,
+            max_iter,
+            &mut rounds,
+        )
+    };
+    if rc == 0 {
+        Ok(rounds)
+    } else {
+        Err(rc)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,5 +193,18 @@ mod tests {
         assert!(out.settled);
         assert!((out.shares[0] - 0.5).abs() < 1e-6);
         assert!((out.shares[1] - 0.5).abs() < 1e-6);
+    }
+
+    #[cfg(seldon_capi)]
+    #[test]
+    fn seldon_capi_two_agents_meet() {
+        let n_in = [2usize, 2];
+        let neigh = [1usize, 0, 0, 1];
+        let w = [0.2, 0.8, 0.2, 0.8];
+        let mut x = [0.0, 1.0];
+        let rounds = settle_seldon(&n_in, &neigh, &w, &mut x, 1e-6, 100).unwrap();
+        assert!(rounds > 0);
+        assert!((x[0] - 0.5).abs() < 1e-5);
+        assert!((x[1] - 0.5).abs() < 1e-5);
     }
 }

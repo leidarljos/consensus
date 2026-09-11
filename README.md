@@ -1,8 +1,12 @@
 # consensus
 
-DeGroot / Friedkin–Johnsen over a trust graph. **Seldon** ([seldon-code/seldon](https://github.com/seldon-code/seldon)) is the ODE engine. This crate does not link it (GPL). `ljos-consensus --seldon` execs `seldon` when it is on PATH.
+DeGroot / Friedkin–Johnsen over a trust graph. The iteration is the same
+one as `Seldon::DeGrootModel` in [seldon-code/seldon](https://github.com/seldon-code/seldon)
+(`seldon_degroot_settle`). Set `SELDON_SRC` to that tree so `build.rs`
+compiles `src/capi.cpp`. Without it, only the discrete FJ stepper runs.
 
-`vissue consensus` stays the tracker verb. This crate is the model. `ljos consensus` calls here first.
+`ljos-consensus --seldon` still execs the `seldon` binary when you want
+the full TOML/network path.
 
 ```
 ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
