@@ -1,0 +1,22 @@
+[package]
+name = "ljos-consensus"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/leidarljos/consensus"
+description = "DeGroot / Friedkin–Johnsen over a trust graph; Seldon ODE when seldon is on PATH"
+
+[[bin]]
+name = "ljos-consensus"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+approx = "0.5"
