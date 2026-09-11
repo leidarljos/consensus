@@ -89,7 +89,7 @@ pub fn settle(
                 nxt[i][k] = (1.0 - susceptibility) * x0[i][k] + susceptibility * heard;
             }
         }
-        let mut err = 0.0;
+        let mut err: f64 = 0.0;
         for i in 0..n {
             for k in 0..m {
                 err = err.max((nxt[i][k] - x[i][k]).abs());
