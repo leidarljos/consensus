@@ -29,12 +29,47 @@ any anchor, so it always settles, and what settles is a profile of
 persistent disagreement rather than one shared position. That is the
 setting to use when reviewers are not expected to abandon their reading.
 
+* Bounded confidence
+
+Hegselmann and Krause, and Deffuant and colleagues
+(doi:10.1142/S0219525900000078), let each voter listen only to voters
+whose opinion lies within a bound of its own. Two blocs further apart than
+the bound never meet: the model produces clusters where the trust graph
+alone would produce one position. =--epsilon= runs that step, and
+=--epsilon-of= gives each voter its own bound, which is the shape a persona
+with a narrow audience takes. Castellano, Fortunato and Loreto review the
+family (doi:10.1103/RevModPhys.81.591).
+
+* Reading a settle
+
+Two numbers come with every outcome. Polarization is how far the final
+opinions sit from their mean, summed over voters; disagreement is how far
+neighbours sit from each other, weighted by the trust between them, summed
+over edges. Musco, Musco and Tsourakakis (doi:10.1145/3178876.3186103)
+show the two move against each other under the Friedkin-Johnsen step, so a
+network can be tuned to lower their sum. A settle that reports high
+polarization and low disagreement has agreed within blocs that do not hear
+each other; the shares alone would not show it.
+
 * Where the rows come from
 
 In the tracker, rows are configuration. In the seat, rows are memory: the
 pack's =trust= atoms, dated and supersedable, moved by =ljos learn= when
 an outcome shows who was right. This crate takes rows from anywhere as
 JSON and does not care which.
+
+Outcomes are rare; most issues close without anyone saying which option
+was right. Dawid and Skene (doi:10.2307/2346806) estimate each voter's
+accuracy without a truth, from how often it agrees with the answer the
+other voters make likely, by expectation maximisation. =reliability= runs
+that over a project's settled issues, and =ljos calibrate= turns the
+accuracies into rows, so weights move from the tracker's own history. The
+row a voter gets is its accuracy, which is the weight a linear opinion pool
+gives a source believed that reliable (Genest and Zidek,
+doi:10.1214/ss/1177013825). Acemoglu, Como, Fagnani and Ozdaglar
+(doi:10.1287/moor.1120.0570) show what a stubborn voter does to such a
+pool: with an anchor near one it never moves and pulls the rest, which is
+why a persona's anchor is a parameter here and not a default.
 
 * Seldon
 
