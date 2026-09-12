@@ -67,8 +67,7 @@ pub fn influence_matrix(
 /// Parse a vote dump: an array of `{agent, choice}`, or an object with
 /// `ballots` / `votes`, or a vissue consensus row with `agents[].voted`.
 pub fn ballots_from_json(raw: &str) -> Result<Vec<Ballot>, String> {
-    let v: serde_json::Value =
-        serde_json::from_str(raw).map_err(|e| format!("vote json: {e}"))?;
+    let v: serde_json::Value = serde_json::from_str(raw).map_err(|e| format!("vote json: {e}"))?;
     let arr = if let Some(a) = v.as_array() {
         a.clone()
     } else if let Some(a) = v.get("ballots").and_then(|x| x.as_array()) {
@@ -102,12 +101,8 @@ pub fn ballots_from_json(raw: &str) -> Result<Vec<Ballot>, String> {
 
 /// Parse trust as `[{from,to,weight}]` or `[[from,to,weight], ...]`.
 pub fn trust_from_json(raw: &str) -> Result<Vec<(String, String, f64)>, String> {
-    let v: serde_json::Value =
-        serde_json::from_str(raw).map_err(|e| format!("trust json: {e}"))?;
-    let arr = v
-        .as_array()
-        .ok_or("trust json: expected an array")?
-        .clone();
+    let v: serde_json::Value = serde_json::from_str(raw).map_err(|e| format!("trust json: {e}"))?;
+    let arr = v.as_array().ok_or("trust json: expected an array")?.clone();
     let mut out = Vec::new();
     for item in arr {
         if let Some(row) = item.as_array() {
@@ -287,10 +282,7 @@ mod tests {
                 choice: "hold".into(),
             },
         ];
-        let trust = vec![
-            ("a".into(), "b".into(), 1.0),
-            ("b".into(), "a".into(), 1.0),
-        ];
+        let trust = vec![("a".into(), "b".into(), 1.0), ("b".into(), "a".into(), 1.0)];
         let out = settle(&ballots, &trust, 0.5, 1.0, 200, 1e-9);
         assert!(out.settled);
         assert_eq!(out.engine, "degroot-fj");
@@ -310,10 +302,7 @@ mod tests {
                 choice: "hold".into(),
             },
         ];
-        let trust = vec![
-            ("a".into(), "b".into(), 1.0),
-            ("b".into(), "a".into(), 1.0),
-        ];
+        let trust = vec![("a".into(), "b".into(), 1.0), ("b".into(), "a".into(), 1.0)];
         let out = settle(&ballots, &trust, 0.5, 0.0, 200, 1e-9);
         assert!(out.settled);
         assert_eq!(out.engine, "degroot-fj");
@@ -324,10 +313,9 @@ mod tests {
 
     #[test]
     fn ballots_from_vote_json_shapes() {
-        let a = ballots_from_json(
-            r#"[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]"#,
-        )
-        .unwrap();
+        let a =
+            ballots_from_json(r#"[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]"#)
+                .unwrap();
         assert_eq!(a.len(), 2);
         let b = ballots_from_json(r#"{"ballots":[{"agent":"a","choice":"ship"}]}"#).unwrap();
         assert_eq!(b[0].agent, "a");
