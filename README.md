@@ -18,6 +18,8 @@ ljos-consensus settle --ballots '[...]' --trust '[{"from":"a","to":"b","weight":
 ljos-consensus settle --issue ID --susceptibility-of '{"reviewer":0.3}'   # a persona anchored to its ballot
 ljos-consensus settle --issue ID --epsilon 0.5                            # bounded confidence: clusters, not one position
 ljos-consensus reliability --project demo                                 # Dawid-Skene accuracy per voter, no truth labels
+ljos-consensus surprising --issue ID --predictions '[{"agent":"a","expect":"ship"}]'   # the surprisingly popular answer
+ljos-consensus reputation --trust '[["a","b",0.8]]'                       # EigenTrust standing per voter
 ```
 
 Panels of parallel agents that debate and vote (self-consistency, multi-agent debate, mixture of agents, the commercial heavy modes) aggregate by count or by an aggregator model; the explanation page places this crate against them, with the literature. Every outcome carries `polarization` and `disagreement` (Musco, Musco and Tsourakakis, doi:10.1145/3178876.3186103). `reliability` is Dawid and Skene (doi:10.2307/2346806); `ljos calibrate` writes its accuracies back as trust rows.

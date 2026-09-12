@@ -86,6 +86,33 @@ who decides when the panel splits is one persona with an anchor of zero,
 not a special case. The settle also says how the panel split, in
 polarization and disagreement, where a count says only who won.
 
+* When the majority is wrong
+
+A settle over ballots cannot see a majority that is wrong, only a majority.
+Prelec, Seung and McCoy (doi:10.1038/nature21054) ask each voter one more
+thing: what share of the others will pick each option. A minority that
+knows better predicts the majority and votes against it, so the option
+whose actual share most exceeds its predicted share is the informed one;
+on questions where most people are confidently wrong, that rule recovers
+the truth where a majority and a confidence-weighted vote both fail. It is
+the second verb a panel runs when the question is hard: =surprising= reads
+the ballots and the forecasts and names the answer, or says that fewer than
+two voters forecast and it has nothing to add. Prediction polls of this
+shape score about as well as prediction markets on the same questions
+(Atanasov et al., doi:10.1287/mnsc.2015.2374).
+
+* Standing from the rows
+
+Pairwise rows say who listens to whom; they do not say who stands high in
+the group. EigenTrust (Kamvar, Schlosser and Garcia-Molina,
+doi:10.1145/775152.775242) reads that off the same rows: normalise them,
+take the principal eigenvector, and pull toward a uniform pre-trust so
+nobody falls to zero and the iteration settles. A voter weighed by voters
+who are themselves weighed stands high; a row from a voter nobody weighs
+counts for little. =reputation= prints the standing; the seat shows it
+beside a settle so a reader sees not only where the group landed but
+whose word carried it.
+
 * Where the rows come from
 
 In the tracker, rows are configuration. In the seat, rows are memory: the

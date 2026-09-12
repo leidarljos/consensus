@@ -2,6 +2,13 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
+## Unreleased
+
+- `surprising`: the surprisingly popular answer from ballots and each
+  voter's forecast of the others (Prelec, Seung and McCoy).
+- `reputation`: EigenTrust standing per voter from the trust rows (Kamvar,
+  Schlosser and Garcia-Molina).
+
 ## 0.3.0 (2026-09-12)
 
 - `settle --susceptibility-of JSON`: a per-voter anchor, so a persona holds

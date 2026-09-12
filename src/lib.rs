@@ -315,6 +315,194 @@ pub fn dawid_skene(
         .collect()
 }
 
+/// One voter's forecast of how the others will vote: a share per option.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Prediction {
+    pub agent: String,
+    pub expect: std::collections::BTreeMap<String, f64>,
+}
+
+/// What the surprisingly popular rule found.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Surprise {
+    pub options: Vec<String>,
+    /// The share of ballots each option got.
+    pub actual: Vec<f64>,
+    /// The mean share each option was predicted to get.
+    pub predicted: Vec<f64>,
+    /// Actual minus predicted; the answer is the largest.
+    pub surprise: Vec<f64>,
+    pub answer: Option<String>,
+    /// How many voters also predicted; below two the rule says nothing.
+    pub predictors: usize,
+}
+
+/// The surprisingly popular answer (Prelec, Seung and McCoy,
+/// doi:10.1038/nature21054): each voter casts a ballot and predicts the
+/// share the others will give each option; the answer is the option whose
+/// actual share most exceeds its predicted share. A minority that knows
+/// the majority is wrong predicts that majority and votes against it, and
+/// that is what the rule reads. With fewer than two predictors it returns
+/// the shares and no answer.
+#[must_use]
+pub fn surprisingly_popular(ballots: &[Ballot], predictions: &[Prediction]) -> Surprise {
+    let (agents, options) = roster(ballots);
+    let n = agents.len().max(1) as f64;
+    let actual: Vec<f64> = options
+        .iter()
+        .map(|o| ballots.iter().filter(|b| b.choice == *o).count() as f64 / n)
+        .collect();
+    let predictors: Vec<&Prediction> = predictions
+        .iter()
+        .filter(|p| !p.expect.is_empty())
+        .collect();
+    let predicted: Vec<f64> = options
+        .iter()
+        .map(|o| {
+            if predictors.is_empty() {
+                return 0.0;
+            }
+            predictors
+                .iter()
+                .map(|p| {
+                    let total: f64 = p.expect.values().sum();
+                    if total <= 0.0 {
+                        0.0
+                    } else {
+                        p.expect.get(o).copied().unwrap_or(0.0) / total
+                    }
+                })
+                .sum::<f64>()
+                / predictors.len() as f64
+        })
+        .collect();
+    let surprise: Vec<f64> = actual
+        .iter()
+        .zip(&predicted)
+        .map(|(a, p)| a - p)
+        .collect();
+    let answer = if predictors.len() >= 2 && !options.is_empty() {
+        let mut best = 0;
+        for i in 1..options.len() {
+            if surprise[i] > surprise[best] {
+                best = i;
+            }
+        }
+        Some(options[best].clone())
+    } else {
+        None
+    };
+    Surprise {
+        options,
+        actual,
+        predicted,
+        surprise,
+        answer,
+        predictors: predictors.len(),
+    }
+}
+
+/// Parse predictions as `[{"agent": a, "expect": {"option": share, ...}}]`
+/// or `[{"agent": a, "expect": "option"}]`, the latter a whole share on one
+/// option.
+pub fn predictions_from_json(raw: &str) -> Result<Vec<Prediction>, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(raw).map_err(|e| format!("predictions json: {e}"))?;
+    let arr = v.as_array().ok_or("predictions: expected an array")?;
+    arr.iter()
+        .map(|row| {
+            let agent = row
+                .get("agent")
+                .and_then(|a| a.as_str())
+                .ok_or("predictions: a row without agent")?
+                .to_string();
+            let expect = match row.get("expect") {
+                Some(serde_json::Value::String(o)) => {
+                    std::iter::once((o.clone(), 1.0)).collect()
+                }
+                Some(serde_json::Value::Object(map)) => map
+                    .iter()
+                    .filter_map(|(k, val)| val.as_f64().map(|f| (k.clone(), f)))
+                    .collect(),
+                _ => return Err("predictions: a row without expect".to_string()),
+            };
+            Ok(Prediction { agent, expect })
+        })
+        .collect()
+}
+
+/// A global standing per voter from the pairwise rows, by EigenTrust
+/// (Kamvar, Schlosser and Garcia-Molina, doi:10.1145/775152.775242): the
+/// rows are normalised into a column-stochastic matrix and the standing is
+/// its principal left eigenvector, pulled toward a uniform pre-trust by
+/// `alpha` so a voter nobody weighs keeps a floor and the iteration
+/// converges. A voter trusted by trusted voters stands high; a row from a
+/// voter nobody trusts counts for little. Returns the standing per agent,
+/// summing to one.
+#[must_use]
+pub fn eigentrust(
+    agents: &[String],
+    trust: &[(String, String, f64)],
+    alpha: f64,
+    max_iter: usize,
+    tol: f64,
+) -> Vec<f64> {
+    let n = agents.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let alpha = alpha.clamp(0.0, 1.0);
+    // c[i][j]: how much i trusts j, rows normalised; a voter with no rows
+    // trusts everyone equally, as the settle's default does.
+    let mut c = vec![vec![0.0; n]; n];
+    for (from, to, w) in trust {
+        let (Some(i), Some(j)) = (
+            agents.iter().position(|a| a == from),
+            agents.iter().position(|a| a == to),
+        ) else {
+            continue;
+        };
+        if i != j && *w > 0.0 {
+            c[i][j] += *w;
+        }
+    }
+    for row in c.iter_mut() {
+        let s: f64 = row.iter().sum();
+        if s > 0.0 {
+            for x in row.iter_mut() {
+                *x /= s;
+            }
+        } else {
+            for x in row.iter_mut() {
+                *x = 1.0 / n as f64;
+            }
+        }
+    }
+    let uniform = 1.0 / n as f64;
+    let mut t = vec![uniform; n];
+    for _ in 0..max_iter {
+        let mut next = vec![0.0; n];
+        for (i, row) in c.iter().enumerate() {
+            for (j, cij) in row.iter().enumerate() {
+                next[j] += cij * t[i];
+            }
+        }
+        for x in next.iter_mut() {
+            *x = (1.0 - alpha) * *x + alpha * uniform;
+        }
+        let diff: f64 = next
+            .iter()
+            .zip(&t)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0, f64::max);
+        t = next;
+        if diff < tol {
+            break;
+        }
+    }
+    t
+}
+
 /// Parse anchors as `{"agent": susceptibility, ...}`, each in `[0, 1]`.
 pub fn anchors_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>, String> {
     let v: serde_json::Value =
@@ -671,6 +859,52 @@ mod tests {
             "everyone met in the middle: {}",
             out.polarization
         );
+    }
+
+    /// A minority that knows the majority is wrong predicts that majority
+    /// and votes against it; the rule reads the minority.
+    #[test]
+    fn the_surprisingly_popular_answer_is_the_informed_minority() {
+        let ballots: Vec<Ballot> = [("a", "yes"), ("b", "yes"), ("c", "yes"), ("d", "no"), ("e", "no")]
+            .iter()
+            .map(|(agent, choice)| Ballot {
+                agent: agent.to_string(),
+                choice: choice.to_string(),
+            })
+            .collect();
+        // Everyone expects yes to win big; it wins by less than expected.
+        let predictions = predictions_from_json(
+            r#"[{"agent":"a","expect":{"yes":0.9,"no":0.1}},{"agent":"b","expect":"yes"},
+                {"agent":"d","expect":{"yes":0.8,"no":0.2}},{"agent":"e","expect":{"yes":0.7,"no":0.3}}]"#,
+        )
+        .unwrap();
+        let s = surprisingly_popular(&ballots, &predictions);
+        assert_eq!(s.options, ["no", "yes"]);
+        assert!((s.actual[1] - 0.6).abs() < 1e-9);
+        assert!(s.predicted[1] > 0.8, "{:?}", s.predicted);
+        assert_eq!(s.answer.as_deref(), Some("no"), "{s:?}");
+        assert_eq!(s.predictors, 4);
+        let none = surprisingly_popular(&ballots, &predictions[..1]);
+        assert_eq!(none.answer, None, "one predictor says nothing");
+    }
+
+    /// Standing flows to whom the trusted trust; a voter nobody weighs keeps
+    /// the pre-trust floor and the vector sums to one.
+    #[test]
+    fn eigentrust_stands_the_trusted_high() {
+        let agents: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
+        let rows = vec![
+            ("a".to_string(), "b".to_string(), 1.0),
+            ("c".to_string(), "b".to_string(), 1.0),
+            ("b".to_string(), "a".to_string(), 0.5),
+            ("b".to_string(), "c".to_string(), 0.5),
+        ];
+        let t = eigentrust(&agents, &rows, 0.15, 200, 1e-12);
+        assert!((t.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+        assert!(t[1] > t[0] && t[1] > t[2], "{t:?}");
+        assert!((t[0] - t[2]).abs() < 1e-9, "a and c are symmetric: {t:?}");
+        let flat = eigentrust(&agents, &[], 0.15, 200, 1e-12);
+        assert!(flat.iter().all(|x| (x - 1.0 / 3.0).abs() < 1e-9), "{flat:?}");
     }
 
     /// Two blocs outside each other's confidence bound stay two clusters;
