@@ -120,7 +120,11 @@ fn main() -> Result<()> {
         } => {
             let rows = trust_from_json(&trust).map_err(|e| anyhow::anyhow!(e))?;
             let names: Vec<String> = match agents {
-                Some(raw) => raw.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+                Some(raw) => raw
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect(),
                 None => {
                     let mut names: Vec<String> = rows
                         .iter()
@@ -134,7 +138,12 @@ fn main() -> Result<()> {
             let standing = ljos_consensus::eigentrust(&names, &rows, alpha, 500, 1e-12);
             let map: std::collections::BTreeMap<&str, f64> =
                 names.iter().map(String::as_str).zip(standing).collect();
-            println!("{}", serde_json::to_string_pretty(&serde_json::json!({"alpha": alpha, "standing": map}))?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    &serde_json::json!({"alpha": alpha, "standing": map})
+                )?
+            );
         }
         Cmd::Reliability {
             items,

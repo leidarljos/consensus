@@ -376,11 +376,7 @@ pub fn surprisingly_popular(ballots: &[Ballot], predictions: &[Prediction]) -> S
                 / predictors.len() as f64
         })
         .collect();
-    let surprise: Vec<f64> = actual
-        .iter()
-        .zip(&predicted)
-        .map(|(a, p)| a - p)
-        .collect();
+    let surprise: Vec<f64> = actual.iter().zip(&predicted).map(|(a, p)| a - p).collect();
     let answer = if predictors.len() >= 2 && !options.is_empty() {
         let mut best = 0;
         for i in 1..options.len() {
@@ -417,9 +413,7 @@ pub fn predictions_from_json(raw: &str) -> Result<Vec<Prediction>, String> {
                 .ok_or("predictions: a row without agent")?
                 .to_string();
             let expect = match row.get("expect") {
-                Some(serde_json::Value::String(o)) => {
-                    std::iter::once((o.clone(), 1.0)).collect()
-                }
+                Some(serde_json::Value::String(o)) => std::iter::once((o.clone(), 1.0)).collect(),
                 Some(serde_json::Value::Object(map)) => map
                     .iter()
                     .filter_map(|(k, val)| val.as_f64().map(|f| (k.clone(), f)))
@@ -865,13 +859,19 @@ mod tests {
     /// and votes against it; the rule reads the minority.
     #[test]
     fn the_surprisingly_popular_answer_is_the_informed_minority() {
-        let ballots: Vec<Ballot> = [("a", "yes"), ("b", "yes"), ("c", "yes"), ("d", "no"), ("e", "no")]
-            .iter()
-            .map(|(agent, choice)| Ballot {
-                agent: agent.to_string(),
-                choice: choice.to_string(),
-            })
-            .collect();
+        let ballots: Vec<Ballot> = [
+            ("a", "yes"),
+            ("b", "yes"),
+            ("c", "yes"),
+            ("d", "no"),
+            ("e", "no"),
+        ]
+        .iter()
+        .map(|(agent, choice)| Ballot {
+            agent: agent.to_string(),
+            choice: choice.to_string(),
+        })
+        .collect();
         // Everyone expects yes to win big; it wins by less than expected.
         let predictions = predictions_from_json(
             r#"[{"agent":"a","expect":{"yes":0.9,"no":0.1}},{"agent":"b","expect":"yes"},
@@ -904,7 +904,10 @@ mod tests {
         assert!(t[1] > t[0] && t[1] > t[2], "{t:?}");
         assert!((t[0] - t[2]).abs() < 1e-9, "a and c are symmetric: {t:?}");
         let flat = eigentrust(&agents, &[], 0.15, 200, 1e-12);
-        assert!(flat.iter().all(|x| (x - 1.0 / 3.0).abs() < 1e-9), "{flat:?}");
+        assert!(
+            flat.iter().all(|x| (x - 1.0 / 3.0).abs() < 1e-9),
+            "{flat:?}"
+        );
     }
 
     /// Two blocs outside each other's confidence bound stay two clusters;
