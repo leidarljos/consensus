@@ -3,10 +3,10 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use ljos_consensus::seldon::{parse_opinions_dir, write_seldon_inputs};
-use ljos_consensus::{Ballot, ballots_from_json, settle, trust_from_json};
+use ljos_consensus::{ballots_from_json, settle, trust_from_json, Ballot};
 
 #[derive(Parser)]
 #[command(
@@ -146,7 +146,6 @@ fn settle_seldon(
 }
 
 fn which_ok(bin: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|p| {
-        std::env::split_paths(&p).any(|d| d.join(bin).is_file())
-    })
+    std::env::var_os("PATH")
+        .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(bin).is_file()))
 }
