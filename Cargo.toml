@@ -23,3 +23,6 @@ cc = "1"
 
 [dev-dependencies]
 approx = "0.5"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(seldon_capi)'] }
