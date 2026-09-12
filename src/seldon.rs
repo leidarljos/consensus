@@ -83,6 +83,8 @@ pub fn parse_opinions_dir(
         rounds,
         settled,
         engine: "seldon".into(),
+        polarization: 0.0,
+        disagreement: 0.0,
     })
 }
 

@@ -43,6 +43,13 @@ enum Cmd {
         /// JSON object of agent to susceptibility: a persona's own anchor.
         #[arg(long)]
         susceptibility_of: Option<String>,
+        /// Bounded confidence instead of the trust graph: each voter averages
+        /// only voters within this L1 distance of its own opinion.
+        #[arg(long)]
+        epsilon: Option<f64>,
+        /// JSON object of agent to its own confidence bound.
+        #[arg(long)]
+        epsilon_of: Option<String>,
         #[arg(long, default_value_t = 200)]
         max_iter: usize,
         #[arg(long, default_value_t = 1e-9)]
@@ -61,6 +68,8 @@ fn main() -> Result<()> {
             self_weight,
             susceptibility,
             susceptibility_of,
+            epsilon,
+            epsilon_of,
             max_iter,
             tol,
         } => {
@@ -73,6 +82,15 @@ fn main() -> Result<()> {
                 Some(raw) => trust_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
                 None => Vec::new(),
             };
+            if let Some(eps) = epsilon {
+                let bounds = match epsilon_of.as_deref() {
+                    Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                    None => std::collections::BTreeMap::new(),
+                };
+                let outcome = ljos_consensus::settle_bounded(&ballots, eps, &bounds, max_iter, tol);
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
+                return Ok(());
+            }
             if use_seldon && !anchors.is_empty() {
                 bail!(
                     "seldon DeGroot has no per-agent anchor; omit --seldon or --susceptibility-of"
