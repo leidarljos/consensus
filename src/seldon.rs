@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use crate::{Ballot, Outcome, influence_matrix, roster};
+use crate::{influence_matrix, roster, Ballot, Outcome};
 
 /// Files written so `seldon config.toml -o dir -n network.txt -a opinions.txt` runs.
 #[derive(Debug, Clone)]
@@ -218,10 +218,13 @@ fn parse_opinions_file(path: &Path) -> Result<Vec<f64>, SeldonError> {
             path: path.to_path_buf(),
             msg: format!("line {}: no comma", lineno + 1),
         })?;
-        let idx = idx.trim().parse::<usize>().map_err(|e| SeldonError::Parse {
-            path: path.to_path_buf(),
-            msg: format!("line {}: idx: {e}", lineno + 1),
-        })?;
+        let idx = idx
+            .trim()
+            .parse::<usize>()
+            .map_err(|e| SeldonError::Parse {
+                path: path.to_path_buf(),
+                msg: format!("line {}: idx: {e}", lineno + 1),
+            })?;
         // SimpleAgent reads one double; extra columns are ignored, same as stod.
         let first = rest.split(',').next().unwrap_or(rest).trim();
         let val = first.parse::<f64>().map_err(|e| SeldonError::Parse {
@@ -309,10 +312,7 @@ mod tests {
                 choice: "hold".into(),
             },
         ];
-        let trust = vec![
-            ("a".into(), "b".into(), 1.0),
-            ("b".into(), "a".into(), 1.0),
-        ];
+        let trust = vec![("a".into(), "b".into(), 1.0), ("b".into(), "a".into(), 1.0)];
         (ballots, trust)
     }
 
