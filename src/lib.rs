@@ -18,6 +18,14 @@ pub struct Outcome {
     pub rounds: usize,
     pub settled: bool,
     pub engine: String,
+    /// Sum over agents of the squared distance from the mean final opinion
+    /// (Musco, Musco and Tsourakakis, doi:10.1145/3178876.3186103).
+    #[serde(default)]
+    pub polarization: f64,
+    /// Sum over trust edges of weight times the squared distance between the
+    /// two ends' final opinions, the same source's disagreement.
+    #[serde(default)]
+    pub disagreement: f64,
 }
 
 /// Distinct agents and choices, each sorted.
@@ -97,6 +105,188 @@ pub fn ballots_from_json(raw: &str) -> Result<Vec<Ballot>, String> {
         out.push(Ballot { agent, choice });
     }
     Ok(out)
+}
+
+/// Polarization and disagreement of a final opinion profile over the trust
+/// matrix (Musco, Musco and Tsourakakis, doi:10.1145/3178876.3186103).
+fn spread(x: &[Vec<f64>], w: &[Vec<f64>]) -> (f64, f64) {
+    let n = x.len();
+    if n == 0 {
+        return (0.0, 0.0);
+    }
+    let m = x[0].len();
+    let mean: Vec<f64> = (0..m).map(|k| x.iter().map(|r| r[k]).sum::<f64>() / n as f64).collect();
+    let polarization = x
+        .iter()
+        .map(|r| r.iter().zip(&mean).map(|(a, b)| (a - b) * (a - b)).sum::<f64>())
+        .sum();
+    let mut disagreement = 0.0;
+    for (i, row) in w.iter().enumerate() {
+        for (j, wij) in row.iter().enumerate() {
+            if i != j && *wij > 0.0 {
+                let d: f64 = x[i].iter().zip(&x[j]).map(|(a, b)| (a - b) * (a - b)).sum();
+                disagreement += wij * d;
+            }
+        }
+    }
+    (polarization, disagreement)
+}
+
+/// Bounded confidence (Hegselmann and Krause; Deffuant et al.,
+/// doi:10.1142/S0219525900000078): each agent averages only the agents whose
+/// opinion lies within `epsilon` of its own, in L1 over the options, with
+/// itself always included. Clusters form where the trust graph alone would
+/// converge; a persona with a narrow bound listens only to those near it.
+/// Returns the outcome with `engine` set to `bounded-confidence`.
+#[must_use]
+pub fn settle_bounded(
+    ballots: &[Ballot],
+    epsilon: f64,
+    epsilons: &std::collections::BTreeMap<String, f64>,
+    max_iter: usize,
+    tol: f64,
+) -> Outcome {
+    let (agents, options) = roster(ballots);
+    let (n, m) = (agents.len(), options.len());
+    if n == 0 || m == 0 {
+        return Outcome {
+            options,
+            shares: vec![],
+            rounds: 0,
+            settled: true,
+            engine: "empty".into(),
+            polarization: 0.0,
+            disagreement: 0.0,
+        };
+    }
+    let bound: Vec<f64> = agents
+        .iter()
+        .map(|a| epsilons.get(a).copied().unwrap_or(epsilon).max(0.0))
+        .collect();
+    let mut x = vec![vec![0.0; m]; n];
+    for b in ballots {
+        let i = agents.iter().position(|a| *a == b.agent).unwrap();
+        let k = options.iter().position(|o| *o == b.choice).unwrap();
+        x[i][k] = 1.0;
+    }
+    let mut rounds = 0;
+    let mut settled = false;
+    let mut last_w = vec![vec![0.0; n]; n];
+    for r in 1..=max_iter {
+        let mut nxt = vec![vec![0.0; m]; n];
+        let mut w = vec![vec![0.0; n]; n];
+        for i in 0..n {
+            let near: Vec<usize> = (0..n)
+                .filter(|&j| {
+                    j == i || x[i].iter().zip(&x[j]).map(|(a, b)| (a - b).abs()).sum::<f64>() <= bound[i]
+                })
+                .collect();
+            let share = 1.0 / near.len() as f64;
+            for &j in &near {
+                w[i][j] = share;
+                for k in 0..m {
+                    nxt[i][k] += share * x[j][k];
+                }
+            }
+        }
+        let err = nxt
+            .iter()
+            .zip(&x)
+            .flat_map(|(a, b)| a.iter().zip(b).map(|(p, q)| (p - q).abs()))
+            .fold(0.0_f64, f64::max);
+        x = nxt;
+        last_w = w;
+        rounds = r;
+        if err < tol {
+            settled = true;
+            break;
+        }
+    }
+    let mut shares = vec![0.0; m];
+    for row in &x {
+        for (share, cell) in shares.iter_mut().zip(row) {
+            *share += cell;
+        }
+    }
+    let total: f64 = shares.iter().sum();
+    if total > 0.0 {
+        for share in &mut shares {
+            *share /= total;
+        }
+    }
+    let (polarization, disagreement) = spread(&x, &last_w);
+    Outcome {
+        options,
+        shares,
+        rounds,
+        settled,
+        engine: "bounded-confidence".into(),
+        polarization,
+        disagreement,
+    }
+}
+
+/// Dawid and Skene's one-coin estimate of each voter's reliability from
+/// many settled items with no known truth (doi:10.2307/2346806): EM over the
+/// items' hidden answers and the voters' accuracies. `items` holds, per
+/// item, each voter's choice. Returns each voter's estimated accuracy in
+/// `(0, 1)`; a voter seen on no item is absent.
+#[must_use]
+pub fn dawid_skene(
+    items: &[Vec<(String, String)>],
+    rounds: usize,
+) -> std::collections::BTreeMap<String, f64> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let voters: BTreeSet<&str> = items
+        .iter()
+        .flat_map(|it| it.iter().map(|(v, _)| v.as_str()))
+        .collect();
+    let mut accuracy: BTreeMap<&str, f64> = voters.iter().map(|v| (*v, 0.7)).collect();
+    let item_options: Vec<BTreeSet<&str>> = items
+        .iter()
+        .map(|it| it.iter().map(|(_, c)| c.as_str()).collect())
+        .collect();
+    for _ in 0..rounds.max(1) {
+        // E step: the posterior over each item's answer given accuracies.
+        let posteriors: Vec<BTreeMap<&str, f64>> = items
+            .iter()
+            .zip(&item_options)
+            .map(|(it, opts)| {
+                let k = opts.len().max(2) as f64;
+                let mut post: BTreeMap<&str, f64> = opts
+                    .iter()
+                    .map(|o| {
+                        let mut log = 0.0f64;
+                        for (v, c) in it {
+                            let p = accuracy[v.as_str()].clamp(1e-3, 1.0 - 1e-3);
+                            log += if c == o { p.ln() } else { ((1.0 - p) / (k - 1.0)).ln() };
+                        }
+                        (*o, log)
+                    })
+                    .collect();
+                let top = post.values().cloned().fold(f64::NEG_INFINITY, f64::max);
+                let z: f64 = post.values().map(|l| (l - top).exp()).sum();
+                for v in post.values_mut() {
+                    *v = (*v - top).exp() / z;
+                }
+                post
+            })
+            .collect();
+        // M step: accuracy is the expected fraction of items a voter matched.
+        let mut hits: BTreeMap<&str, (f64, f64)> = BTreeMap::new();
+        for (it, post) in items.iter().zip(&posteriors) {
+            for (v, c) in it {
+                let e = hits.entry(v.as_str()).or_insert((0.0, 0.0));
+                e.0 += post.get(c.as_str()).copied().unwrap_or(0.0);
+                e.1 += 1.0;
+            }
+        }
+        for (v, (right, seen)) in hits {
+            // Laplace smoothing keeps a voter off the certainties.
+            accuracy.insert(v, (right + 1.0) / (seen + 2.0));
+        }
+    }
+    accuracy.into_iter().map(|(v, a)| (v.to_string(), a)).collect()
 }
 
 /// Parse anchors as `{"agent": susceptibility, ...}`, each in `[0, 1]`.
@@ -205,6 +395,8 @@ pub fn settle_anchored(
             rounds: 0,
             settled: true,
             engine: "empty".into(),
+            polarization: 0.0,
+            disagreement: 0.0,
         };
     }
     let w = influence_matrix(&agents, trust, self_weight);
@@ -261,14 +453,17 @@ pub fn settle_anchored(
             *share /= s;
         }
     }
+    let (polarization, disagreement) = spread(&x, &w);
     Outcome {
         options,
         shares,
         rounds,
         settled,
         engine: "degroot-fj".into(),
+        polarization,
+        disagreement,
     }
-}
+}}
 
 /// Same DeGroot iteration as `Seldon::DeGrootModel`, via the C API.
 #[cfg(seldon_capi)]
@@ -411,6 +606,47 @@ mod tests {
         assert!(anchors_from_json(r#"{"a": 0.2}"#).unwrap()["a"] - 0.2 < 1e-12);
         assert!(anchors_from_json(r#"{"a": 1.5}"#).is_err());
         assert!(anchors_from_json("[]").is_err());
+    }
+
+    /// Two blocs outside each other's confidence bound stay two clusters;
+    /// with a wide bound they meet in the middle.
+    #[test]
+    fn bounded_confidence_keeps_far_blocs_apart() {
+        let ballots: Vec<Ballot> = ["a", "b", "c", "d"]
+            .iter()
+            .enumerate()
+            .map(|(i, a)| Ballot {
+                agent: a.to_string(),
+                choice: if i < 2 { "ship".into() } else { "hold".into() },
+            })
+            .collect();
+        let narrow = settle_bounded(&ballots, 0.5, &std::collections::BTreeMap::new(), 100, 1e-9);
+        assert!((narrow.shares[0] - 0.5).abs() < 1e-9, "{:?}", narrow.shares);
+        assert!(narrow.polarization > 0.9, "{}", narrow.polarization);
+        let wide = settle_bounded(&ballots, 2.0, &std::collections::BTreeMap::new(), 100, 1e-9);
+        assert!(wide.polarization < 1e-6, "{}", wide.polarization);
+        assert!(wide.settled);
+    }
+
+    /// The voter that agrees with the hidden majority on every item is
+    /// estimated more reliable than the one that flips a coin.
+    #[test]
+    fn dawid_skene_finds_the_reliable_voter() {
+        let mut items = Vec::new();
+        for i in 0..40 {
+            let truth = if i % 2 == 0 { "x" } else { "y" };
+            let noisy = if i % 3 == 0 { if truth == "x" { "y" } else { "x" } } else { truth };
+            let coin = if i % 2 == 0 { "y" } else if i % 4 == 1 { "x" } else { "y" };
+            items.push(vec![
+                ("steady".to_string(), truth.to_string()),
+                ("noisy".to_string(), noisy.to_string()),
+                ("coin".to_string(), coin.to_string()),
+            ]);
+        }
+        let acc = dawid_skene(&items, 20);
+        assert!(acc["steady"] > acc["noisy"], "{acc:?}");
+        assert!(acc["noisy"] > acc["coin"], "{acc:?}");
+        assert!(acc["steady"] > 0.9, "{acc:?}");
     }
 
     #[test]
