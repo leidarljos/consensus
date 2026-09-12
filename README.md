@@ -14,6 +14,14 @@ ljos-consensus settle --ballots '[...]' --trust '[{"from":"a","to":"b","weight":
 
 `--issue` reads `vissue vote ID --json` when that works. Otherwise pass `--ballots`.
 
+```
+ljos-consensus settle --issue ID --susceptibility-of '{"reviewer":0.3}'   # a persona anchored to its ballot
+ljos-consensus settle --issue ID --epsilon 0.5                            # bounded confidence: clusters, not one position
+ljos-consensus reliability --project demo                                 # Dawid-Skene accuracy per voter, no truth labels
+```
+
+Every outcome carries `polarization` and `disagreement` (Musco, Musco and Tsourakakis, doi:10.1145/3178876.3186103). `reliability` is Dawid and Skene (doi:10.2307/2346806); `ljos calibrate` writes its accuracies back as trust rows.
+
 `--seldon` writes `config.toml` matching Seldon's DeGroot example, a network from the trust weights, and an opinions init from the ballots, then runs:
 
 ```

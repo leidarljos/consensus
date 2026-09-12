@@ -12,11 +12,27 @@
 | =--trust JSON= | =[[from, to, weight], ...]= or =[{from, to, weight}, ...]= |
 | =--self-weight W= | the diagonal when a row does not name it; default 0.5 |
 | =--susceptibility S= | 1 is DeGroot; below 1 anchors each voter to its ballot; default 1 |
+| =--susceptibility-of JSON= | =\{agent: s\}=, a persona's own anchor per voter |
+| =--epsilon E [--epsilon-of JSON]= | bounded confidence instead of the trust graph: each voter averages only voters within L1 distance =E= of its own opinion |
 | =--max-iter N=, =--tol T= | the fixed-point budget; defaults 200 and 1e-9 |
 | =--seldon [--out DIR]= | write Seldon inputs, run =seldon=, read the result |
 
-Output: =options= sorted, =shares= in that order, =rounds=, =settled=, and
-=engine= (=degroot-fj=, =seldon=, or =empty=).
+Output: =options= sorted, =shares= in that order, =rounds=, =settled=,
+=engine= (=degroot-fj=, =bounded-confidence=, =seldon=, or =empty=),
+=polarization= (the sum over voters of the squared distance from the mean
+final opinion) and =disagreement= (the sum over trust edges of weight times
+the squared distance between the two ends), both after Musco, Musco and
+Tsourakakis (doi:10.1145/3178876.3186103).
+
+=ljos-consensus reliability (--items JSON | --project P) [--rounds N]=
+
+Dawid and Skene's estimate (doi:10.2307/2346806) of each voter's accuracy
+from many items with no known truth: expectation maximisation over the
+items' hidden answers and the voters' accuracies, twenty rounds by default.
+=--items= is a JSON array of ballot arrays; =--project= reads every issue
+of a tracker project that holds two or more ballots. Output: =items=,
+=rounds=, and =accuracy= as an object of voter to a value in (0, 1),
+Laplace smoothed so no voter reaches a certainty.
 
 * The step
 
@@ -29,6 +45,7 @@ column sums of the fixed point, normalised.
 * Library
 
 =ljos_consensus::{Ballot, Outcome, roster, influence_matrix, settle,
-ballots_from_json, trust_from_json, settle_seldon}=. The Seldon module
+settle_anchored, settle_bounded, dawid_skene, ballots_from_json,
+trust_from_json, anchors_from_json, settle_seldon}=. The Seldon module
 writes and reads the engine's files and links nothing under a copyleft
 licence.

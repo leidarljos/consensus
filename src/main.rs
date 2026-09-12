@@ -55,10 +55,39 @@ enum Cmd {
         #[arg(long, default_value_t = 1e-9)]
         tol: f64,
     },
+    /// Estimate each voter's reliability from many settled items with no
+    /// known truth (Dawid and Skene, doi:10.2307/2346806): EM over the
+    /// items' hidden answers and the voters' accuracies. Prints a JSON
+    /// object of voter to accuracy, plus the number of items used.
+    Reliability {
+        /// JSON array of items, each an array of {agent, choice}.
+        #[arg(long)]
+        items: Option<String>,
+        /// Read every issue of this tracker project that has two or more
+        /// ballots, through `vissue list --json` and `vissue vote --json`.
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long, default_value_t = 20)]
+        rounds: usize,
+    },
 }
 
 fn main() -> Result<()> {
     match Cli::parse().cmd {
+        Cmd::Reliability {
+            items,
+            project,
+            rounds,
+        } => {
+            let items = load_items(items.as_deref(), project.as_deref())?;
+            let accuracy = ljos_consensus::dawid_skene(&items, rounds);
+            let out = serde_json::json!({
+                "items": items.len(),
+                "rounds": rounds,
+                "accuracy": accuracy,
+            });
+            println!("{}", serde_json::to_string_pretty(&out)?);
+        }
         Cmd::Settle {
             issue,
             ballots,
@@ -132,6 +161,50 @@ fn load_ballots(issue: Option<&str>, ballots: Option<&str>) -> Result<Vec<Ballot
         bail!("pass --ballots JSON or --issue");
     };
     ballots_from_vissue(id)
+}
+
+/// Items for the reliability estimate: `--items` JSON, else every issue of
+/// a tracker project holding two or more ballots.
+fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(String, String)>>> {
+    if let Some(raw) = items {
+        let rows: Vec<Vec<Ballot>> = serde_json::from_str(raw).context("items: not a JSON array of ballot arrays")?;
+        return Ok(rows
+            .into_iter()
+            .map(|item| item.into_iter().map(|b| (b.agent, b.choice)).collect())
+            .collect());
+    }
+    let Some(project) = project else {
+        bail!("pass --items JSON or --project");
+    };
+    if !which_ok("vissue") {
+        bail!("vissue not on PATH; pass --items JSON");
+    }
+    let out = Command::new("vissue")
+        .args(["list", "-p", project, "--json"])
+        .output()
+        .context("run vissue list --json")?;
+    if !out.status.success() {
+        bail!(
+            "vissue list -p {project} --json failed\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    let rows: Vec<serde_json::Value> =
+        serde_json::from_slice(&out.stdout).context("vissue list --json: not a JSON array")?;
+    let mut items = Vec::new();
+    for row in rows {
+        let Some(id) = row.get("id").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let ballots = ballots_from_vissue(id)?;
+        if ballots.len() >= 2 {
+            items.push(ballots.into_iter().map(|b| (b.agent, b.choice)).collect());
+        }
+    }
+    if items.is_empty() {
+        bail!("reliability: no issue in {project} holds two or more ballots");
+    }
+    Ok(items)
 }
 
 fn ballots_from_vissue(id: &str) -> Result<Vec<Ballot>> {
