@@ -115,10 +115,17 @@ fn spread(x: &[Vec<f64>], w: &[Vec<f64>]) -> (f64, f64) {
         return (0.0, 0.0);
     }
     let m = x[0].len();
-    let mean: Vec<f64> = (0..m).map(|k| x.iter().map(|r| r[k]).sum::<f64>() / n as f64).collect();
+    let mean: Vec<f64> = (0..m)
+        .map(|k| x.iter().map(|r| r[k]).sum::<f64>() / n as f64)
+        .collect();
     let polarization = x
         .iter()
-        .map(|r| r.iter().zip(&mean).map(|(a, b)| (a - b) * (a - b)).sum::<f64>())
+        .map(|r| {
+            r.iter()
+                .zip(&mean)
+                .map(|(a, b)| (a - b) * (a - b))
+                .sum::<f64>()
+        })
         .sum();
     let mut disagreement = 0.0;
     for (i, row) in w.iter().enumerate() {
@@ -178,7 +185,13 @@ pub fn settle_bounded(
         for i in 0..n {
             let near: Vec<usize> = (0..n)
                 .filter(|&j| {
-                    j == i || x[i].iter().zip(&x[j]).map(|(a, b): (&f64, &f64)| (a - b).abs()).sum::<f64>() <= bound[i]
+                    j == i
+                        || x[i]
+                            .iter()
+                            .zip(&x[j])
+                            .map(|(a, b): (&f64, &f64)| (a - b).abs())
+                            .sum::<f64>()
+                            <= bound[i]
                 })
                 .collect();
             let share = 1.0 / near.len() as f64;
@@ -259,7 +272,11 @@ pub fn dawid_skene(
                         let mut log = 0.0f64;
                         for (v, c) in it {
                             let p = accuracy[v.as_str()].clamp(1e-3, 1.0 - 1e-3);
-                            log += if c == o { p.ln() } else { ((1.0 - p) / (k - 1.0)).ln() };
+                            log += if c == o {
+                                p.ln()
+                            } else {
+                                ((1.0 - p) / (k - 1.0)).ln()
+                            };
                         }
                         (*o, log)
                     })
@@ -286,7 +303,10 @@ pub fn dawid_skene(
             accuracy.insert(v, (right + 1.0) / (seen + 2.0));
         }
     }
-    accuracy.into_iter().map(|(v, a)| (v.to_string(), a)).collect()
+    accuracy
+        .into_iter()
+        .map(|(v, a)| (v.to_string(), a))
+        .collect()
 }
 
 /// Parse anchors as `{"agent": susceptibility, ...}`, each in `[0, 1]`.
@@ -635,8 +655,22 @@ mod tests {
         let mut items = Vec::new();
         for i in 0..40 {
             let truth = if i % 2 == 0 { "x" } else { "y" };
-            let noisy = if i % 3 == 0 { if truth == "x" { "y" } else { "x" } } else { truth };
-            let coin = if i % 2 == 0 { "y" } else if i % 4 == 1 { "x" } else { "y" };
+            let noisy = if i % 3 == 0 {
+                if truth == "x" {
+                    "y"
+                } else {
+                    "x"
+                }
+            } else {
+                truth
+            };
+            let coin = if i % 2 == 0 {
+                "y"
+            } else if i % 4 == 1 {
+                "x"
+            } else {
+                "y"
+            };
             items.push(vec![
                 ("steady".to_string(), truth.to_string()),
                 ("noisy".to_string(), noisy.to_string()),
