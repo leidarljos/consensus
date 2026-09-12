@@ -48,17 +48,17 @@ pub fn influence_matrix(
         };
         w[i][j] += *wt;
     }
-    for i in 0..n {
-        if w[i][i] == 0.0 {
-            w[i][i] = self_weight;
+    for (i, row) in w.iter_mut().enumerate() {
+        if row[i] == 0.0 {
+            row[i] = self_weight;
         }
-        let s: f64 = w[i].iter().sum();
+        let s: f64 = row.iter().sum();
         if s > 0.0 {
-            for j in 0..n {
-                w[i][j] /= s;
+            for x in row.iter_mut() {
+                *x /= s;
             }
         } else {
-            w[i][i] = 1.0;
+            row[i] = 1.0;
         }
     }
     w
