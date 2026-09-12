@@ -38,6 +38,9 @@ enum Cmd {
         self_weight: f64,
         #[arg(long, default_value_t = 1.0)]
         susceptibility: f64,
+        /// JSON object of agent to susceptibility: a persona's own anchor.
+        #[arg(long)]
+        susceptibility_of: Option<String>,
         #[arg(long, default_value_t = 200)]
         max_iter: usize,
         #[arg(long, default_value_t = 1e-9)]
@@ -55,14 +58,24 @@ fn main() -> Result<()> {
             out,
             self_weight,
             susceptibility,
+            susceptibility_of,
             max_iter,
             tol,
         } => {
             let ballots = load_ballots(issue.as_deref(), ballots.as_deref())?;
+            let anchors = match susceptibility_of.as_deref() {
+                Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                None => std::collections::BTreeMap::new(),
+            };
             let trust = match trust.as_deref() {
                 Some(raw) => trust_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
                 None => Vec::new(),
             };
+            if use_seldon && !anchors.is_empty() {
+                bail!(
+                    "seldon DeGroot has no per-agent anchor; omit --seldon or --susceptibility-of"
+                );
+            }
             if use_seldon {
                 let outcome = settle_seldon(
                     &ballots,
@@ -75,7 +88,15 @@ fn main() -> Result<()> {
                 )?;
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             } else {
-                let outcome = settle(&ballots, &trust, self_weight, susceptibility, max_iter, tol);
+                let outcome = settle_anchored(
+                    &ballots,
+                    &trust,
+                    self_weight,
+                    susceptibility,
+                    &anchors,
+                    max_iter,
+                    tol,
+                );
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             }
         }
