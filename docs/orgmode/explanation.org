@@ -51,6 +51,41 @@ network can be tuned to lower their sum. A settle that reports high
 polarization and low disagreement has agreed within blocs that do not hear
 each other; the shares alone would not show it.
 
+* Panels of agents
+
+Running several model calls and settling their answers is now a product
+feature. Self-consistency samples one model many times and takes the
+majority (Wang et al., doi:10.48550/arXiv.2203.11171). Multi-agent debate
+lets several instances read each other's answers over rounds before a
+final vote (Du et al., doi:10.48550/arXiv.2305.14325; Liang et al.,
+doi:10.48550/arXiv.2305.19118), and a jury of debating evaluators grades
+text the same way (ChatEval, doi:10.48550/arXiv.2308.07201). Mixture of
+agents feeds the answers of several models to an aggregator model that
+writes the final one (Wang et al., doi:10.48550/arXiv.2406.04692). One
+model can also play several personas and have them collaborate (Wang et
+al., doi:10.48550/arXiv.2307.05300), and the roster can be chosen per task
+(Liu et al., doi:10.48550/arXiv.2310.02170). Debate between more
+persuasive models makes a weaker judge more truthful (Khan et al.,
+doi:10.48550/arXiv.2402.06782). A commercial system runs several agents in
+parallel on "multiple hypotheses at once" and settles before answering
+(the Grok 4 announcement, https://x.ai/news/grok-4); reports describe a
+captain agent deciding when the others do not agree, which this crate has
+not verified against a primary source.
+
+Two things these share, and this crate does differently. First, the
+aggregation is a count or an aggregator model's judgement, with every
+voice weighed the same; Chen et al. (doi:10.48550/arXiv.2403.02419) show
+that adding calls to such a count is not even monotone in accuracy, since
+it helps on easy items and hurts on hard ones. Here the aggregation is a
+weighted settle whose weights are memory: rows a person set, rows
+=learn= moved when an outcome refuted a voter, rows =calibrate= wrote
+from the voters' history, each scoped to the topics they were earned on.
+Second, the roles are prompts that vanish with the session; here a persona
+is an atom in the pack with an anchor the settle honours, and a captain
+who decides when the panel splits is one persona with an anchor of zero,
+not a special case. The settle also says how the panel split, in
+polarization and disagreement, where a count says only who won.
+
 * Where the rows come from
 
 In the tracker, rows are configuration. In the seat, rows are memory: the
