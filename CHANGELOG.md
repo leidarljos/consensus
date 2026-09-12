@@ -10,6 +10,8 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   and Krause; Deffuant et al.), clusters instead of one position.
 - Every outcome carries `polarization` and `disagreement` (Musco, Musco and
   Tsourakakis).
+- A voter with no trust row of its own listens to everyone equally, as the
+  tracker's default does; a settle with no rows was a count.
 - `reliability`: Dawid and Skene's estimate of each voter's accuracy from a
   project's settled issues, with no truth labels.
 

@@ -21,8 +21,9 @@ Rows are JSON, tuples or objects:
 $ ljos-consensus settle --issue proj-1a2b --trust '[["alice","carol",0.9],{"from":"carol","to":"alice","weight":0.5}]'
 #+end_src
 
-A row from a voter to itself sets its self weight; a voter with no row
-keeps =--self-weight= (0.5) and listens to nobody else.
+A row from a voter to itself sets its self weight; a voter with no row of
+its own listens to everyone equally, itself included, as the tracker's
+default does.
 
 * Anchor the voters
 
