@@ -6,7 +6,9 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use ljos_consensus::seldon::{parse_opinions_dir, write_seldon_inputs};
-use ljos_consensus::{ballots_from_json, settle, trust_from_json, Ballot};
+use ljos_consensus::{
+    anchors_from_json, ballots_from_json, settle_anchored, trust_from_json, Ballot,
+};
 
 #[derive(Parser)]
 #[command(
