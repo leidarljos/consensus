@@ -463,7 +463,7 @@ pub fn settle_anchored(
         polarization,
         disagreement,
     }
-}}
+}
 
 /// Same DeGroot iteration as `Seldon::DeGrootModel`, via the C API.
 #[cfg(seldon_capi)]
