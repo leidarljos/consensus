@@ -2,7 +2,7 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
-## Unreleased
+## 0.4.1 (2026-09-12)
 
 - A closed pipe ends a run quietly instead of a panic; the seat reads the
   first lines of a settle and moved on.
