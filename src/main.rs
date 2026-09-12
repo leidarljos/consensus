@@ -56,6 +56,33 @@ enum Cmd {
         #[arg(long, default_value_t = 1e-9)]
         tol: f64,
     },
+    /// The surprisingly popular answer (Prelec, Seung and McCoy,
+    /// doi:10.1038/nature21054): ballots plus each voter's forecast of the
+    /// others' shares; the answer is the option whose actual share most
+    /// exceeds its predicted share.
+    Surprising {
+        #[arg(long)]
+        issue: Option<String>,
+        /// JSON array of {agent, choice}
+        #[arg(long)]
+        ballots: Option<String>,
+        /// JSON array of {agent, expect}, expect an option or {option: share}
+        #[arg(long)]
+        predictions: String,
+    },
+    /// A global standing per voter from the trust rows, by EigenTrust
+    /// (Kamvar, Schlosser and Garcia-Molina, doi:10.1145/775152.775242).
+    Reputation {
+        /// JSON array of {from, to, weight}
+        #[arg(long)]
+        trust: String,
+        /// Agents to stand; the rows' names when absent.
+        #[arg(long)]
+        agents: Option<String>,
+        /// Pull toward a uniform pre-trust; the floor a voter nobody weighs keeps.
+        #[arg(long, default_value_t = 0.15)]
+        alpha: f64,
+    },
     /// Estimate each voter's reliability from many settled items with no
     /// known truth (Dawid and Skene, doi:10.2307/2346806): EM over the
     /// items' hidden answers and the voters' accuracies. Prints a JSON
@@ -75,6 +102,40 @@ enum Cmd {
 
 fn main() -> Result<()> {
     match Cli::parse().cmd {
+        Cmd::Surprising {
+            issue,
+            ballots,
+            predictions,
+        } => {
+            let ballots = load_ballots(issue.as_deref(), ballots.as_deref())?;
+            let predictions = ljos_consensus::predictions_from_json(&predictions)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            let out = ljos_consensus::surprisingly_popular(&ballots, &predictions);
+            println!("{}", serde_json::to_string_pretty(&out)?);
+        }
+        Cmd::Reputation {
+            trust,
+            agents,
+            alpha,
+        } => {
+            let rows = trust_from_json(&trust).map_err(|e| anyhow::anyhow!(e))?;
+            let names: Vec<String> = match agents {
+                Some(raw) => raw.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+                None => {
+                    let mut names: Vec<String> = rows
+                        .iter()
+                        .flat_map(|(f, t, _)| [f.clone(), t.clone()])
+                        .collect();
+                    names.sort();
+                    names.dedup();
+                    names
+                }
+            };
+            let standing = ljos_consensus::eigentrust(&names, &rows, alpha, 500, 1e-12);
+            let map: std::collections::BTreeMap<&str, f64> =
+                names.iter().map(String::as_str).zip(standing).collect();
+            println!("{}", serde_json::to_string_pretty(&serde_json::json!({"alpha": alpha, "standing": map}))?);
+        }
         Cmd::Reliability {
             items,
             project,
