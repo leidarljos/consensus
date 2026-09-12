@@ -1,0 +1,34 @@
+#+title: Reference
+#+options: toc:nil num:nil
+
+* Command line
+
+=ljos-consensus settle [FLAGS]=
+
+| Flag | Meaning |
+|---+---|
+| =--issue ID= | ballots from =vissue vote ID --json= |
+| =--ballots JSON= | =[{agent, choice}]=, or an object with =ballots=, =votes= or =agents[].voted= |
+| =--trust JSON= | =[[from, to, weight], ...]= or =[{from, to, weight}, ...]= |
+| =--self-weight W= | the diagonal when a row does not name it; default 0.5 |
+| =--susceptibility S= | 1 is DeGroot; below 1 anchors each voter to its ballot; default 1 |
+| =--max-iter N=, =--tol T= | the fixed-point budget; defaults 200 and 1e-9 |
+| =--seldon [--out DIR]= | write Seldon inputs, run =seldon=, read the result |
+
+Output: =options= sorted, =shares= in that order, =rounds=, =settled=, and
+=engine= (=degroot-fj=, =seldon=, or =empty=).
+
+* The step
+
+=x(t+1) = (1 - s) x(0) + s W x(t)=, with =W= the row-stochastic trust matrix
+and =s= the susceptibility. A voter's opinion is a distribution over the
+options, one-hot at the start. Missing self weight is filled with
+=--self-weight=; a voter with no row listens only to itself. Shares are the
+column sums of the fixed point, normalised.
+
+* Library
+
+=ljos_consensus::{Ballot, Outcome, roster, influence_matrix, settle,
+ballots_from_json, trust_from_json, settle_seldon}=. The Seldon module
+writes and reads the engine's files and links nothing under a copyleft
+licence.
