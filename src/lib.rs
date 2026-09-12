@@ -99,6 +99,26 @@ pub fn ballots_from_json(raw: &str) -> Result<Vec<Ballot>, String> {
     Ok(out)
 }
 
+/// Parse anchors as `{"agent": susceptibility, ...}`, each in `[0, 1]`.
+pub fn anchors_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(raw).map_err(|e| format!("anchors json: {e}"))?;
+    let obj = v
+        .as_object()
+        .ok_or("anchors json: expected an object of agent to susceptibility")?;
+    let mut out = std::collections::BTreeMap::new();
+    for (agent, value) in obj {
+        let s = value
+            .as_f64()
+            .ok_or_else(|| format!("anchors json: {agent} must be a number"))?;
+        if !(0.0..=1.0).contains(&s) {
+            return Err(format!("anchors json: {agent} must be in [0, 1], got {s}"));
+        }
+        out.insert(agent.clone(), s);
+    }
+    Ok(out)
+}
+
 /// Parse trust as `[{from,to,weight}]` or `[[from,to,weight], ...]`.
 pub fn trust_from_json(raw: &str) -> Result<Vec<(String, String, f64)>, String> {
     let v: serde_json::Value = serde_json::from_str(raw).map_err(|e| format!("trust json: {e}"))?;
@@ -151,6 +171,30 @@ pub fn settle(
     max_iter: usize,
     tol: f64,
 ) -> Outcome {
+    settle_anchored(
+        ballots,
+        trust,
+        self_weight,
+        susceptibility,
+        &std::collections::BTreeMap::new(),
+        max_iter,
+        tol,
+    )
+}
+
+/// [`settle`] with a susceptibility per named agent: how far each moves off
+/// its own ballot (Friedkin-Johnsen). An agent not named uses
+/// `susceptibility`. A persona is an agent with an anchor of its own.
+#[allow(clippy::too_many_arguments)]
+pub fn settle_anchored(
+    ballots: &[Ballot],
+    trust: &[(String, String, f64)],
+    self_weight: f64,
+    susceptibility: f64,
+    anchors: &std::collections::BTreeMap<String, f64>,
+    max_iter: usize,
+    tol: f64,
+) -> Outcome {
     let (agents, options) = roster(ballots);
     let n = agents.len();
     let m = options.len();
@@ -164,6 +208,16 @@ pub fn settle(
         };
     }
     let w = influence_matrix(&agents, trust, self_weight);
+    let pull: Vec<f64> = agents
+        .iter()
+        .map(|a| {
+            anchors
+                .get(a)
+                .copied()
+                .unwrap_or(susceptibility)
+                .clamp(0.0, 1.0)
+        })
+        .collect();
     // x[agent][option]
     let mut x = vec![vec![0.0; m]; n];
     let mut x0 = vec![vec![0.0; m]; n];
@@ -177,10 +231,10 @@ pub fn settle(
     let mut settled = false;
     for r in 1..=max_iter {
         let mut nxt = vec![vec![0.0; m]; n];
-        for ((row, w_i), x0_i) in nxt.iter_mut().zip(&w).zip(&x0) {
+        for (((row, w_i), x0_i), s_i) in nxt.iter_mut().zip(&w).zip(&x0).zip(&pull) {
             for (k, cell) in row.iter_mut().enumerate() {
                 let heard: f64 = w_i.iter().zip(&x).map(|(wij, x_j)| wij * x_j[k]).sum();
-                *cell = (1.0 - susceptibility) * x0_i[k] + susceptibility * heard;
+                *cell = (1.0 - s_i) * x0_i[k] + s_i * heard;
             }
         }
         let err = nxt
@@ -317,6 +371,46 @@ mod tests {
         assert_eq!(b[0].agent, "a");
         let c = ballots_from_json(r#"{"agents":[{"agent":"a","voted":"ship"}]}"#).unwrap();
         assert_eq!(c[0].choice, "ship");
+    }
+
+    /// The anchored voter keeps more of its ballot than the movable one under
+    /// the same rows.
+    #[test]
+    fn an_anchor_holds_a_voter_to_its_ballot() {
+        let ballots = vec![
+            Ballot {
+                agent: "a".into(),
+                choice: "ship".into(),
+            },
+            Ballot {
+                agent: "b".into(),
+                choice: "hold".into(),
+            },
+            Ballot {
+                agent: "c".into(),
+                choice: "hold".into(),
+            },
+        ];
+        let trust = vec![
+            ("a".into(), "b".into(), 1.0),
+            ("a".into(), "c".into(), 1.0),
+            ("b".into(), "a".into(), 1.0),
+            ("c".into(), "a".into(), 1.0),
+        ];
+        let loose = settle(&ballots, &trust, 0.5, 1.0, 200, 1e-9);
+        let mut anchors = std::collections::BTreeMap::new();
+        anchors.insert("a".to_string(), 0.1);
+        let firm = settle_anchored(&ballots, &trust, 0.5, 1.0, &anchors, 200, 1e-9);
+        let ship = |o: &Outcome| o.shares[o.options.iter().position(|x| x == "ship").unwrap()];
+        assert!(
+            ship(&firm) > ship(&loose),
+            "{:?} vs {:?}",
+            firm.shares,
+            loose.shares
+        );
+        assert!(anchors_from_json(r#"{"a": 0.2}"#).unwrap()["a"] - 0.2 < 1e-12);
+        assert!(anchors_from_json(r#"{"a": 1.5}"#).is_err());
+        assert!(anchors_from_json("[]").is_err());
     }
 
     #[test]
