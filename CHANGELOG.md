@@ -2,7 +2,7 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
-## Unreleased
+## 0.4.0 (2026-09-12)
 
 - `surprising`: the surprisingly popular answer from ballots and each
   voter's forecast of the others (Prelec, Seung and McCoy).
