@@ -167,7 +167,8 @@ fn load_ballots(issue: Option<&str>, ballots: Option<&str>) -> Result<Vec<Ballot
 /// a tracker project holding two or more ballots.
 fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(String, String)>>> {
     if let Some(raw) = items {
-        let rows: Vec<Vec<Ballot>> = serde_json::from_str(raw).context("items: not a JSON array of ballot arrays")?;
+        let rows: Vec<Vec<Ballot>> =
+            serde_json::from_str(raw).context("items: not a JSON array of ballot arrays")?;
         return Ok(rows
             .into_iter()
             .map(|item| item.into_iter().map(|b| (b.agent, b.choice)).collect())
