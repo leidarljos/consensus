@@ -45,6 +45,7 @@ $ ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","
    :hidden:
 
    getting-started
+   howto
    reference
    explanation
 #+end_export

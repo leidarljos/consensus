@@ -44,6 +44,7 @@ html_theme_options = {
     "github_url": "https://github.com/leidarljos/consensus",
     "nav_links": [
         {"title": "Get started", "url": "getting-started"},
+        {"title": "How-to", "url": "howto"},
         {"title": "Reference", "url": "reference"},
         {"title": "Explanation", "url": "explanation"},
     ],
