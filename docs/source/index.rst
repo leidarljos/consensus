@@ -45,5 +45,6 @@ Install
    :hidden:
 
    getting-started
+   howto
    reference
    explanation
