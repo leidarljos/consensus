@@ -2,7 +2,7 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
-## Unreleased
+## 0.3.0 (2026-09-12)
 
 - `settle --susceptibility-of JSON`: a per-voter anchor, so a persona holds
   its ballot as much as it is told to.
