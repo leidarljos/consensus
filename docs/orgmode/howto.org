@@ -10,8 +10,8 @@ $ ljos consensus proj-1a2b
 #+end_src
 
 It reads the live =trust= atoms from the pack and passes them as =--trust=
-to both this crate and the tracker's own =consensus= verb, so the two
-settles weigh one graph.
+to this crate and to the tracker's own =consensus= verb. The two settles
+weigh one graph.
 
 * Feed rows from anywhere
 
