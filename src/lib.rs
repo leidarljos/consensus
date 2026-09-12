@@ -178,7 +178,7 @@ pub fn settle_bounded(
         for i in 0..n {
             let near: Vec<usize> = (0..n)
                 .filter(|&j| {
-                    j == i || x[i].iter().zip(&x[j]).map(|(a, b)| (a - b).abs()).sum::<f64>() <= bound[i]
+                    j == i || x[i].iter().zip(&x[j]).map(|(a, b): (&f64, &f64)| (a - b).abs()).sum::<f64>() <= bound[i]
                 })
                 .collect();
             let share = 1.0 / near.len() as f64;
