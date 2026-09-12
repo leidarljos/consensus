@@ -13,6 +13,7 @@ use ljos_consensus::{
 #[derive(Parser)]
 #[command(
     name = "ljos-consensus",
+    version,
     about = "DeGroot / Friedkin–Johnsen; Seldon ODE when present"
 )]
 struct Cli {
