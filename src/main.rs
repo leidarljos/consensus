@@ -101,6 +101,12 @@ enum Cmd {
 }
 
 fn main() -> Result<()> {
+    // A closed pipe ends the run quietly: `ljos-consensus settle | head` and
+    // a seat that reads only the first lines are not a panic.
+    // SAFETY: resetting a signal disposition before any thread is spawned.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
     match Cli::parse().cmd {
         Cmd::Surprising {
             issue,
