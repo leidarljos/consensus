@@ -642,11 +642,18 @@ mod tests {
         let agents = vec!["a".to_string(), "b".to_string(), "c".to_string()];
         let w = influence_matrix(&agents, &[], 0.5);
         for row in &w {
-            assert!(row.iter().all(|x| (*x - 1.0 / 3.0).abs() < 1e-12), "{row:?}");
+            assert!(
+                row.iter().all(|x| (*x - 1.0 / 3.0).abs() < 1e-12),
+                "{row:?}"
+            );
         }
         let rows = vec![("a".to_string(), "b".to_string(), 1.0)];
         let w = influence_matrix(&agents, &rows, 0.5);
-        assert!((w[0][0] - 1.0 / 3.0).abs() < 1e-12 && (w[0][1] - 2.0 / 3.0).abs() < 1e-12, "{:?}", w[0]);
+        assert!(
+            (w[0][0] - 1.0 / 3.0).abs() < 1e-12 && (w[0][1] - 2.0 / 3.0).abs() < 1e-12,
+            "{:?}",
+            w[0]
+        );
         assert!(w[1].iter().all(|x| (*x - 1.0 / 3.0).abs() < 1e-12));
         let ballots: Vec<Ballot> = [("a", "ship"), ("b", "ship"), ("c", "hold")]
             .iter()
@@ -659,7 +666,11 @@ mod tests {
         assert!(out.settled);
         assert!(out.rounds > 1, "a count would settle in one round");
         assert!((out.shares[1] - 2.0 / 3.0).abs() < 1e-6, "{:?}", out.shares);
-        assert!(out.polarization < 1e-9, "everyone met in the middle: {}", out.polarization);
+        assert!(
+            out.polarization < 1e-9,
+            "everyone met in the middle: {}",
+            out.polarization
+        );
     }
 
     /// Two blocs outside each other's confidence bound stay two clusters;
