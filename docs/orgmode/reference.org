@@ -39,7 +39,8 @@ Laplace smoothed so no voter reaches a certainty.
 =x(t+1) = (1 - s) x(0) + s W x(t)=, with =W= the row-stochastic trust matrix
 and =s= the susceptibility. A voter's opinion is a distribution over the
 options, one-hot at the start. Missing self weight is filled with
-=--self-weight=; a voter with no row listens only to itself. Shares are the
+=--self-weight=; a voter with no row of its own listens to everyone
+equally, itself included. Shares are the
 column sums of the fixed point, normalised.
 
 * Library

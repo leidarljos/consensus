@@ -57,16 +57,22 @@ pub fn influence_matrix(
         w[i][j] += *wt;
     }
     for (i, row) in w.iter_mut().enumerate() {
+        // A voter with no row of its own listens to everyone equally, itself
+        // included. Listening to nobody would make a settle with no rows a
+        // count, and the tracker's default listens to everyone; the two
+        // settles have to agree when neither has been told anything.
+        if row.iter().all(|x| *x == 0.0) {
+            for x in row.iter_mut() {
+                *x = 1.0 / n as f64;
+            }
+            continue;
+        }
         if row[i] == 0.0 {
             row[i] = self_weight;
         }
         let s: f64 = row.iter().sum();
-        if s > 0.0 {
-            for x in row.iter_mut() {
-                *x /= s;
-            }
-        } else {
-            row[i] = 1.0;
+        for x in row.iter_mut() {
+            *x /= s;
         }
     }
     w
@@ -626,6 +632,34 @@ mod tests {
         assert!(anchors_from_json(r#"{"a": 0.2}"#).unwrap()["a"] - 0.2 < 1e-12);
         assert!(anchors_from_json(r#"{"a": 1.5}"#).is_err());
         assert!(anchors_from_json("[]").is_err());
+    }
+
+    /// With no rows every voter listens to everyone equally, so a 2 to 1
+    /// vote settles on the majority as a shared position rather than a
+    /// frozen count, and a voter that has rows keeps them.
+    #[test]
+    fn a_voter_with_no_row_listens_to_everyone() {
+        let agents = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let w = influence_matrix(&agents, &[], 0.5);
+        for row in &w {
+            assert!(row.iter().all(|x| (*x - 1.0 / 3.0).abs() < 1e-12), "{row:?}");
+        }
+        let rows = vec![("a".to_string(), "b".to_string(), 1.0)];
+        let w = influence_matrix(&agents, &rows, 0.5);
+        assert!((w[0][0] - 1.0 / 3.0).abs() < 1e-12 && (w[0][1] - 2.0 / 3.0).abs() < 1e-12, "{:?}", w[0]);
+        assert!(w[1].iter().all(|x| (*x - 1.0 / 3.0).abs() < 1e-12));
+        let ballots: Vec<Ballot> = [("a", "ship"), ("b", "ship"), ("c", "hold")]
+            .iter()
+            .map(|(agent, choice)| Ballot {
+                agent: agent.to_string(),
+                choice: choice.to_string(),
+            })
+            .collect();
+        let out = settle(&ballots, &[], 0.5, 1.0, 200, 1e-9);
+        assert!(out.settled);
+        assert!(out.rounds > 1, "a count would settle in one round");
+        assert!((out.shares[1] - 2.0 / 3.0).abs() < 1e-6, "{:?}", out.shares);
+        assert!(out.polarization < 1e-9, "everyone met in the middle: {}", out.polarization);
     }
 
     /// Two blocs outside each other's confidence bound stay two clusters;
