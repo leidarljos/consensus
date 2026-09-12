@@ -20,7 +20,7 @@ ljos-consensus settle --issue ID --epsilon 0.5                            # boun
 ljos-consensus reliability --project demo                                 # Dawid-Skene accuracy per voter, no truth labels
 ```
 
-Every outcome carries `polarization` and `disagreement` (Musco, Musco and Tsourakakis, doi:10.1145/3178876.3186103). `reliability` is Dawid and Skene (doi:10.2307/2346806); `ljos calibrate` writes its accuracies back as trust rows.
+Panels of parallel agents that debate and vote (self-consistency, multi-agent debate, mixture of agents, the commercial heavy modes) aggregate by count or by an aggregator model; the explanation page places this crate against them, with the literature. Every outcome carries `polarization` and `disagreement` (Musco, Musco and Tsourakakis, doi:10.1145/3178876.3186103). `reliability` is Dawid and Skene (doi:10.2307/2346806); `ljos calibrate` writes its accuracies back as trust rows.
 
 `--seldon` writes `config.toml` matching Seldon's DeGroot example, a network from the trust weights, and an opinions init from the ballots, then runs:
 
