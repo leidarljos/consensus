@@ -177,21 +177,17 @@ pub fn settle(
     let mut settled = false;
     for r in 1..=max_iter {
         let mut nxt = vec![vec![0.0; m]; n];
-        for i in 0..n {
-            for k in 0..m {
-                let mut heard = 0.0;
-                for j in 0..n {
-                    heard += w[i][j] * x[j][k];
-                }
-                nxt[i][k] = (1.0 - susceptibility) * x0[i][k] + susceptibility * heard;
+        for ((row, w_i), x0_i) in nxt.iter_mut().zip(&w).zip(&x0) {
+            for (k, cell) in row.iter_mut().enumerate() {
+                let heard: f64 = w_i.iter().zip(&x).map(|(wij, x_j)| wij * x_j[k]).sum();
+                *cell = (1.0 - susceptibility) * x0_i[k] + susceptibility * heard;
             }
         }
-        let mut err: f64 = 0.0;
-        for i in 0..n {
-            for k in 0..m {
-                err = err.max((nxt[i][k] - x[i][k]).abs());
-            }
-        }
+        let err = nxt
+            .iter()
+            .zip(&x)
+            .flat_map(|(a, b)| a.iter().zip(b).map(|(p, q)| (p - q).abs()))
+            .fold(0.0_f64, f64::max);
         x = nxt;
         rounds = r;
         if err < tol {
@@ -200,15 +196,15 @@ pub fn settle(
         }
     }
     let mut shares = vec![0.0; m];
-    for i in 0..n {
-        for k in 0..m {
-            shares[k] += x[i][k];
+    for row in &x {
+        for (share, cell) in shares.iter_mut().zip(row) {
+            *share += cell;
         }
     }
     let s: f64 = shares.iter().sum();
     if s > 0.0 {
-        for k in 0..m {
-            shares[k] /= s;
+        for share in &mut shares {
+            *share /= s;
         }
     }
     Outcome {
