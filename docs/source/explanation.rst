@@ -1,50 +1,165 @@
-===========
-Explanation
-===========
-
-
-
 Why weigh at all
-----------------
+================
 
 Counting is right when every voter is worth the same. A maintainer who has
 read the code for years, a reviewer who was wrong twice, and a first-time
 contributor each cast one ballot. A plurality reports them as three equal
-opinions. DeGroot's model (https://doi.org/10.1080/01621459.1974.10480137) is the
+opinions. DeGroot's model (doi:10.1080/01621459.1974.10480137) is the
 standard answer and is one line: each voter replaces its opinion with the
 weighted average of the voters it trusts, ``x(t+1) = W x(t)``. Where that
 settles is the group's position, and it is the mean only when trust is
 symmetric.
 
 When it settles
----------------
+===============
 
 The iteration converges to agreement exactly when the trust graph has one
 closed group every voter reaches, and that group is aperiodic (Berger,
-https://doi.org/10.1080/01621459.1981.10477662). Two teams that cite only each other
+doi:10.1080/01621459.1981.10477662). Two teams that cite only each other
 never converge, and that is a fact about the team worth reporting rather
 than a number worth averaging. The tracker's own ``consensus`` verb reports
 the split; this crate reports ``settled: false`` when the budget runs out.
 
 Anchoring
----------
+=========
 
-Friedkin and Johnsen (https://doi.org/10.1080/0022250X.1990.9990069) keep each voter
+Friedkin and Johnsen (doi:10.1080/0022250X.1990.9990069) keep each voter
 partly anchored to its own starting opinion. The step is a contraction for
 any anchor, so it always settles, and what settles is a profile of
 persistent disagreement rather than one shared position. That is the
 setting to use when reviewers are not expected to abandon their reading.
 
+Bounded confidence
+==================
+
+Hegselmann and Krause, and Deffuant and colleagues
+(doi:10.1142/S0219525900000078), let each voter listen only to voters
+whose opinion lies within a bound of its own. Two blocs further apart than
+the bound never meet: the model produces clusters where the trust graph
+alone would produce one position. ``--epsilon`` runs that step, and
+``--epsilon-of`` gives each voter its own bound, which is the shape a persona
+with a narrow audience takes. Castellano, Fortunato and Loreto review the
+family (doi:10.1103/RevModPhys.81.591).
+
+Reading a settle
+================
+
+Two numbers come with every outcome. Polarization is how far the final
+opinions sit from their mean, summed over voters; disagreement is how far
+neighbours sit from each other, weighted by the trust between them, summed
+over edges. Musco, Musco and Tsourakakis (doi:10.1145/3178876.3186103)
+show the two move against each other under the Friedkin-Johnsen step, so a
+network can be tuned to lower their sum. A settle that reports high
+polarization and low disagreement has agreed within blocs that do not hear
+each other; the shares alone would not show it.
+
+Panels of agents
+================
+
+Running several model calls and settling their answers is now a product
+feature. Self-consistency samples one model many times and takes the
+majority (Wang et al., doi:10.48550/arXiv.2203.11171). Multi-agent debate
+lets several instances read each other's answers over rounds before a
+final vote (Du et al., doi:10.48550/arXiv.2305.14325; Liang et al.,
+doi:10.48550/arXiv.2305.19118), and a jury of debating evaluators grades
+text the same way (ChatEval, doi:10.48550/arXiv.2308.07201). Mixture of
+agents feeds the answers of several models to an aggregator model that
+writes the final one (Wang et al., doi:10.48550/arXiv.2406.04692). One
+model can also play several personas and have them collaborate (Wang et
+al., doi:10.48550/arXiv.2307.05300), and the roster can be chosen per task
+(Liu et al., doi:10.48550/arXiv.2310.02170). Debate between more
+persuasive models makes a weaker judge more truthful (Khan et al.,
+doi:10.48550/arXiv.2402.06782). A commercial system runs several agents in
+parallel on "multiple hypotheses at once" and settles before answering
+(the Grok 4 announcement, https://x.ai/news/grok-4); reports describe a
+captain agent deciding when the others do not agree, which this crate has
+not verified against a primary source.
+
+Two things these share, and this crate does differently. First, the
+aggregation is a count or an aggregator model's judgement, with every
+voice weighed the same; Chen et al. (doi:10.48550/arXiv.2403.02419) show
+that adding calls to such a count is not even monotone in accuracy, since
+it helps on easy items and hurts on hard ones. Here the aggregation is a
+weighted settle whose weights are memory: rows a person set, rows
+``learn`` moved when an outcome refuted a voter, rows ``calibrate`` wrote
+from the voters' history, each scoped to the topics they were earned on.
+Second, the roles are prompts that vanish with the session; here a persona
+is an atom in the pack with an anchor the settle honours, and a captain
+who decides when the panel splits is one persona with an anchor of zero,
+not a special case. The settle also says how the panel split, in
+polarization and disagreement, where a count says only who won.
+
+When the majority is wrong
+==========================
+
+A settle over ballots cannot see a majority that is wrong, only a majority.
+Prelec, Seung and McCoy (doi:10.1038/nature21054) ask each voter one more
+thing: what share of the others will pick each option. A minority that
+knows better predicts the majority and votes against it, so the option
+whose actual share most exceeds its predicted share is the informed one;
+on questions where most people are confidently wrong, that rule recovers
+the truth where a majority and a confidence-weighted vote both fail. It is
+the second verb a panel runs when the question is hard: ``surprising`` reads
+the ballots and the forecasts and names the answer, or says that fewer than
+two voters forecast and it has nothing to add. Prediction polls of this
+shape score about as well as prediction markets on the same questions
+(Atanasov et al., doi:10.1287/mnsc.2015.2374).
+
+Standing from the rows
+======================
+
+Pairwise rows say who listens to whom; they do not say who stands high in
+the group. EigenTrust (Kamvar, Schlosser and Garcia-Molina,
+doi:10.1145/775152.775242) reads that off the same rows: normalise them,
+take the principal eigenvector, and pull toward a uniform pre-trust so
+nobody falls to zero and the iteration settles. A voter weighed by voters
+who are themselves weighed stands high; a row from a voter nobody weighs
+counts for little. ``reputation`` prints the standing; the seat shows it
+beside a settle so a reader sees not only where the group landed but
+whose word carried it.
+
 Where the rows come from
-------------------------
+========================
 
 In the tracker, rows are configuration. In the seat, rows are memory: the
 pack's ``trust`` atoms, dated and supersedable, moved by ``ljos learn`` when
 an outcome shows who was right. This crate takes rows from anywhere as
 JSON and does not care which.
 
+Outcomes are rare; most issues close without anyone saying which option
+was right. Dawid and Skene (doi:10.2307/2346806) estimate each voter's
+accuracy without a truth, from how often it agrees with the answer the
+other voters make likely, by expectation maximisation. ``reliability`` runs
+that over a project's settled issues, and ``ljos calibrate`` turns the
+accuracies into rows, so weights move from the tracker's own history. The
+row a voter gets is its accuracy, which is the weight a linear opinion pool
+gives a source believed that reliable (Genest and Zidek,
+doi:10.1214/ss/1177013825). Acemoglu, Como, Fagnani and Ozdaglar
+(doi:10.1287/moor.1120.0570) show what a stubborn voter does to such a
+pool: with an anchor near one it never moves and pulls the rest, which is
+why a persona's anchor is a parameter here and not a default.
+
+The rules were measured where the truth is known
+(``examples/synthetic_voters.rs``): voters with accuracies drawn uniformly
+between 0.35 and 0.95, so some are worse than chance, answer two-way
+questions, and the group decides under each rule; twenty seeds, four
+hundred questions each. Nine voters: one voter one vote 0.820; the
+accuracies as linear weights 0.873; the accuracies as log odds
+(Nitzan and Paroush, doi:10.2307/2526438) 0.934 against 0.939 for the
+same weights from the true accuracies, the ceiling; Hedge from equal
+rows 0.831, because after enough misses every row sits on the floor and
+the settle is a count again; Hedge with a fixed share of recovery
+(Herbster and Warmuth, doi:10.1023/A:1007424614876) 0.877; and the
+online form of calibration, each voter's smoothed record of hits and
+misses so far as log odds before every question, 0.929. Fifteen voters:
+0.877, 0.936, 0.974, 0.976, 0.891, 0.937, 0.972. Log-odds weights reach
+within half a point of the ceiling whether estimated in one batch or
+kept as a running record; multiplicative shrinking does not, even with
+recovery. ``ljos calibrate`` writes log odds for that reason, and ``ljos
+learn`` keeps the record.
+
 Seldon
-------
+======
 
 Seldon is an opinion-dynamics engine that integrates the same models as
 ordinary differential equations. This crate can write its inputs and read its output so the discrete

@@ -1,8 +1,3 @@
-=========
-consensus
-=========
-
-
 .. raw:: html
 
    <div class="vi-hero">
@@ -32,12 +27,27 @@ binary: ballots and trust rows in, shares and rounds out. It can also write
 the inputs for the Seldon opinion-dynamics engine and read its output.
 
 Install
--------
+=======
 
 .. code:: console
 
-    $ cargo binstall ljos-consensus
-    $ ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
+   $ cargo binstall ljos-consensus
+   $ ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
+
+First minute
+============
+
+.. code:: console
+
+   $ cargo binstall ljos-consensus
+   $ ljos-consensus settle --ballots '[
+       {"agent":"alice","choice":"ship"},
+       {"agent":"bob","choice":"ship"},
+       {"agent":"carol","choice":"hold"}]'
+   { "options": ["hold","ship"], "shares": [0.333, 0.667], "rounds": 1, "settled": true, "engine": "degroot-fj" }
+
+The :doc:`tutorial <getting-started>` adds trust, then an anchor.
+The seat verb is ``ljos consensus``.
 
 .. toctree::
    :maxdepth: 1
@@ -48,3 +58,4 @@ Install
    howto
    reference
    explanation
+   seat
