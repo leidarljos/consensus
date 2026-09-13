@@ -55,6 +55,9 @@ enum Cmd {
         max_iter: usize,
         #[arg(long, default_value_t = 1e-9)]
         tol: f64,
+        /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration. `energy`: the same settle as the minimum of its energy, found by rgmin; the influence is symmetrised.
+        #[arg(long, default_value = "iterate")]
+        engine: String,
     },
     /// The surprisingly popular answer (Prelec, Seung and McCoy,
     /// doi:10.1038/nature21054): ballots plus each voter's forecast of the
@@ -212,6 +215,17 @@ fn main() -> Result<()> {
                     tol,
                     out,
                 )?;
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
+            } else if engine == "energy" {
+                let outcome = settle_energy(
+                    &ballots,
+                    &trust,
+                    self_weight,
+                    susceptibility,
+                    &anchors,
+                    max_iter,
+                    tol,
+                );
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             } else {
                 let outcome = settle_anchored(

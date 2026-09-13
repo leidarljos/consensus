@@ -18,6 +18,9 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+eindir-core = { version = "0.6.0", git = "https://github.com/HaoZeke/eindir.git", rev = "f3c42130bb389ba6cd6e4cfdc8b2e182f4a764e9", features = ["capi"] }
+rgmin = { git = "https://github.com/OmniPotentRPC/rgmin.git", rev = "2dc2b7d07157e5468f9aa122fb2157a2d0208f08" }
+ndarray = "0.17"
 
 [build-dependencies]
 cc = "1"
