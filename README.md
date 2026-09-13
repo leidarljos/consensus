@@ -6,6 +6,17 @@ DeGroot / Friedkin–Johnsen over a trust graph. This crate is the seat model.
 
 `vissue consensus` stays the tracker verb. `ljos consensus` calls this crate first.
 
+Docs: https://leidarljos.github.io/consensus/
+
+| Page | What it answers |
+|---|---|
+| [Getting started](https://leidarljos.github.io/consensus/getting-started.html) | Three voters, then trust, then an anchor |
+| [How-to](https://leidarljos.github.io/consensus/howto.html) | Issue ballots, Seldon, scripts |
+| [Reference](https://leidarljos.github.io/consensus/reference.html) | Flags, the step, the library |
+| [Explanation](https://leidarljos.github.io/consensus/explanation.html) | Why weigh, and when a count is wrong |
+
+The seat that settles through this crate is documented at https://leidarljos.github.io.
+
 ```
 ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
 ljos-consensus settle --issue ID
