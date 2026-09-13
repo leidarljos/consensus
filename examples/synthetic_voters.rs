@@ -24,6 +24,10 @@
 //!   Warmuth, doi:10.1023/A:1007424614876), the rule `learn --share`
 //!   applies, so a voter is weighed by its recent record rather than by
 //!   every miss it ever made.
+//! - `learn log-odds online`: no estimate and no shrink; each voter's
+//!   record of hits and misses so far, smoothed by one of each, gives its
+//!   accuracy, and the rows are the log odds of that scaled to the best at
+//!   one, before each question. The online form of `calibrate`.
 //!
 //! ```console
 //! $ cargo run --release --example synthetic_voters -- 9 400 20
@@ -131,6 +135,7 @@ fn main() {
         "calibrate log-odds",
         "learn hedge",
         "learn hedge, share 0.1",
+        "learn log-odds online",
     ];
     const SHARE: f64 = 0.1;
     let mut right = vec![0usize; arms.len()];
@@ -182,6 +187,9 @@ fn main() {
             }
         }
         let mut shared = hedge.clone();
+        // Hits and misses so far, one of each to start.
+        let mut record: BTreeMap<String, (f64, f64)> =
+            names.iter().map(|n| (n.clone(), (1.0, 1.0))).collect();
         for (truth, ballots) in &items {
             asked += 1;
             let rows_of = |m: &BTreeMap<(String, String), f64>| -> Vec<(String, String, f64)> {
@@ -189,6 +197,11 @@ fn main() {
                     .map(|((f, t), w)| (f.clone(), t.clone(), *w))
                     .collect()
             };
+            let online_acc: BTreeMap<String, f64> = record
+                .iter()
+                .map(|(n, (h, m))| (n.clone(), h / (h + m)))
+                .collect();
+            let online = log_odds_rows(&online_acc);
             let decisions = [
                 weighted_majority(ballots, &BTreeMap::new()),
                 weighted_majority(ballots, &oracle_w),
@@ -196,6 +209,7 @@ fn main() {
                 decide(ballots, &logodds),
                 decide(ballots, &rows_of(&hedge)),
                 decide(ballots, &rows_of(&shared)),
+                decide(ballots, &online),
             ];
             for (k, d) in decisions.iter().enumerate() {
                 if d == truth {
@@ -204,6 +218,12 @@ fn main() {
             }
             // The outcome refutes the voters who chose otherwise.
             for b in ballots {
+                let r = record.get_mut(&b.agent).unwrap();
+                if b.choice == *truth {
+                    r.0 += 1.0;
+                } else {
+                    r.1 += 1.0;
+                }
                 if b.choice != *truth {
                     for from in &names {
                         if from != &b.agent {
