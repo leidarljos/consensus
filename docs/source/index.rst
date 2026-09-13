@@ -36,7 +36,7 @@ Install
 
 .. code:: console
 
-    $ cargo install --git https://github.com/leidarljos/consensus
+    $ cargo binstall ljos-consensus
     $ ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
 
 .. toctree::
