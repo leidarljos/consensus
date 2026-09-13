@@ -2,6 +2,14 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
+## Unreleased
+
+- `examples/synthetic_voters.rs`: the rules measured where the truth is
+  known. Nine voters of uniform accuracy in [0.35, 0.95], 400 questions,
+  20 seeds: majority 0.820, linear calibration 0.873, log-odds
+  calibration 0.934 against the oracle's 0.939, Hedge 0.831, Hedge with
+  fixed share 0.877.
+
 ## 0.4.1 (2026-09-12)
 
 - A closed pipe ends a run quietly instead of a panic; the seat reads the

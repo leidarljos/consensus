@@ -133,6 +133,22 @@ doi:10.1214/ss/1177013825). Acemoglu, Como, Fagnani and Ozdaglar
 pool: with an anchor near one it never moves and pulls the rest, which is
 why a persona's anchor is a parameter here and not a default.
 
+The rules were measured where the truth is known
+(=examples/synthetic_voters.rs=): voters with accuracies drawn uniformly
+between 0.35 and 0.95, so some are worse than chance, answer two-way
+questions, and the group decides under each rule; twenty seeds, four
+hundred questions each. Nine voters: one voter one vote 0.820; the
+accuracies as linear weights 0.873; the accuracies as log odds
+(Nitzan and Paroush, doi:10.2307/2526438) 0.934 against 0.939 for the
+same weights from the true accuracies, the ceiling; Hedge from equal
+rows 0.831, because after enough misses every row sits on the floor and
+the settle is a count again; Hedge with a fixed share of recovery
+(Herbster and Warmuth, doi:10.1023/A:1007424614876) 0.877. Fifteen
+voters: 0.877, 0.936, 0.974, 0.976, 0.891, 0.937. Log-odds calibration
+reaches within half a point of the ceiling from the ballots alone; the
+online rules stand where linear calibration stands. =ljos calibrate=
+writes log odds for that reason.
+
 * Seldon
 
 Seldon is an opinion-dynamics engine that integrates the same models as
