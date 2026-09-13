@@ -1,11 +1,16 @@
 [package]
 name = "ljos-consensus"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/leidarljos/consensus"
 description = "DeGroot / Friedkin–Johnsen over a trust graph; Seldon ODE when seldon is on PATH"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/consensus-v{ version }-{ target }.tar.gz"
+bin-dir = "consensus-v{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
 
 [[bin]]
 name = "ljos-consensus"
