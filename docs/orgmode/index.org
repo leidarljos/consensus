@@ -34,7 +34,7 @@ the inputs for the Seldon opinion-dynamics engine and read its output.
 * Install
 
 #+begin_src console
-$ cargo install --git https://github.com/leidarljos/consensus
+$ cargo binstall ljos-consensus
 $ ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
 #+end_src
 
