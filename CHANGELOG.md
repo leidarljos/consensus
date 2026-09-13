@@ -2,7 +2,7 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
-## Unreleased
+## 0.5.0 (2026-09-13)
 
 - `examples/synthetic_voters.rs`: the rules measured where the truth is
   known. Nine voters of uniform accuracy in [0.35, 0.95], 400 questions,
