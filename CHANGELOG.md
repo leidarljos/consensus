@@ -8,7 +8,7 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   known. Nine voters of uniform accuracy in [0.35, 0.95], 400 questions,
   20 seeds: majority 0.820, linear calibration 0.873, log-odds
   calibration 0.934 against the oracle's 0.939, Hedge 0.831, Hedge with
-  fixed share 0.877.
+  fixed share 0.877, the running record as log odds 0.929.
 
 ## 0.4.1 (2026-09-12)
 

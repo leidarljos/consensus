@@ -143,11 +143,14 @@ accuracies as linear weights 0.873; the accuracies as log odds
 same weights from the true accuracies, the ceiling; Hedge from equal
 rows 0.831, because after enough misses every row sits on the floor and
 the settle is a count again; Hedge with a fixed share of recovery
-(Herbster and Warmuth, doi:10.1023/A:1007424614876) 0.877. Fifteen
-voters: 0.877, 0.936, 0.974, 0.976, 0.891, 0.937. Log-odds calibration
-reaches within half a point of the ceiling from the ballots alone; the
-online rules stand where linear calibration stands. =ljos calibrate=
-writes log odds for that reason.
+(Herbster and Warmuth, doi:10.1023/A:1007424614876) 0.877; and the
+online form of calibration, each voter's smoothed record of hits and
+misses so far as log odds before every question, 0.929. Fifteen voters:
+0.877, 0.936, 0.974, 0.976, 0.891, 0.937, 0.972. Log-odds weights reach
+within half a point of the ceiling whether estimated in one batch or
+kept as a running record; multiplicative shrinking does not, even with
+recovery. =ljos calibrate= writes log odds for that reason, and =ljos
+learn= keeps the record.
 
 * Seldon
 
