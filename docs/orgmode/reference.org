@@ -62,9 +62,10 @@ column sums of the fixed point, normalised.
 
 * Library
 
-=ljos_consensus::{Ballot, Outcome, roster, influence_matrix, settle,
-settle_anchored, settle_bounded, dawid_skene, surprisingly_popular,
-eigentrust, ballots_from_json, trust_from_json, anchors_from_json,
-predictions_from_json, settle_seldon}=. The Seldon module
+The crate root exports =Ballot=, =Outcome=, =roster=,
+=influence_matrix=, =settle=, =settle_anchored=, =settle_bounded=,
+=dawid_skene=, =surprisingly_popular=, =eigentrust=,
+=ballots_from_json=, =trust_from_json=, =anchors_from_json=,
+=predictions_from_json=, and =settle_seldon=. The Seldon module
 writes and reads the engine's files and links nothing under a copyleft
 licence.

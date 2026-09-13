@@ -50,5 +50,6 @@ $ ljos-consensus settle --issue proj-1a2b --seldon --out run/
 #+end_src
 
 Writes =config.toml=, =network.txt= and =opinions.txt=, runs =seldon= when
-it is on =PATH=, and reads the final opinions back. The fixed points of the
-discrete step and the integration agree.
+it is on =PATH=, and reads the final opinions back. The parse path does
+not print a residual. When =seldon= is absent the discrete step is the
+settle.

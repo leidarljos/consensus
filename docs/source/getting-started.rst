@@ -68,5 +68,5 @@ Runs ``vissue vote proj-1a2b --json`` and settles those ballots. The seat's
 
 Writes ``config.toml``, ``network.txt`` and ``opinions.txt`` in Seldon's format,
 runs ``seldon`` when it is on ``PATH``, and parses the final opinions back into
-the same JSON shape. The discrete step and the differential-equation integration agree on the
-fixed point; Seldon is there to check that they do.
+the same JSON shape. The parse path does not print a residual. When
+``seldon`` is absent the discrete step is the settle.
