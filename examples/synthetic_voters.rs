@@ -19,6 +19,11 @@
 //!   other voter's row (Hedge, doi:10.1006/jcss.1997.1504), the rule
 //!   `finish --outcome` applies; the settle before each question uses
 //!   the rows so far.
+//! - `learn hedge, share 0.1`: the same, and after each step every row
+//!   recovers a tenth of its gap to one (fixed share, Herbster and
+//!   Warmuth, doi:10.1023/A:1007424614876), the rule `learn --share`
+//!   applies, so a voter is weighed by its recent record rather than by
+//!   every miss it ever made.
 //!
 //! ```console
 //! $ cargo run --release --example synthetic_voters -- 9 400 20
@@ -125,7 +130,9 @@ fn main() {
         "calibrate linear",
         "calibrate log-odds",
         "learn hedge",
+        "learn hedge, share 0.1",
     ];
+    const SHARE: f64 = 0.1;
     let mut right = vec![0usize; arms.len()];
     let mut asked = 0usize;
     for seed in 0..seeds {
@@ -174,18 +181,21 @@ fn main() {
                 }
             }
         }
+        let mut shared = hedge.clone();
         for (truth, ballots) in &items {
             asked += 1;
-            let hedge_rows: Vec<(String, String, f64)> = hedge
-                .iter()
-                .map(|((f, t), w)| (f.clone(), t.clone(), *w))
-                .collect();
+            let rows_of = |m: &BTreeMap<(String, String), f64>| -> Vec<(String, String, f64)> {
+                m.iter()
+                    .map(|((f, t), w)| (f.clone(), t.clone(), *w))
+                    .collect()
+            };
             let decisions = [
                 weighted_majority(ballots, &BTreeMap::new()),
                 weighted_majority(ballots, &oracle_w),
                 decide(ballots, &linear),
                 decide(ballots, &logodds),
-                decide(ballots, &hedge_rows),
+                decide(ballots, &rows_of(&hedge)),
+                decide(ballots, &rows_of(&shared)),
             ];
             for (k, d) in decisions.iter().enumerate() {
                 if d == truth {
@@ -199,9 +209,15 @@ fn main() {
                         if from != &b.agent {
                             let w = hedge.get_mut(&(from.clone(), b.agent.clone())).unwrap();
                             *w = (*w * BETA).max(FLOOR);
+                            let v = shared.get_mut(&(from.clone(), b.agent.clone())).unwrap();
+                            *v = (*v * BETA).max(FLOOR);
                         }
                     }
                 }
+            }
+            // Fixed share: every row recovers a share of its gap to one.
+            for v in shared.values_mut() {
+                *v += SHARE * (1.0 - *v);
             }
         }
     }
