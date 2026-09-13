@@ -673,6 +673,227 @@ pub fn settle_anchored(
     }
 }
 
+/// The Friedkin-Johnsen settle as the minimum of an energy, found by
+/// rgmin rather than by iteration. For symmetric influence the FJ
+/// equilibrium is the unique minimiser of
+/// `sum_i (1 - s_i) |x_i - x0_i|^2 + (1/2) sum_ij M_ij |x_i - x_j|^2` with
+/// `M_ij = s_i W_ij + s_j W_ji` (Bindel, Kleinberg and Oren,
+/// doi:10.1016/j.geb.2015.02.005): the anchor terms hold each voter near
+/// its ballot by how little it listens, the pair terms pull listeners
+/// together by how much. Opinions live on the simplex through a softmax
+/// of free logits, and L-BFGS descends the energy. For asymmetric rows
+/// this is the settle of the symmetrised influence, which the iteration
+/// is not; the two agree when the rows are symmetric, and a test holds
+/// them to it. What the energy form buys: the settle is a stationary
+/// point of a stated function, so a constraint is a term, a stubborn
+/// voter is an anchor at one, and two settled states of a polarised
+/// group are two minima with a saddle between them that a minimum-mode
+/// search can find.
+pub fn settle_energy(
+    ballots: &[Ballot],
+    trust: &[(String, String, f64)],
+    self_weight: f64,
+    susceptibility: f64,
+    anchors: &std::collections::BTreeMap<String, f64>,
+    max_iter: usize,
+    tol: f64,
+) -> Outcome {
+    use eindir_core::{Bounds, DifferentiableObjective, Gradient, Objective};
+    use ndarray::{Array1, ArrayView1};
+
+    let (agents, options) = roster(ballots);
+    let n = agents.len();
+    let m = options.len();
+    if n == 0 || m == 0 {
+        return Outcome {
+            options,
+            shares: vec![],
+            rounds: 0,
+            settled: true,
+            engine: "empty".into(),
+            polarization: 0.0,
+            disagreement: 0.0,
+        };
+    }
+    let w = influence_matrix(&agents, trust, self_weight);
+    let pull: Vec<f64> = agents
+        .iter()
+        .map(|a| {
+            anchors
+                .get(a)
+                .copied()
+                .unwrap_or(susceptibility)
+                .clamp(0.0, 1.0)
+        })
+        .collect();
+    let mut x0 = vec![vec![0.0; m]; n];
+    for b in ballots {
+        let i = agents.iter().position(|a| *a == b.agent).unwrap();
+        let k = options.iter().position(|o| *o == b.choice).unwrap();
+        x0[i][k] = 1.0;
+    }
+    // Pair weights, symmetrised; the diagonal is not a pair.
+    let mut pair = vec![vec![0.0; n]; n];
+    for i in 0..n {
+        for j in 0..n {
+            if i != j {
+                pair[i][j] = pull[i] * w[i][j] + pull[j] * w[j][i];
+            }
+        }
+    }
+
+    struct Energy {
+        n: usize,
+        m: usize,
+        x0: Vec<Vec<f64>>,
+        anchor: Vec<f64>,
+        pair: Vec<Vec<f64>>,
+        bounds: Bounds<f64>,
+    }
+    impl Energy {
+        fn opinions(&self, z: ArrayView1<f64>) -> Vec<Vec<f64>> {
+            (0..self.n)
+                .map(|i| {
+                    let row = &z.as_slice().unwrap()[i * self.m..(i + 1) * self.m];
+                    let top = row.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    let e: Vec<f64> = row.iter().map(|v| (v - top).exp()).collect();
+                    let s: f64 = e.iter().sum();
+                    e.iter().map(|v| v / s).collect()
+                })
+                .collect()
+        }
+        fn energy_gradient(&self, z: ArrayView1<f64>) -> (f64, Array1<f64>) {
+            let x = self.opinions(z);
+            let mut e = 0.0;
+            // dE/dx
+            let mut gx = vec![vec![0.0; self.m]; self.n];
+            for i in 0..self.n {
+                for k in 0..self.m {
+                    let d = x[i][k] - self.x0[i][k];
+                    e += self.anchor[i] * d * d;
+                    gx[i][k] += 2.0 * self.anchor[i] * d;
+                }
+                for j in 0..self.n {
+                    if j <= i {
+                        continue;
+                    }
+                    let wij = self.pair[i][j];
+                    if wij == 0.0 {
+                        continue;
+                    }
+                    for k in 0..self.m {
+                        let d = x[i][k] - x[j][k];
+                        e += 0.5 * wij * d * d;
+                        gx[i][k] += wij * d;
+                        gx[j][k] -= wij * d;
+                    }
+                }
+            }
+            // dE/dz through the softmax: J = diag(x) - x x^T.
+            let mut gz = Array1::<f64>::zeros(self.n * self.m);
+            for i in 0..self.n {
+                let dot: f64 = (0..self.m).map(|k| gx[i][k] * x[i][k]).sum();
+                for k in 0..self.m {
+                    gz[i * self.m + k] = x[i][k] * (gx[i][k] - dot);
+                }
+            }
+            (e, gz)
+        }
+    }
+    impl Objective<f64> for Energy {
+        fn dim(&self) -> usize {
+            self.n * self.m
+        }
+        fn bounds(&self) -> &Bounds<f64> {
+            &self.bounds
+        }
+        fn eval(&self, z: ArrayView1<f64>) -> f64 {
+            self.energy_gradient(z).0
+        }
+    }
+    impl Gradient<f64> for Energy {
+        fn grad(&self, z: ArrayView1<f64>) -> Array1<f64> {
+            self.energy_gradient(z).1
+        }
+        fn dim(&self) -> usize {
+            self.n * self.m
+        }
+    }
+    impl DifferentiableObjective<f64> for Energy {
+        fn value_and_gradient(&self, z: ArrayView1<f64>) -> (f64, Array1<f64>) {
+            self.energy_gradient(z)
+        }
+    }
+
+    let dim = n * m;
+    let energy = Energy {
+        n,
+        m,
+        x0: x0.clone(),
+        anchor: pull.iter().map(|s| 1.0 - s).collect(),
+        pair,
+        bounds: Bounds::new(
+            Array1::from_elem(dim, -20.0),
+            Array1::from_elem(dim, 20.0),
+            0.0,
+        ),
+    };
+    // Start at the ballots, softly: a logit of four on the chosen option.
+    let mut z = Array1::<f64>::zeros(dim);
+    for i in 0..n {
+        for k in 0..m {
+            z[i * m + k] = if x0[i][k] > 0.5 { 4.0 } else { 0.0 };
+        }
+    }
+    let control = rgmin::Control {
+        maxiter: max_iter.max(1),
+        gtol: tol.max(1e-12),
+        istep: 0.1,
+        maxmove: Some(2.0),
+    };
+    let report = rgmin::minimize_method(
+        &energy,
+        z.clone(),
+        &control,
+        rgmin::Method::Lbfgs { memory: 10 },
+        rgmin::LineSearch::Backtracking {
+            c: 1e-4,
+            beta: 0.5,
+            maxiter: 40,
+        },
+    );
+    let (coords, rounds, settled) = match report {
+        Ok(r) => {
+            let done = r.grad_norm <= control.gtol;
+            (r.coords, r.steps, done)
+        }
+        Err(_) => (z, 0, false),
+    };
+    let x = energy.opinions(coords.view());
+    let mut shares = vec![0.0; m];
+    for row in &x {
+        for (share, cell) in shares.iter_mut().zip(row) {
+            *share += cell;
+        }
+    }
+    let s: f64 = shares.iter().sum();
+    if s > 0.0 {
+        for share in &mut shares {
+            *share /= s;
+        }
+    }
+    let (polarization, disagreement) = spread(&x, &w);
+    Outcome {
+        options,
+        shares,
+        rounds,
+        settled,
+        engine: "fj-energy".into(),
+        polarization,
+        disagreement,
+    }
+}
+
 /// Same DeGroot iteration as `Seldon::DeGrootModel`, via the C API.
 #[cfg(seldon_capi)]
 pub fn settle_seldon(
@@ -721,6 +942,50 @@ pub fn settle_seldon(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_energy_settle_agrees_with_the_iteration_on_symmetric_rows() {
+        let ballots = vec![
+            Ballot {
+                agent: "a".into(),
+                choice: "ship".into(),
+            },
+            Ballot {
+                agent: "b".into(),
+                choice: "ship".into(),
+            },
+            Ballot {
+                agent: "c".into(),
+                choice: "hold".into(),
+            },
+        ];
+        // Symmetric rows: every pair weighs each other alike.
+        let rows: Vec<(String, String, f64)> = [
+            ("a", "b", 0.5),
+            ("b", "a", 0.5),
+            ("a", "c", 0.5),
+            ("c", "a", 0.5),
+            ("b", "c", 0.5),
+            ("c", "b", 0.5),
+        ]
+        .iter()
+        .map(|(f, t, w)| ((*f).to_string(), (*t).to_string(), *w))
+        .collect();
+        let anchors = std::collections::BTreeMap::new();
+        let iterated = settle_anchored(&ballots, &rows, 0.5, 0.7, &anchors, 500, 1e-10);
+        let energy = settle_energy(&ballots, &rows, 0.5, 0.7, &anchors, 500, 1e-8);
+        assert_eq!(energy.engine, "fj-energy");
+        assert!(energy.settled, "{energy:?}");
+        for (a, b) in iterated.shares.iter().zip(&energy.shares) {
+            assert!((a - b).abs() < 0.02, "{iterated:?} vs {energy:?}");
+        }
+        // A voter anchored at zero does not move: the energy holds it.
+        let mut stubborn = std::collections::BTreeMap::new();
+        stubborn.insert("c".to_string(), 0.0);
+        let held = settle_energy(&ballots, &rows, 0.5, 1.0, &stubborn, 500, 1e-8);
+        let hold = held.options.iter().position(|o| o == "hold").unwrap();
+        assert!(held.shares[hold] > 0.3, "{held:?}");
+    }
+
     use super::*;
 
     #[test]
