@@ -1,49 +1,73 @@
-=========
-Reference
-=========
-
-
-
 Command line
-------------
+============
 
 ``ljos-consensus settle [FLAGS]``
 
-.. table::
+=================================== ==========================================================================================================================
+Flag                                Meaning
+=================================== ==========================================================================================================================
+``--issue ID``                      ballots from ``vissue vote ID --json``
+``--ballots JSON``                  ``[{agent, choice}]``, or an object with ``ballots``, ``votes`` or ``agents[].voted``
+``--trust JSON``                    ``[[from, to, weight], ...]`` or ``[{from, to, weight}, ...]``
+``--self-weight W``                 the diagonal when a row does not name it; default 0.5
+``--susceptibility S``              1 is DeGroot; below 1 anchors each voter to its ballot; default 1
+``--susceptibility-of JSON``        ``\{agent: s\}``, a persona's own anchor per voter
+``--epsilon E [--epsilon-of JSON]`` bounded confidence instead of the trust graph: each voter averages only voters within L1 distance ``E`` of its own opinion
+``--max-iter N``, ``--tol T``       the fixed-point budget; defaults 200 and 1e-9
+``--seldon [--out DIR]``            write Seldon inputs, run ``seldon``, read the result
+=================================== ==========================================================================================================================
 
-    +-------------------------------+---------------------------------------------------------------------------------------+
-    | Flag                          | Meaning                                                                               |
-    +===============================+=======================================================================================+
-    | ``--issue ID``                | ballots from ``vissue vote ID --json``                                                |
-    +-------------------------------+---------------------------------------------------------------------------------------+
-    | ``--ballots JSON``            | ``[{agent, choice}]``, or an object with ``ballots``, ``votes`` or ``agents[].voted`` |
-    +-------------------------------+---------------------------------------------------------------------------------------+
-    | ``--trust JSON``              | ``[[from, to, weight], ...]`` or ``[{from, to, weight}, ...]``                        |
-    +-------------------------------+---------------------------------------------------------------------------------------+
-    | ``--self-weight W``           | the diagonal when a row does not name it; default 0.5                                 |
-    +-------------------------------+---------------------------------------------------------------------------------------+
-    | ``--susceptibility S``        | 1 is DeGroot; below 1 anchors each voter to its ballot; default 1                     |
-    +-------------------------------+---------------------------------------------------------------------------------------+
-    | ``--max-iter N``, ``--tol T`` | the fixed-point budget; defaults 200 and 1e-9                                         |
-    +-------------------------------+---------------------------------------------------------------------------------------+
-    | ``--seldon [--out DIR]``      | write Seldon inputs, run ``seldon``, read the result                                  |
-    +-------------------------------+---------------------------------------------------------------------------------------+
+Output: ``options`` sorted, ``shares`` in that order, ``rounds``, ``settled``,
+``engine`` (``degroot-fj``, ``bounded-confidence``, ``seldon``, or ``empty``),
+``polarization`` (the sum over voters of the squared distance from the mean
+final opinion) and ``disagreement`` (the sum over trust edges of weight times
+the squared distance between the two ends), both after Musco, Musco and
+Tsourakakis (doi:10.1145/3178876.3186103).
 
-Output: ``options`` sorted, ``shares`` in that order, ``rounds``, ``settled``, and
-``engine`` (``degroot-fj``, ``seldon``, or ``empty``).
+``ljos-consensus surprising (--issue ID | --ballots JSON) --predictions JSON``
+
+The surprisingly popular answer (Prelec, Seung and McCoy,
+doi:10.1038/nature21054). ``--predictions`` is an array of ``{agent, expect}``
+where ``expect`` is an option, or an object of option to the share the voter
+expects the others to give it. Output: ``options``, ``actual`` and ``predicted``
+shares, ``surprise`` (actual minus predicted), ``answer`` (the largest
+surprise; absent below two predictors), ``predictors``.
+
+``ljos-consensus reputation --trust JSON [--agents a,b,c] [--alpha A]``
+
+EigenTrust (Kamvar, Schlosser and Garcia-Molina,
+doi:10.1145/775152.775242): a global standing per voter from the pairwise
+rows, the principal eigenvector of the row-normalised trust matrix pulled
+toward a uniform pre-trust by ``alpha`` (default 0.15). Output: ``standing``
+as an object of voter to a share of one.
+
+``ljos-consensus reliability (--items JSON | --project P) [--rounds N]``
+
+Dawid and Skene's estimate (doi:10.2307/2346806) of each voter's accuracy
+from many items with no known truth: expectation maximisation over the
+items' hidden answers and the voters' accuracies, twenty rounds by default.
+``--items`` is a JSON array of ballot arrays; ``--project`` reads every issue
+of a tracker project that holds two or more ballots. Output: ``items``,
+``rounds``, and ``accuracy`` as an object of voter to a value in (0, 1),
+Laplace smoothed so no voter reaches a certainty.
 
 The step
---------
+========
 
 ``x(t+1) = (1 - s) x(0) + s W x(t)``, with ``W`` the row-stochastic trust matrix
 and ``s`` the susceptibility. A voter's opinion is a distribution over the
 options, one-hot at the start. Missing self weight is filled with
-``--self-weight``; a voter with no row listens only to itself. Shares are the
+``--self-weight``; a voter with no row of its own listens to everyone
+equally, itself included. Shares are the
 column sums of the fixed point, normalised.
 
 Library
--------
+=======
 
-``ljos_consensus::{Ballot, Outcome, roster, influence_matrix, settle, ballots_from_json, trust_from_json, settle_seldon}``. The Seldon module
+The crate root exports ``Ballot``, ``Outcome``, ``roster``,
+``influence_matrix``, ``settle``, ``settle_anchored``, ``settle_bounded``,
+``dawid_skene``, ``surprisingly_popular``, ``eigentrust``,
+``ballots_from_json``, ``trust_from_json``, ``anchors_from_json``,
+``predictions_from_json``, and ``settle_seldon``. The Seldon module
 writes and reads the engine's files and links nothing under a copyleft
 licence.
