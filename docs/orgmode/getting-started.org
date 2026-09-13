@@ -3,6 +3,16 @@
 
 Three voters, two options, and a trust graph that changes the answer.
 
+* 0. Install
+
+#+begin_src console
+$ cargo binstall ljos-consensus
+$ ljos-consensus --help
+#+end_src
+
+The crate is on crates.io as =ljos-consensus=. The name =consensus= is
+already a Bitcoin crate.
+
 * 1. Settle with equal trust
 
 #+begin_src text
