@@ -182,6 +182,7 @@ fn main() -> Result<()> {
             epsilon_of,
             max_iter,
             tol,
+            engine,
         } => {
             let ballots = load_ballots(issue.as_deref(), ballots.as_deref())?;
             let anchors = match susceptibility_of.as_deref() {
