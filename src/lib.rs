@@ -17,6 +17,11 @@ pub struct Outcome {
     pub shares: Vec<f64>,
     pub rounds: usize,
     pub settled: bool,
+    /// How far from settled the engine stopped: for the energy engine the
+    /// largest component of the energy's gradient at the point returned.
+    /// Zero when an engine does not measure it.
+    #[serde(default)]
+    pub residual: f64,
     pub engine: String,
     /// Sum over agents of the squared distance from the mean final opinion
     /// (Musco, Musco and Tsourakakis, doi:10.1145/3178876.3186103).
@@ -167,6 +172,7 @@ pub fn settle_bounded(
             shares: vec![],
             rounds: 0,
             settled: true,
+            residual: 0.0,
             engine: "empty".into(),
             polarization: 0.0,
             disagreement: 0.0,
@@ -602,6 +608,7 @@ pub fn settle_anchored(
             shares: vec![],
             rounds: 0,
             settled: true,
+            residual: 0.0,
             engine: "empty".into(),
             polarization: 0.0,
             disagreement: 0.0,
@@ -710,6 +717,7 @@ pub fn settle_energy(
             shares: vec![],
             rounds: 0,
             settled: true,
+            residual: 0.0,
             engine: "empty".into(),
             polarization: 0.0,
             disagreement: 0.0,
@@ -891,7 +899,13 @@ pub fn settle_energy(
         .1
         .iter()
         .fold(0.0_f64, |m, g| m.max(g.abs()));
-    let settled = residual <= control.gtol * (n as f64).sqrt();
+    // Settled at the tolerance asked, or at the floor floating point sets:
+    // once the decrease a step could buy, of the order of the squared
+    // gradient, is below the energy's own rounding, no line search can
+    // accept a step, and the point is as settled as the arithmetic allows.
+    let value = energy.energy_gradient(coords.view()).0;
+    let floor = (f64::EPSILON * (1.0 + value.abs())).sqrt();
+    let settled = residual <= (control.gtol * (n as f64).sqrt()).max(floor);
     let x = energy.opinions(coords.view());
     let mut shares = vec![0.0; m];
     for row in &x {
@@ -911,6 +925,7 @@ pub fn settle_energy(
         shares,
         rounds,
         settled,
+        residual,
         engine: "fj-energy".into(),
         polarization,
         disagreement,
