@@ -2,6 +2,21 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
+## 0.6.0 (2026-09-19)
+
+- `settle_energy`, and `settle --engine energy`: the Friedkin-Johnsen
+  settle as the minimum of its energy over a softmax parametrisation,
+  found by rgmin's L-BFGS. A penalty on each row's summed logits fixes
+  the softmax gauge; the line search is Wolfe from unit step, because
+  rgmin opens each search at half the last accepted step and a search
+  that only shrinks stalled the settle.
+- `Outcome.residual`: the largest gradient component at the point the
+  energy engine returned; zero for the other engines. `settled` is
+  judged there, against the tolerance scaled by the voter count or the
+  floating floor, whichever is larger.
+- Registry `rgmin` 0.2.0 and `eindir-core` 0.6.0, so the crate
+  publishes.
+
 ## 0.5.0 (2026-09-13)
 
 - `examples/synthetic_voters.rs`: the rules measured where the truth is
