@@ -7,7 +7,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use ljos_consensus::seldon::{parse_opinions_dir, write_seldon_inputs};
 use ljos_consensus::{
-    anchors_from_json, ballots_from_json, settle_anchored, trust_from_json, Ballot,
+    anchors_from_json, ballots_from_json, settle_anchored, settle_energy, trust_from_json,
+    Ballot,
 };
 
 #[derive(Parser)]
@@ -181,6 +182,7 @@ fn main() -> Result<()> {
             epsilon_of,
             max_iter,
             tol,
+            engine,
         } => {
             let ballots = load_ballots(issue.as_deref(), ballots.as_deref())?;
             let anchors = match susceptibility_of.as_deref() {
