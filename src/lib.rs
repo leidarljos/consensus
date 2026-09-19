@@ -742,6 +742,9 @@ pub fn settle_energy(
         }
     }
 
+    /// Weight of the gauge term on each row's summed logits.
+    const GAUGE: f64 = 1e-2;
+
     struct Energy {
         n: usize,
         m: usize,
@@ -791,10 +794,17 @@ pub fn settle_energy(
             }
             // dE/dz through the softmax: J = diag(x) - x x^T.
             let mut gz = Array1::<f64>::zeros(self.n * self.m);
+            let zs = z.as_slice().unwrap();
             for i in 0..self.n {
                 let dot: f64 = (0..self.m).map(|k| gx[i][k] * x[i][k]).sum();
+                // The softmax is shift-invariant along each row, so the
+                // energy is flat there and the Hessian singular; a penalty on
+                // the row's mean logit fixes that gauge without moving any
+                // opinion, and the minimiser sees a curved bowl.
+                let shift: f64 = zs[i * self.m..(i + 1) * self.m].iter().sum();
+                e += GAUGE * shift * shift;
                 for k in 0..self.m {
-                    gz[i * self.m + k] = x[i][k] * (gx[i][k] - dot);
+                    gz[i * self.m + k] = x[i][k] * (gx[i][k] - dot) + 2.0 * GAUGE * shift;
                 }
             }
             (e, gz)
@@ -838,11 +848,17 @@ pub fn settle_energy(
             0.0,
         ),
     };
-    // Start at the ballots, softly: a logit of four on the chosen option.
+    // Start at the ballots, softly: logits summing to zero on each row, four
+    // apart between the chosen option and the rest.
     let mut z = Array1::<f64>::zeros(dim);
+    let mf = m as f64;
     for i in 0..n {
         for k in 0..m {
-            z[i * m + k] = if x0[i][k] > 0.5 { 4.0 } else { 0.0 };
+            z[i * m + k] = if x0[i][k] > 0.5 {
+                4.0 * (mf - 1.0) / mf
+            } else {
+                -4.0 / mf
+            };
         }
     }
     let control = rgmin::Control {
