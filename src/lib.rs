@@ -878,13 +878,20 @@ pub fn settle_energy(
             maxiter: 40,
         },
     );
-    let (coords, rounds, settled) = match report {
-        Ok(r) => {
-            let done = r.grad_norm <= control.gtol;
-            (r.coords, r.steps, done)
-        }
-        Err(_) => (z, 0, false),
+    // Settled is judged here, at the point returned: the largest component
+    // of the energy's own gradient there, against the tolerance asked for,
+    // scaled by the number of voters so a wide panel is not held to a
+    // tighter bar per voter than a small one.
+    let (coords, rounds) = match report {
+        Ok(r) => (r.coords, r.steps),
+        Err(_) => (z, 0),
     };
+    let residual = energy
+        .energy_gradient(coords.view())
+        .1
+        .iter()
+        .fold(0.0_f64, |m, g| m.max(g.abs()));
+    let settled = residual <= control.gtol * (n as f64).sqrt();
     let x = energy.opinions(coords.view());
     let mut shares = vec![0.0; m];
     for row in &x {
