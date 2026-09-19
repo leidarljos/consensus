@@ -82,6 +82,7 @@ pub fn parse_opinions_dir(
         shares,
         rounds,
         settled,
+        residual: 0.0,
         engine: "seldon".into(),
         polarization: 0.0,
         disagreement: 0.0,
