@@ -7,8 +7,7 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use ljos_consensus::seldon::{parse_opinions_dir, write_seldon_inputs};
 use ljos_consensus::{
-    anchors_from_json, ballots_from_json, settle_anchored, settle_energy, trust_from_json,
-    Ballot,
+    anchors_from_json, ballots_from_json, settle_anchored, settle_energy, trust_from_json, Ballot,
 };
 
 #[derive(Parser)]
