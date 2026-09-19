@@ -871,20 +871,24 @@ pub fn settle_energy(
             };
         }
     }
+    // The quasi-Newton direction carries its own scale, so the first trial
+    // step is one. rgmin opens each line search at half the step it last
+    // accepted, and a search that can only shrink then collapses the step
+    // geometrically; the Wolfe search can grow it again.
     let control = rgmin::Control {
         maxiter: max_iter.max(1),
         gtol: tol.max(1e-12),
-        istep: 0.1,
-        maxmove: Some(2.0),
+        istep: 1.0,
+        maxmove: Some(4.0),
     };
     let report = rgmin::minimize_method(
         &energy,
         z.clone(),
         &control,
         rgmin::Method::Lbfgs { memory: 10 },
-        rgmin::LineSearch::Backtracking {
-            c: 1e-4,
-            beta: 0.5,
+        rgmin::LineSearch::Wolfe {
+            c1: 1e-4,
+            c2: 0.9,
             maxiter: 40,
         },
     );
