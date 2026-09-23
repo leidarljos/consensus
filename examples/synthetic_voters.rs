@@ -158,6 +158,7 @@ fn main() {
                     Ballot {
                         agent: n.clone(),
                         choice: choice.to_string(),
+                        confidence: None,
                     }
                 })
                 .collect();

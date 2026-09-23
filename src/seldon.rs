@@ -309,10 +309,12 @@ mod tests {
             Ballot {
                 agent: "a".into(),
                 choice: "ship".into(),
+                confidence: None,
             },
             Ballot {
                 agent: "b".into(),
                 choice: "hold".into(),
+                confidence: None,
             },
         ];
         let trust = vec![("a".into(), "b".into(), 1.0), ("b".into(), "a".into(), 1.0)];

@@ -198,7 +198,7 @@ fn main() -> Result<()> {
                     None => std::collections::BTreeMap::new(),
                 };
                 let outcome = ljos_consensus::settle_bounded(&ballots, eps, &bounds, max_iter, tol);
-                println!("{}", serde_json::to_string_pretty(&outcome)?);
+                emit_settle(&ballots, &outcome, false, true)?;
                 return Ok(());
             }
             if use_seldon && !anchors.is_empty() {
@@ -216,7 +216,7 @@ fn main() -> Result<()> {
                     tol,
                     out,
                 )?;
-                println!("{}", serde_json::to_string_pretty(&outcome)?);
+                emit_settle(&ballots, &outcome, trust.is_empty(), false)?;
             } else if engine == "energy" {
                 let outcome = settle_energy(
                     &ballots,
@@ -227,7 +227,7 @@ fn main() -> Result<()> {
                     max_iter,
                     tol,
                 );
-                println!("{}", serde_json::to_string_pretty(&outcome)?);
+                emit_settle(&ballots, &outcome, trust.is_empty(), !anchors.is_empty())?;
             } else {
                 let outcome = settle_anchored(
                     &ballots,
@@ -238,10 +238,25 @@ fn main() -> Result<()> {
                     max_iter,
                     tol,
                 );
-                println!("{}", serde_json::to_string_pretty(&outcome)?);
+                emit_settle(&ballots, &outcome, trust.is_empty(), !anchors.is_empty())?;
             }
         }
     }
+    Ok(())
+}
+
+fn emit_settle(
+    ballots: &[ljos_consensus::Ballot],
+    outcome: &ljos_consensus::Outcome,
+    equal_weight: bool,
+    anchored: bool,
+) -> Result<()> {
+    print!(
+        "{}",
+        ljos_consensus::reading(outcome, equal_weight, anchored)
+    );
+    print!("{}", ljos_consensus::crowding_reading(ballots, outcome));
+    println!("{}", serde_json::to_string_pretty(outcome)?);
     Ok(())
 }
 

@@ -16,6 +16,10 @@ pkg-fmt = "tgz"
 name = "ljos-consensus"
 path = "src/main.rs"
 
+[[bin]]
+name = "crowd-bench"
+path = "src/bin/crowd_bench.rs"
+
 [dependencies]
 libc = "0.2"
 anyhow = "1"

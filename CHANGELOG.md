@@ -2,6 +2,24 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
+## Unreleased
+
+- `crowd-bench` prints the pinned seed `0xC0FFEE` and a 100-seed mean,
+  sample standard deviation, and standard error. The inverse-variance
+  mean is the baseline that knows the noise. On the biased task that
+  column stays the ordinary mean, because a fixed offset is not a
+  variance. A deaf expert beats the unweighted mean only when its
+  variance is below `1/(n+1)` and the companions have variance 1.
+- `settle` prints a reading before the JSON. Polarization and disagreement
+  say whether the mean is a position to act on. A zero with one option is
+  named as one option.
+- Beside the settle: a bloc weighs n to the power one half, not n, and
+  crowding is the diversity listening removed. That collapse is not an
+  accuracy gain. A threshold crowd joins from zero until the next person
+  will not.
+- Two matching public signals start an information cascade. On a ring,
+  unlike neighbors swap while that lowers the unhappy count.
+
 ## 0.6.0 (2026-09-19)
 
 - `settle_energy`, and `settle --engine energy`: the Friedkin-Johnsen
