@@ -41,6 +41,7 @@ First minute
 
    $ cargo binstall ljos-consensus
    $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"hold"}]'
+   {"options":["hold","ship"],"shares":[0.5,0.5],"rounds":2,"settled":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0}
 
 The :doc:`tutorial <getting-started>` adds trust, then an anchor.
 The seat verb is ``ljos consensus``.
