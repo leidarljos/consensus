@@ -43,6 +43,7 @@ $ ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","
 #+begin_src console
 $ cargo binstall ljos-consensus
 $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"hold"}]'
+{"options":["hold","ship"],"shares":[0.5,0.5],"rounds":2,"settled":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0}
 #+end_src
 
 The [[file:getting-started.org][tutorial]] adds trust, then an anchor.

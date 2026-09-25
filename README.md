@@ -1,6 +1,6 @@
 # consensus
 
-DeGroot / Friedkin–Johnsen over a trust graph. This crate is the seat model.
+Who agrees, weighted by who listens to whom? DeGroot / Friedkin-Johnsen over a trust graph. This crate is the seat model.
 
 **Seldon** ([seldon-code/seldon](https://github.com/seldon-code/seldon)) is the ODE engine. This crate does not link it (GPL). `ljos-consensus settle --seldon` writes a DeGroot TOML plus `network.txt` / `opinions.txt` from ballots and trust, then execs `seldon` when it is on PATH.
 
@@ -16,6 +16,15 @@ Docs: https://leidarljos.github.io/consensus/
 | [Explanation](https://leidarljos.github.io/consensus/explanation.html) | Why weigh, and when a count is wrong |
 
 The seat that settles through this crate is documented at https://leidarljos.github.io.
+
+## First minute
+
+```console
+$ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"hold"}]'
+{"options":["hold","ship"],"shares":[0.5,0.5],"rounds":2,"settled":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0}
+```
+
+The [tutorial](https://leidarljos.github.io/consensus/getting-started.html) adds trust, then an anchor.
 
 ```
 ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
@@ -41,6 +50,6 @@ Panels of parallel agents that debate and vote (self-consistency, multi-agent de
 seldon config.toml -o dir -n network.txt -a opinions.txt
 ```
 
-The last `opinions_i.txt` is parsed back into the same `Outcome` the discrete stepper prints. Friedkin–Johnsen (`--susceptibility` below 1) stays on the native `settle()`; Seldon DeGroot has no anchor.
+The last `opinions_i.txt` is parsed back into the same `Outcome` the discrete stepper prints. Friedkin-Johnsen (`--susceptibility` below 1) stays on the native `settle()`; Seldon DeGroot has no anchor.
 
 Native `settle()` is the test path. It does not need `seldon` on PATH.
