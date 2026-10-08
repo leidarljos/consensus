@@ -21,8 +21,12 @@
 //!
 //! ```console
 //! $ cargo run --release --example correlated_voters -- 5 4 400 20
+//! $ cargo run --release --example correlated_voters -- 5 4 400 20 infer
 //! ```
-//! clones, independent voters, questions, seeds.
+//! clones, independent voters, questions, seeds; `infer` reads the
+//! correlation against the Dawid-Skene answer rather than the named
+//! outcomes, which leaves the clones looking independent (they make most
+//! of that answer) and the discount inert: 0.705 against 0.794.
 
 use std::collections::BTreeMap;
 
@@ -107,6 +111,9 @@ fn main() {
     let solos: usize = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(4);
     let questions: usize = args.get(3).and_then(|a| a.parse().ok()).unwrap_or(400);
     let seeds: u64 = args.get(4).and_then(|a| a.parse().ok()).unwrap_or(20);
+    // `infer`: read the correlation against the Dawid-Skene answer instead
+    // of the named outcomes, as a project with no outcomes recorded would.
+    let infer = args.get(5).is_some_and(|a| a == "infer");
     let judge_acc = 0.70;
     let names: Vec<String> = (0..clones)
         .map(|i| format!("clone{i}"))
@@ -155,7 +162,12 @@ fn main() {
                 });
             }
             if q > 0 && q % 25 == 0 {
-                let reading = correlation(&history, &truths, 20, 10);
+                let named: Vec<Option<String>> = if infer {
+                    vec![None; truths.len()]
+                } else {
+                    truths.clone()
+                };
+                let reading = correlation(&history, &named, 20, 10);
                 discount = reading.discount;
                 n_eff = reading.independent_voters;
             }

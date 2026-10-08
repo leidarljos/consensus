@@ -265,14 +265,21 @@ correctness on each item, against the outcome where one was named and the
 Dawid-Skene answer otherwise, and the correlation of those indicators per
 pair. It prints the discount each voter keeps, ``1 / (1 + sum_k max(rho_ik,
 0))``, for ``settle --discount-of``, the panel's ``effective_voters`` under
-equal weights, and its ``independent_voters`` once discounted. Against an
-inferred answer the majority bloc defines the truth and its correlation
-reads high; named outcomes do not have that bias, so ``learn`` is worth
-running. Measured on five clones of one judge right 0.70 of the time
-beside four independent voters in [0.60, 0.75] (``examples/correlated_voters.rs``,
-the discount re-read every 25 questions), a count scores 0.701, log-odds
-weights 0.710, the same weights with the discount 0.794, and the true
-weights with the clones merged 0.805.
+equal weights, and its ``independent_voters`` once discounted. Measured on
+five clones of one judge right 0.70 of the time beside four independent
+voters in [0.60, 0.75] (``examples/correlated_voters.rs``, the discount
+re-read every 25 questions against the named outcomes), a count scores
+0.701, log-odds weights 0.710, the same weights with the discount 0.794,
+and the true weights with the clones merged 0.805.
+
+The reading needs those outcomes. Against the Dawid-Skene answer instead
+(the example's ``infer`` argument), the clone bloc is most of the answer it
+is read against, so its members look right on every item, their
+correctness never varies, and their correlation reads zero: the reading
+holds 8.40 independent voices where there are five, and the discount
+leaves the group at 0.705. It does no harm on a panel with no clones
+(0.832 against 0.834), but it buys nothing without named outcomes, which
+is why the seat does not apply it to a settle by default.
 
 Independence before influence
 =============================
