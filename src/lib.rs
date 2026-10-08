@@ -1,7 +1,7 @@
 //! Discrete DeGroot / Friedkin–Johnsen. Seldon is the ODE engine
 //! (`seldon` on PATH). This crate does not link GPL Seldon.
 
-
+pub mod correlation;
 pub mod exact;
 pub mod seldon;
 
