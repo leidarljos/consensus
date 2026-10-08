@@ -1,30 +1,36 @@
 //! How much the voters say the same thing for the same reason.
 //!
-//! Personas answered by one model share its mistakes (Kim et al. 2025,
-//! doi:10.48550/arXiv.2506.07962), and the jury theorem's promise rests on
-//! independent errors (Ladha, doi:10.2307/2111584; Dietrich and Spiekermann,
-//! doi:10.1093/mind/fzt074). Read off a project's history: each voter's
-//! correctness on each item, against the outcome where one was named and the
-//! Dawid-Skene answer otherwise, and the Pearson correlation of those
-//! indicators between each pair over the items both voted on.
+//! Personas that run on one model share its mistakes (Kim et al. 2025,
+//! doi:10.48550/arXiv.2506.07962). The jury theorem's promise weakens as
+//! errors correlate (Ladha, doi:10.2307/2111584), and Dietrich and
+//! Spiekermann (doi:10.1093/mind/fzt074) show what a shared cause does to it.
+//! This module reads correlated errors, the trace of that shared cause, off a
+//! project's history. A voter's correctness on each item is scored against
+//! the outcome where one was named, and the Dawid-Skene answer otherwise. A
+//! Pearson correlation of those scores is taken for each pair, over the items
+//! both voted on.
 //!
-//! derive/sympy/jury.py derives the discount. In a cluster of `k` voters
+//! derive/sympy/jury.py derives the discount. For a cluster of `k` voters
 //! correlated `rho`, the weights that minimise the variance of the combined
-//! vote divide each member by `1 + (k - 1) rho`, so the cluster counts as
-//! `k / (1 + (k - 1) rho)` voters and, as `rho` goes to one, as one. The
-//! discount here is that rule with the cluster read off the matrix:
-//! `1 / (1 + sum_{k != i} rho_ik)` over the pairs the gate below counts.
+//! vote divide each member's weight by `1 + (k - 1) rho`. The cluster
+//! counts as `k / (1 + (k - 1) rho)` voters, and as `rho` goes to one, as
+//! one. The discount here is that rule with the cluster read off the
+//! matrix, `1 / (1 + sum_{j != i} rho_ij)` over the pairs the gate below
+//! counts.
 //!
-//! Against an inferred answer the majority bloc defines the truth, so its
-//! members look right together and their correlation reads high; named
-//! outcomes do not have that bias.
+//! An inferred answer is whatever the majority bloc says, and the bloc's
+//! members look right on nearly every item, so their correctness barely
+//! varies and their correlation reads near zero. Named outcomes do not
+//! have that bias.
 //!
-//! A seat's history is short, and over `m` shared items the correlation of
-//! two voters who err apart reads about `N(0, 1/m)`. Counting every positive
-//! reading would discount independent voters by noise, so a pair counts
-//! only when `sqrt(m) rho` passes the one-sided test of independence at
-//! `gate`: `m rho^2` is Pearson's chi-square for the pair's 2x2 table
-//! (derive/sympy/jury.py). Exact clones read one and pass from three items.
+//! A seat's history is short. The correlation of two voters who err apart
+//! reads about `N(0, 1/m)` over `m` shared items, so counting every positive
+//! reading would discount independent voters by noise. A pair counts only
+//! when `sqrt(m) rho` passes the one-sided test of independence at `gate`.
+//! `m rho^2` is Pearson's chi-square for the pair's 2x2 table
+//! (derive/sympy/jury.py). On its own the gate would pass exact clones from
+//! three shared items when they have both a hit and a miss there. By default
+//! a pair needs five shared items (`min_shared`).
 
 use std::collections::BTreeMap;
 
@@ -47,14 +53,15 @@ pub struct Correlation {
     /// counts every positive reading.
     pub gate: f64,
     /// The weight each voter's ballot keeps once its correlated company is
-    /// counted: `1 / (1 + sum_{k != i} rho_ik)` over the pairs that passed.
+    /// counted: `1 / (1 + sum_{j != i} rho_ij)` over the pairs that passed.
     pub discount: BTreeMap<String, f64>,
     /// How many independent voters the panel is worth with equal weights:
     /// `n^2 / sum_ij rho_ij` over the pairs that passed, `n` when nobody
-    /// shares errors. A count gets this much.
+    /// shares errors. A plain count gets this much.
     pub effective_voters: f64,
     /// How many independent voices the panel holds once each is discounted:
-    /// the sum of the discounts, `k / (1 + (k - 1) rho)` a cluster.
+    /// the sum of the discounts, `k / (1 + (k - 1) rho)` for a cluster of `k`
+    /// voters correlated `rho`.
     pub independent_voters: f64,
     /// Items read, and how many had a named outcome.
     pub items: usize,
@@ -211,9 +218,9 @@ pub fn correlation(
 mod tests {
     use super::*;
 
-    /// Three clones of one judge beside two independent voters: the clones
-    /// read correlated and keep about a third of their weight each, the
-    /// independents keep theirs, and the panel holds three voices, not five.
+    /// Three clones of one judge beside two independent voters. The clones
+    /// read correlated and keep about a third of their weight each.
+    /// Independents keep theirs; the panel holds three voices, not five.
     #[test]
     fn clones_share_their_weight_and_independents_keep_theirs() {
         let mut state = 7u64;
@@ -249,7 +256,7 @@ mod tests {
             c.discount
         );
         assert!(c.discount["solo1"] > 0.8, "{:?}", c.discount);
-        // Equal weights: 25 / 11 of a voter; discounted: about three voices.
+        // Equal weights: 25 / 11 voters, about 2.3; discounted: about three.
         assert!(
             c.effective_voters > 2.0 && c.effective_voters < 2.6,
             "{}",
@@ -263,11 +270,12 @@ mod tests {
         assert_eq!(c.named, 300);
     }
 
-    /// Six named outcomes: two clones always agree, and a voter who errs on
-    /// its own happens to read 0.25 against the other independent voter and
-    /// against each clone. Ungated, that noise leaves it 1/1.75 of its
-    /// weight; the gate (sqrt(6) 0.25 = 0.61 < 1.645) leaves it whole and
-    /// still halves each clone.
+    /// Six named outcomes: two clones always agree. An independent voter
+    /// whose misses each land on another voter's happens to read 0.25 against
+    /// the other independent voter and against each clone. That noise would
+    /// leave it 1/1.75 of its weight without the gate. The gate leaves that
+    /// voter whole, since `sqrt(6) 0.25 = 0.61 < 1.645`, and still halves
+    /// each clone.
     #[test]
     fn on_a_short_history_the_gate_counts_clones_and_not_noise() {
         let right = |who: &str, pattern: &[bool], items: &mut Vec<Vec<(String, String)>>| {

@@ -13,8 +13,9 @@ over a row-stochastic trust matrix `W` and susceptibilities `s i ∈ [0, q]`.
   of `W` averages.
 * `fjStep_contracting`: for `q < 1` it is a contraction, so it has exactly one
   fixed point and the iteration converges to it from any start (Banach).
-* `fjStep_aposteriori`: the bound `settle_with` stops on,
-  `dist x(t) x* ≤ q / (1 - q) * dist x(t-1) x(t)`.
+* `fjStep_aposteriori`: Banach's part of the bound `settle_with` stops on,
+  `dist x(t) x* ≤ q / (1 - q) * dist x(t-1) x(t)`, without the rounding term
+  derive/sollya/rounding.sollya adds.
 -/
 
 open Finset

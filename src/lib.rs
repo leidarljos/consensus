@@ -38,7 +38,8 @@ pub struct Outcome {
     pub agents: Vec<String>,
     /// Each voter's social power: the weight its ballot carries in the
     /// shares, `c = (1/n) P^T 1` for the fixed point `x* = P x0` (Friedkin,
-    /// doi:10.1086/229694). Sums to one; the shares are the vote it weighs.
+    /// doi:10.1086/229694). They sum to one. The shares are the vote they
+    /// weigh.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub influence: Vec<f64>,
     /// `1 / sum c_i^2`: how many equal voices the settle is worth. One when
@@ -617,21 +618,23 @@ pub fn settle_anchored(
 pub enum SelfTrust {
     /// The same weight for every voter; the tracker's default is 0.5.
     Constant(f64),
-    /// What the others give it: the mean weight the rows that name the
-    /// voter put on it, else the fallback. With rows that weigh each voter
-    /// alike from everyone, as `learn` and `calibrate` write them, every row
-    /// is then the same, the settle is the weighted vote with those weights
-    /// in one round, and with log-odds rows that vote is Nitzan and
-    /// Paroush's optimum (doi:10.2307/2526438). A constant self-weight `sw`
-    /// weighs voter j by `w_j (S + sw - w_j)` instead (derive/sympy/fj.py,
-    /// identities 3 to 5).
+    /// What the others give it: the mean weight the rows that name the voter
+    /// put on it, else the fallback. When the rows weigh each voter alike
+    /// from everyone, as `learn` and `calibrate` write them, every row is
+    /// the same. With every voter listening fully (`s_i = 1`, the default),
+    /// the settle is then the weighted vote with those weights in one round
+    /// (derive/sympy/fj.py, identity 4). That vote is Nitzan and Paroush's
+    /// optimum (doi:10.2307/2526438) for log-odds rows from independent
+    /// voters, all better than chance, on a two-way choice. A constant
+    /// self-weight `sw` weighs voter j by `w_j (S + sw - w_j)` instead, with
+    /// `S` the sum of the weights (identity 3).
     Earned(f64),
 }
 
-/// [`influence_matrix`] with the self-weight rule named and each voter's
-/// inbound weight scaled by its discount (a voter absent from `discount`
-/// keeps 1): a voice correlated with others counts once among them
-/// ([`correlation`]).
+/// [`influence_matrix`] with the self-weight rule named, and each voter's
+/// inbound weight scaled by its discount. A voter absent from `discount`
+/// keeps its whole weight. Exact clones then count as one voice, and a
+/// looser cluster as more than one ([`correlation`]).
 #[must_use]
 pub fn influence_matrix_with(
     agents: &[String],
@@ -664,10 +667,11 @@ pub fn influence_matrix_with(
         })
         .collect();
     for (i, row) in w.iter_mut().enumerate() {
-        // A voter with no row of its own listens to everyone equally, itself
-        // included. Listening to nobody would make a settle with no rows a
-        // count, and the tracker's default listens to everyone; the two
-        // settles have to agree when neither has been told anything.
+        // A voter with no row of its own listens to everyone, itself
+        // included, each in proportion to its discount, so equally when
+        // there is none. Listening to nobody would make a settle with no
+        // rows a count, and the tracker's default listens to everyone; the
+        // two settles have to agree when neither has been told anything.
         if row.iter().all(|x| *x == 0.0) {
             row.clone_from(&d);
         } else {
@@ -719,7 +723,7 @@ impl Default for Opts {
     }
 }
 
-/// The pieces every settle of the trust graph starts from.
+/// The pieces the iterated and the closed-form settle start from.
 struct Setup {
     agents: Vec<String>,
     options: Vec<String>,
@@ -787,9 +791,10 @@ fn max_gap(a: &[Vec<f64>], b: &[Vec<f64>]) -> f64 {
         .fold(0.0_f64, f64::max)
 }
 
-/// The outcome of a settle that ended at opinions `x`: shares, spread,
-/// social power from `p` when the fixed point was read off, and whether
-/// the leading two options are farther apart than `residual` leaves open.
+/// The outcome of a settle that ended at opinions `x`: the shares, the
+/// spread, and the social power from `p` when the fixed point was read off.
+/// `tie` says the leading two options are no farther apart than twice
+/// `residual` plus a rounding allowance of `4 n eps`.
 #[allow(clippy::too_many_arguments)]
 fn outcome_of(
     setup: Setup,
@@ -822,9 +827,11 @@ fn outcome_of(
     } else {
         ranked.first().copied().unwrap_or(0.0)
     };
-    // Each opinion is within `residual` of the fixed point, so each share is
-    // and a difference of two within twice that; rounding adds a few ulps a
-    // voter.
+    // Where `residual` bounds the distance to the fixed point, every opinion
+    // is within it, so every share is too, and the gap between two shares is
+    // off by at most twice `residual`. `residual` bounds nothing on the
+    // last-step fallback, and on the exact path it is only rounding.
+    // Rounding adds a few ulps a voter.
     let open = 2.0 * residual + 4.0 * setup.agents.len() as f64 * f64::EPSILON;
     Outcome {
         effective_voters: exact::effective_voters(&influence),
@@ -843,16 +850,18 @@ fn outcome_of(
     }
 }
 
-/// The settle by iteration, stopped on a bound rather than a step. With
-/// `q = max s_i < 1` the step is a `q`-contraction in the sup norm, so
-/// `|x_t - x*| <= q / (1 - q) |x_t - x_(t-1)|` (Banach's estimate,
-/// derive/lean/ConsensusProofs/Contraction.lean), and binary64 adds at most
-/// `gamma(n + 2) / (1 - q)` to it (derive/sollya/rounding.sollya): the
-/// iteration stops once that bound is under `tol`, and `residual` is the
-/// bound. When some voter listens fully the step is no contraction in that
-/// norm; the fixed point is read off in closed form ([`exact::fixed_point`])
-/// and `residual` is the distance to it. Either way `settled` means within
-/// `tol` of the fixed point, not merely a small step.
+/// The settle by iteration, stopped on a bound rather than a step: `settled`
+/// means `residual` fell under `tol`. The step is a `q`-contraction in the
+/// sup norm for `q = max s_i < 1`, and Banach's estimate gives
+/// `|x_t - x*| <= q / (1 - q) |x_t - x_(t-1)|`
+/// (derive/lean/ConsensusProofs/Contraction.lean). Binary64 adds at most
+/// `gamma(n + 2) / (1 - q)` to it (derive/sollya/rounding.sollya). Iteration
+/// stops once that bound is under `tol`; `residual` is the bound. A voter
+/// that listens fully breaks the contraction in that norm. `residual` is
+/// then the distance to the closed-form fixed point
+/// ([`exact::fixed_point`]). When there is no closed form, `residual` is the
+/// last step, which bounds nothing. When `max_iter` runs out first, the
+/// distance to the closed form is reported if it is smaller.
 #[must_use]
 pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Outcome {
     let Some(setup) = setup(ballots, trust, opts) else {
@@ -891,10 +900,11 @@ pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &O
             break;
         }
     }
-    // A stiff panel reaches its fixed point before its bound says so: at
-    // tol 1e-9 the bound needs more than 200 rounds once q passes 0.89
-    // (derive/sollya/rounding.sollya). The distance to the closed form then
-    // answers instead.
+    // A stiff panel can reach its fixed point well before its bound says so.
+    // In the worst case, where each step shrinks by only q, the bound needs
+    // more than 200 rounds at tol 1e-9 once q passes about 0.892.
+    // settle_with then reads the distance to the closed form instead.
+    // derive/sollya/rounding.sollya checks the counts at 0.89 and 0.9.
     if !settled {
         if let Some(t) = &target {
             let measured = max_gap(&x, t);
@@ -926,8 +936,9 @@ fn gamma(k: usize) -> f64 {
 
 /// The settle read off in closed form: `x* = P x0` with `P` from
 /// [`exact::fixed_point`], no iteration. `residual` is the defect of one
-/// more step from `x*`, which only rounding leaves; `settled` is false
-/// only for a DeGroot class that cycles, which no settle ends.
+/// more step from `x*`, which only rounding leaves. No fixed point can be
+/// read off a periodic DeGroot class or a system too near singular to solve;
+/// the iteration's answer then comes back with `settled` false.
 #[must_use]
 pub fn settle_exact(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Outcome {
     let Some(setup) = setup(ballots, trust, opts) else {
@@ -1629,7 +1640,8 @@ mod tests {
             for (i, c) in case["influence"].as_array().unwrap().iter().enumerate() {
                 assert!((out.influence[i] - num(c)).abs() < 1e-12, "{name}: c[{i}]");
             }
-            // The iteration lands on the same point within its own bound.
+            // The iteration lands on the same shares, within 2e-9, twice its
+            // tolerance.
             let iterated = settle_with(
                 &ballots,
                 &rows,
@@ -1681,7 +1693,8 @@ mod tests {
                 "{earned:?}"
             );
         }
-        // The vote a weighs at 1.0 against b and c's 0.8 together: ship wins.
+        // a's weight of 1.0 beats b and c's 0.8 together, so ship takes
+        // 1 / 1.8 of the vote.
         let ship = earned.options.iter().position(|o| o == "ship").unwrap();
         assert!((earned.shares[ship] - 1.0 / 1.8).abs() < 1e-12);
         let constant = settle_exact(&ballots, &rows, &Opts::default());
@@ -1699,11 +1712,11 @@ mod tests {
         );
     }
 
-    /// With every voter anchored the iteration stops on Banach's bound, and
-    /// the bound holds: the reported residual is no smaller than the true
-    /// distance to the fixed point.
+    /// With every voter at susceptibility 0.95, the iteration stops on
+    /// Banach's bound. The bound holds: the reported residual is no smaller
+    /// than the gap between its shares and the closed form's.
     #[test]
-    fn the_residual_bounds_the_distance_to_the_fixed_point() {
+    fn the_residual_bounds_the_gap_in_shares() {
         let ballots: Vec<Ballot> = [("a", "x"), ("b", "y"), ("c", "y"), ("d", "x")]
             .iter()
             .map(|(a, c)| Ballot {
@@ -1745,10 +1758,11 @@ mod tests {
         }
     }
 
-    /// A panel anchored at 0.95 contracts faster than its bound says: here
-    /// the opinions are within 1e-9 by round 36 while the bound, at
-    /// q / (1 - q) = 19 times the step, gets there only at 40. Stopped at
-    /// 36, the distance to the closed form answers.
+    /// A panel with susceptibility 0.95 contracts faster than its bound
+    /// says. Its opinions are within 1e-9 of the fixed point from round 34,
+    /// but the bound, at `q / (1 - q) = 19` times the step, gets there only
+    /// at round 40. A run stopped at 36 settles on the distance to the
+    /// closed form.
     #[test]
     fn a_stiff_panel_settles_on_the_measured_distance() {
         let ballots: Vec<Ballot> = [("a", "x"), ("b", "y"), ("c", "y")]
@@ -1800,9 +1814,9 @@ mod tests {
         assert!(!out.tie && (out.margin - 0.5).abs() < 1e-9, "{out:?}");
     }
 
-    /// Three clones of one judge outvote two independent voters on a count;
-    /// discounted by the correlation reading they count as one voice, and
-    /// the independents carry the settle.
+    /// Three clones of one judge outvote two independent voters on a count.
+    /// A correlation reading gives three exact clones a third each, so they
+    /// count as one voice and the independents carry the settle.
     #[test]
     fn a_discount_counts_correlated_clones_once() {
         let ballots: Vec<Ballot> = [

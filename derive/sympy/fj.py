@@ -41,24 +41,26 @@ def main():
     L = sp.diag(*s)
     I = sp.eye(n)
 
-    # 1. The fixed point is x* = P x0 with P = (I - L W)^-1 (I - L), and P is
-    #    row-stochastic: (I - L W) 1 = 1 - L 1 = (I - L) 1, so P 1 = 1.
+    # 1. The fixed point is x* = P x0 with P = (I - L W)^-1 (I - L). P is
+    # row-stochastic: (I - L W) 1 = (I - L) 1 gives P 1 = 1, and the Neumann
+    # series of L W, a sum of nonnegative matrices, gives P >= 0; that series
+    # converges when every closed group of W holds a voter with s_i < 1.
     results.append(check("(I - L W) 1 = (I - L) 1", (I - L * W) * one - (I - L) * one))
     P = (I - L * W).inv() * (I - L)
     results.append(check("P 1 = 1 (P row-stochastic)", P * one - one))
 
-    # 2. The shares are a weighted vote. shares = (1/n) 1^T P X0 and X0's rows
-    #    are ballot indicators, so share_k = sum over voters of option k of c_i
-    #    with c = (1/n) P^T 1, the social power (Friedkin 1991,
-    #    doi:10.1086/229694); sum c = 1.
+    # 2. The shares are a weighted vote: shares = (1/n) 1^T P X0, and X0's
+    # rows are ballot indicators. Option k's share is the sum of c_i over its
+    # voters, with c = (1/n) P^T 1, the social power (Friedkin 1991,
+    # doi:10.1086/229694). They sum to one.
     c = (P.T * one) / n
     results.append(check("sum of social power = 1", sum(c) - 1))
 
     # 3. The rows `learn` writes: every voter gives voter j the same weight
-    #    w_j, and itself a constant self-weight sw. The DeGroot limit is the
-    #    left eigenvector pi with pi_j proportional to w_j (S + sw - w_j),
-    #    S = sum w: not proportional to w_j, so the settle compresses the
-    #    log-odds weights it was handed.
+    # w_j; the settle gives each a constant self-weight sw. Its DeGroot limit
+    # is the left eigenvector pi, with pi_j proportional to w_j (S + sw - w_j)
+    # where S = sum w. Since pi is not proportional to w, the settle
+    # compresses the log-odds weights it was handed.
     w = sp.symbols(f"w0:{n}", positive=True)
     sw = sp.Symbol("sw", positive=True)
     S = sum(w)
@@ -68,20 +70,21 @@ def main():
     pi = pi / sum(pi)
     results.append(check("pi^T W = pi^T for pi_j ~ w_j (S + sw - w_j)", (pi.T * Wl - pi.T).T))
 
-    # 4. Earned self-trust: fill the diagonal with the voter's own inbound
-    #    weight. Every row is then w / S, W = 1 w^T / S is rank one, the
-    #    DeGroot limit is pi = w / S in one round, and the settle is the
-    #    weighted majority with weights w: Nitzan-Paroush exactly when w are
-    #    log odds (doi:10.2307/2526438).
+    # 4. Earned self-trust fills the diagonal with the voter's own inbound
+    # weight. Every row is w / S. W = 1 w^T / S is rank one, so the DeGroot
+    # limit pi = w / S comes in one round. The settle is the weighted majority
+    # with weights w: Nitzan and Paroush's optimum (doi:10.2307/2526438) when
+    # w holds the log odds of independent voters, all better than chance, on a
+    # two-way choice.
     We = sp.Matrix(n, n, lambda i, j: w[j] / S)
     results.append(check("earned self-trust: W = 1 w^T / S", We - one * sp.Matrix([w]) / S))
     results.append(check("earned self-trust: W^2 = W (one round)", We * We - We))
 
-    # 5. With earned self-trust and anchors, Sherman-Morrison gives the
-    #    social power in closed form:
-    #      c_j = (1 - s_j) / n * (1 + w_j sum_i s_i / (S - sum_i w_i s_i)).
-    #    With one susceptibility s for all, c = (1 - s) / n + s w / S: the
-    #    settle is the mixture (1 - s) count + s accuracy-weighted vote.
+    # 5. Sherman-Morrison gives the social power in closed form under earned
+    # self-trust and anchors:
+    #     c_j = (1 - s_j) / n * (1 + w_j sum_i s_i / (S - sum_i w_i s_i)).
+    # One susceptibility s for all gives c = (1 - s) / n + s w / S: the settle
+    # puts weight 1 - s on a plain count and s on the vote weighted by w.
     Pe = (I - L * We).inv() * (I - L)
     ce = (Pe.T * one) / n
     sws = sum(w[i] * s[i] for i in range(n))
@@ -94,10 +97,10 @@ def main():
     mix = sp.Matrix([(1 - s_all) / n + s_all * w[j] / S for j in range(n)])
     results.append(check("uniform anchor: c = (1-s)/n + s w/S", uniform - mix))
 
-    # 6. Convergence rate of the learned rows with equal weights w and a
-    #    constant self-weight sw: W = a 1 1^T + (b - a) I with
-    #    a = w / D, b = sw / D, D = (n - 1) w + sw, so the second eigenvalue
-    #    is (sw - w) / D: zero, one round, exactly when sw = w.
+    # 6. The convergence rate of learned rows with equal weights w and a
+    # constant self-weight sw. W = a 1 1^T + (b - a) I, with a = w / D,
+    # b = sw / D and D = (n - 1) w + sw. Its second eigenvalue is
+    # (sw - w) / D: zero, and the settle takes one round, exactly when sw = w.
     wq = sp.Symbol("wq", positive=True)
     D = (n - 1) * wq + sw
     Wq = sp.Matrix(n, n, lambda i, j: (sw if i == j else wq) / D)
@@ -106,11 +109,13 @@ def main():
     lam2 = (sw - wq) / D
     results.append(check("second eigenvalue (sw - w) / ((n-1) w + sw)", charpoly.subs(lam, lam2)))
 
-    # 7. The a-posteriori bound the iteration stops on. With q = max s_i < 1
-    #    the map is a q-contraction in the sup norm (each row of W averages),
-    #    so |x_t - x*| <= q / (1 - q) |x_t - x_(t-1)|: the tail of the
-    #    geometric series sum_{k>=1} q^k. The Lean file proves the bound; here
-    #    the series and the round count it implies.
+    # 7. The a-posteriori bound the iteration stops on. This map is a
+    # q-contraction in the sup norm for q = max s_i < 1, since each row of W
+    # averages. The distance to the fixed point is at most the last step times
+    # the tail of the geometric series sum_{k>=1} q^k:
+    #     |x_t - x*| <= q / (1 - q) |x_t - x_(t-1)|.
+    # derive/lean/ConsensusProofs/Contraction.lean proves the bound. Only the
+    # series is checked here; derive/sollya/rounding.sollya counts the rounds.
     q, k = sp.symbols("q k", positive=True)
     tail = sp.summation(q**k, (k, 1, sp.oo))
     results.append(check("sum_{k>=1} q^k = q/(1-q) for |q|<1", sp.piecewise_fold(tail).args[0][0] - q / (1 - q)))
