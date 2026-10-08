@@ -41,6 +41,9 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   count is best, and with the gated discount beside five clones and four
   voters reaches 0.780 at five outcomes and 0.813 at a hundred, against
   0.719 and 0.708 for plug-in log odds.
+- `examples/synthetic_voters.rs` scores the record shrunk as `ljos learn`
+  keeps it: 0.929 on nine voters and 0.971 on fifteen, against 0.934 and
+  0.974 for `calibrate`.
 - `derive/`: the identities in SymPy, the gate's `m rho^2` as the
   two-by-two chi-square among them, the contraction, the stopping bound,
   the simplex, Nitzan and Paroush's theorem and the self-trust weights

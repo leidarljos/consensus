@@ -28,10 +28,12 @@
 //!   record of hits and misses so far, smoothed by one of each, gives its
 //!   accuracy, and the rows are the log odds of that scaled to the best at
 //!   one, before each question. The online form of `calibrate`.
-//! - `..., earned self-trust`: the same rows with each voter weighing its
-//!   own ballot as the others weigh it rather than at a constant 0.5, which
-//!   makes the settle the weighted vote the rows describe
-//!   (derive/sympy/fj.py).
+//! - `learn log-odds online, shrunk`: the same record, but shrunk toward the
+//!   pooled accuracy as `ljos learn` now reads it.
+//! - `..., earned self-trust`: the same rows as `calibrate log-odds` and
+//!   `learn log-odds online`, with each voter weighing its own ballot as the
+//!   others weigh it, not at a constant 0.5. Under that fill the settle is
+//!   the weighted vote the rows describe (derive/sympy/fj.py).
 //!
 //! ```console
 //! $ cargo run --release --example synthetic_voters -- 9 400 20
@@ -86,6 +88,43 @@ fn log_odds_rows(acc: &BTreeMap<String, f64>) -> Vec<(String, String, f64)> {
         }
     }
     rows
+}
+
+/// Each voter's accuracy from its record, shrunk toward the pooled accuracy
+/// by empirical Bayes as ljos `shrunk_accuracy` reads it. `record` starts at
+/// one hit and one miss, which this takes back off.
+fn shrunk_acc(record: &BTreeMap<String, (f64, f64)>) -> BTreeMap<String, f64> {
+    let raw: Vec<(&String, f64, f64)> = record
+        .iter()
+        .map(|(n, (h, m))| (n, h - 1.0, h + m - 2.0))
+        .collect();
+    let (hits, seen) = raw.iter().fold((0.0, 0.0), |a, r| (a.0 + r.1, a.1 + r.2));
+    let pooled = if seen > 0.0 { hits / seen } else { 0.5 };
+    let read: Vec<(f64, f64)> = raw
+        .iter()
+        .filter(|r| r.2 > 0.0)
+        .map(|r| (r.1 / r.2, r.2))
+        .collect();
+    let strength = if read.len() >= 2 && seen > 1.0 {
+        let k = read.len() as f64;
+        let mean = read.iter().map(|r| r.0).sum::<f64>() / k;
+        let spread = read.iter().map(|r| (r.0 - mean).powi(2)).sum::<f64>() / (k - 1.0);
+        let pq = pooled * (1.0 - pooled) * seen / (seen - 1.0);
+        let noise = pq * read.iter().map(|r| 1.0 / r.1).sum::<f64>() / k;
+        let between = spread - noise;
+        (between > 1e-12).then(|| (pq / between - 1.0).max(0.0))
+    } else {
+        None
+    };
+    raw.iter()
+        .map(|(n, h, seen_i)| {
+            let p = match strength {
+                Some(k) if seen_i + k > 0.0 => (h + k * pooled) / (seen_i + k),
+                _ => pooled,
+            };
+            ((*n).clone(), p)
+        })
+        .collect()
 }
 
 fn linear_rows(acc: &BTreeMap<String, f64>) -> Vec<(String, String, f64)> {
@@ -160,6 +199,7 @@ fn main() {
         "learn hedge",
         "learn hedge, share 0.1",
         "learn log-odds online",
+        "learn log-odds online, shrunk",
         "calibrate log-odds, earned self-trust",
         "learn log-odds online, earned self-trust",
     ];
@@ -238,6 +278,7 @@ fn main() {
                 .map(|(n, (h, m))| (n.clone(), h / (h + m)))
                 .collect();
             let online = log_odds_rows(&online_acc);
+            let shrunk = log_odds_rows(&shrunk_acc(&record));
             let decisions = [
                 weighted_majority(ballots, &BTreeMap::new()),
                 weighted_majority(ballots, &oracle_w),
@@ -246,6 +287,7 @@ fn main() {
                 decide(ballots, &rows_of(&hedge)),
                 decide(ballots, &rows_of(&shared)),
                 decide(ballots, &online),
+                decide(ballots, &shrunk),
                 decide_earned(ballots, &logodds),
                 decide_earned(ballots, &online),
             ];
