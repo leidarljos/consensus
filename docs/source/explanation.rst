@@ -229,11 +229,12 @@ the settle is a count again; Hedge with a fixed share of recovery
 (Herbster and Warmuth, doi:10.1023/A:1007424614876) 0.877; and the
 online form of calibration, each voter's smoothed record of hits and
 misses so far as log odds before every question, 0.929. Fifteen voters:
-0.877, 0.936, 0.974, 0.976, 0.891, 0.937, 0.972. Log-odds weights reach
-within half a point of the ceiling whether estimated in one batch or
-kept as a running record; multiplicative shrinking does not, even with
-recovery. ``ljos calibrate`` writes log odds for that reason, and ``ljos
-learn`` keeps the record.
+0.877, 0.936, 0.974, 0.976, 0.891, 0.937, 0.972. The record shrunk by
+empirical Bayes, as ``ljos learn`` now keeps it, scores 0.929 and 0.971.
+Log-odds weights reach within half a point of the ceiling whether
+estimated in one batch or kept as a running record; multiplicative
+shrinking does not, even with recovery. ``ljos calibrate`` writes log odds
+for that reason, and ``ljos learn`` keeps the record.
 
 Voices that share a cause
 =========================
