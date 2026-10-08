@@ -3,11 +3,12 @@
 Run: python3 derive/sympy/jury.py   (exit 0 when every identity holds)
 
 Personas answered by one model share its errors (Kim et al. 2025,
-doi:10.48550/arXiv.2506.07962; Chen et al. 2024, doi:10.48550/arXiv.2403.02419).
-The jury theorem assumes independence (Condorcet 1785; Grofman, Owen and
-Feld 1983, doi:10.1007/BF00125672); Ladha (doi:10.2307/2111584) and
-Dietrich and Spiekermann (doi:10.1093/mind/fzt074) show what a shared cause
-does to it. This file derives the quantities the settle uses.
+doi:10.48550/arXiv.2506.07962; Chen et al. 2024,
+doi:10.48550/arXiv.2403.02419). The jury theorem assumes independence
+(Condorcet 1785; Grofman, Owen and Feld 1983, doi:10.1007/BF00125672); Ladha
+(doi:10.2307/2111584) and Dietrich and Spiekermann (doi:10.1093/mind/fzt074)
+show what a shared cause does to it. This file derives the quantities the
+settle uses.
 """
 
 import sys
@@ -29,10 +30,10 @@ def main():
     p, rho = sp.symbols("p rho", positive=True)
     n, k = sp.symbols("n k", positive=True, integer=True)
 
-    # 1. n exchangeable voters, each right with probability p, pairwise
-    #    correlation rho between their correctness: the variance of the count
-    #    of right ballots is n p (1-p) (1 + (n-1) rho). The same variance from
-    #    independent voters needs n_eff = n / (1 + (n-1) rho) of them.
+    # 1. n exchangeable voters are each right with probability p, and any two
+    # have correlation rho in their correctness. The count of right ballots
+    # has variance n p (1-p) (1 + (n-1) rho). Their share is as noisy as the
+    # share of n_eff = n / (1 + (n-1) rho) independent voters.
     var_one = p * (1 - p)
     var_sum = n * var_one + n * (n - 1) * rho * var_one
     n_eff = n / (1 + (n - 1) * rho)
@@ -41,13 +42,13 @@ def main():
                          sp.simplify(n**2 * var_one / var_sum) - n_eff))
     results.append(check("n_eff -> 1/rho as n -> oo", sp.limit(n_eff, n, sp.oo) - 1 / rho))
 
-    # 2. The weights. The linear combination of signals with the least
-    #    variance for a given mean weighs them by Sigma^-1 mu (Bates and
-    #    Granger 1969, doi:10.2307/3008764). For a cluster of k voters with
-    #    equal strength mu and equicorrelation rho, Sherman-Morrison gives
-    #    Sigma^-1 1 = 1 / (1 + (k-1) rho) 1: each member's weight is divided
-    #    by 1 + (k-1) rho, the cluster's total is k / (1 + (k-1) rho) members'
-    #    worth, and as rho -> 1 the cluster counts as one voter.
+    # 2. The weights. The least-variance combination of unbiased signals
+    # weighs them in proportion to Sigma^-1 1 (Bates and Granger 1969,
+    # doi:10.2307/3008764). Sherman-Morrison solves it for a cluster of k
+    # voters of equal strength and equicorrelation rho:
+    #     Sigma^-1 1 = 1 / (1 + (k-1) rho) 1.
+    # A member's weight is divided by 1 + (k-1) rho, and the cluster is worth
+    # k / (1 + (k-1) rho) members; as rho -> 1 it counts as one voter.
     kk = 4
     Sigma = (1 - rho) * sp.eye(kk) + rho * sp.ones(kk, kk)
     weights = Sigma.inv() * sp.ones(kk, 1)
@@ -56,17 +57,17 @@ def main():
     total = sp.Rational(kk) / (1 + (kk - 1) * rho)
     results.append(check("cluster of 4 at rho=1 weighs as one voter", total.subs(rho, 1) - 1))
 
-    # A cluster beside an independent voter: Sigma = blockdiag(cluster, 1).
-    # The independent voter keeps weight 1; each cluster member gets
+    # A cluster beside an independent voter: Sigma = blockdiag(cluster, 1). An
+    # independent voter keeps weight 1; each cluster member gets
     # 1/(1+(k-1)rho).
     Sigma2 = sp.diag(Sigma, sp.Matrix([[1]]))
     w2 = Sigma2.inv() * sp.ones(kk + 1, 1)
     results.append(check("independent voter beside a cluster keeps its weight", w2[kk] - 1))
 
     # 3. The jury theorem with a shared cause saturates. Model the shared
-    #    cause as a latent accuracy theta ~ Beta(a, b) with mean p and
-    #    correlation rho = 1 / (a + b + 1): the beta-binomial. As n grows the
-    #    majority is right with probability P(theta > 1/2), not 1.
+    # cause as a latent accuracy theta ~ Beta(a, b) with mean p and
+    # correlation rho = 1 / (a + b + 1): the beta-binomial. As n grows the
+    # majority is right with probability P(theta > 1/2), not 1.
     a = p * (1 / rho - 1)
     b = (1 - p) * (1 / rho - 1)
     results.append(check("beta-binomial: mean a/(a+b) = p", a / (a + b) - p))
@@ -97,12 +98,12 @@ def main():
     indep = sum(sp.binomial(51, kv) * pv**kv * (1 - pv) ** (51 - kv) for kv in range(26, 52))
     print(f"     independent voters at p=0.7, n=51: {float(indep):.6f} (the theorem's promise)")
 
-    # 4. Extremizing. If each voter's log odds L_i is conditionally
-    #    independent evidence on a uniform prior, the posterior log odds is
-    #    sum L_i = n mean(L): the average probability is too timid by a
-    #    factor n in log odds (Baron et al. 2014, doi:10.1287/deca.2014.0293;
-    #    Satopaa et al. 2014, doi:10.1016/j.ijforecast.2013.09.009). With
-    #    equicorrelated evidence the factor is n_eff.
+    # 4. Extremizing. When each voter's log odds L_i are conditionally
+    # independent evidence on a uniform prior, the posterior log odds are
+    # sum L_i = n mean(L). The mean of the log odds is too timid by a factor n
+    # (Baron et al. 2014, doi:10.1287/deca.2014.0293; Satopaa et al. 2014,
+    # doi:10.1016/j.ijforecast.2013.09.009). With equicorrelated evidence of
+    # equal strength the factor is n_eff, and nothing below checks it.
     L = sp.symbols("L0:3", real=True)
     prior = sp.Rational(1, 2)
     lik_yes = sp.prod([sp.exp(Li) / (1 + sp.exp(Li)) for Li in L])
@@ -111,29 +112,30 @@ def main():
     results.append(check("posterior log odds = sum of log odds (independent evidence)",
                          sp.expand_log(sp.simplify(post_logodds), force=True) - sum(L)))
 
-    # 5. Correlation from agreement, two options. Voters i and j agree when
-    #    both are right or both wrong: A = P_bc + P_bw with
-    #    P_bw = 1 - p_i - p_j + P_bc, so P_bc = (A - 1 + p_i + p_j) / 2 and
-    #    rho_ij = (P_bc - p_i p_j) / sqrt(p_i (1-p_i) p_j (1-p_j)).
+    # 5. Correlation from agreement, with two options. Voters i and j agree
+    # when both are right or both are wrong. Their agreement is
+    # A = P_bc + P_bw, with P_bw = 1 - p_i - p_j + P_bc, so
+    # P_bc = (A - 1 + p_i + p_j) / 2 and
+    #     rho_ij = (P_bc - p_i p_j) / sqrt(p_i (1-p_i) p_j (1-p_j)).
     pi_, pj, A, Pbc = sp.symbols("p_i p_j A P_bc", positive=True)
     Pbw = 1 - pi_ - pj + Pbc
     solved = sp.solve(sp.Eq(A, Pbc + Pbw), Pbc)[0]
     results.append(check("P(both right) = (A - 1 + p_i + p_j)/2", solved - (A - 1 + pi_ + pj) / 2))
     rho_ij = (solved - pi_ * pj) / sp.sqrt(pi_ * (1 - pi_) * pj * (1 - pj))
-    # Independent voters agree with probability p_i p_j + (1-p_i)(1-p_j): rho = 0.
+    # Independence means A = p_i p_j + (1-p_i)(1-p_j), which gives rho = 0.
     results.append(check("independent agreement gives rho = 0",
                          rho_ij.subs(A, pi_ * pj + (1 - pi_) * (1 - pj))))
     # Clones always agree: A = 1 with p_i = p_j gives rho = 1.
     clone = sp.refine(sp.simplify(rho_ij.subs({A: 1, pj: pi_})), sp.Q.lt(pi_, 1))
     results.append(check("clones (A = 1, p_i = p_j) give rho = 1", clone - 1))
 
-    # 6. The gate on a short history. Over m items, two voters' correctness
-    #    fills a 2x2 table: a both right, b only i, c only j, d neither. The
-    #    Pearson correlation of the two indicators, as correlation.rs reads
-    #    it, squared and times m, is Pearson's chi-square for the table, so
-    #    sqrt(m) rho is its signed root: about N(0, 1) when the voters err
-    #    apart. A pair counts toward the discount only when sqrt(m) rho
-    #    passes the one-sided five percent test, z = 1.645.
+    # 6. The gate on a short history. Two voters' correctness over m items
+    # fills a 2x2 table: a both right, b only i, c only j, d neither. Their
+    # Pearson correlation rho, as correlation.rs reads it, gives Pearson's
+    # chi-square for the table as m rho^2. Its signed root, sqrt(m) rho, is
+    # about N(0, 1) when the voters err apart. A pair counts toward the
+    # discount only when sqrt(m) rho passes the one-sided five percent test,
+    # z = 1.645.
     a, b, c, d = sp.symbols("a b c d", positive=True)
     m = a + b + c + d
     xbar, ybar = (a + b) / m, (a + c) / m
@@ -147,8 +149,10 @@ def main():
     near = abs(z95 - 1.645) < 1e-3
     print(f"{'ok ' if near else 'FAIL'} the gate's 1.645 is the one-sided five percent point of N(0, 1), {z95:.6f}, to 1e-3")
     results.append(near)
-    # Exact clones read rho = 1, so they pass from sqrt(m) > 1.645: three
-    # shared items. Independent voters pass about one time in twenty.
+    # Exact clones with both a hit and a miss among the shared items read
+    # rho = 1, so the gate alone would pass them from three shared items,
+    # where sqrt(m) > 1.645, but by default correlation's min_shared asks for
+    # five. Independent voters pass the gate about one time in twenty.
     results.append(check("clones pass the gate from three shared items",
                          sp.Integer(int(sp.ceiling(sp.Float(1.645) ** 2))) - 3))
 

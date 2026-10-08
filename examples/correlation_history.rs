@@ -1,11 +1,12 @@
 //! How many named outcomes the correlation discount needs before it helps,
 //! and how a short record should weigh the voters.
 //!
-//! A seat records an outcome per decided issue, so its history is short:
-//! a handful of issues, then tens. Over `m` shared items the correlation of
-//! two voters who err apart reads about `N(0, 1/m)`, and a voter's record
-//! over `m` items is as noisy. This measures the decision on the next
-//! question after `h` named outcomes, for each `h`, on the same ballots:
+//! A seat records an outcome per decided issue, so its history is short: a
+//! handful of issues, then tens. The correlation of two voters who err apart
+//! reads about `N(0, 1/m)` over `m` shared items, and a voter's record over
+//! `m` items is noisy on the same `1/m` scale. This measures the decision on
+//! the next question after `h` named outcomes, for each `h`, on the same
+//! ballots:
 //!
 //! - `count`: one voter one vote.
 //! - `log-odds`: each voter's record as log-odds rows, earned self-trust.
@@ -14,7 +15,8 @@
 //! - `gated`: the discount counting a pair only when `sqrt(m) rho` passes
 //!   the one-sided test of independence, `INDEPENDENCE_Z`.
 //! - `shrunk`: log-odds rows from each record shrunk toward the pooled
-//!   accuracy by empirical Bayes, so a short record weighs voters alike.
+//!   accuracy by empirical Bayes, so a short record weighs voters nearly
+//!   alike.
 //! - `shrunk, gated`: both; what `ljos learn` and `ljos consensus` run.
 //!
 //! ```console
@@ -66,13 +68,13 @@ fn rows_of(record: &BTreeMap<String, (f64, f64)>) -> Vec<(String, String, f64)> 
     rows
 }
 
-/// Log-odds rows from each voter's accuracy shrunk toward the panel's
-/// pooled accuracy by empirical Bayes (Efron and Morris): the prior's
-/// strength is what the spread between voters leaves once sampling noise is
-/// taken out, so a short record weighs voters alike and a long one keeps
-/// the differences it has shown. The noise is the pooled Bernoulli variance
-/// with `N / (N - 1)`, unbiased, so a panel on its first outcome, where the
-/// spread between voters cannot be told from noise, weighs everyone alike.
+/// Log-odds rows from each voter's accuracy, shrunk toward the panel's pooled
+/// accuracy by empirical Bayes (Efron and Morris). The prior weakens as the
+/// voters' spread exceeds sampling noise. The noise is the pooled Bernoulli
+/// variance times `N / (N - 1)`, divided by each record's length and
+/// averaged, where `N` counts the ballots the records hold. A short record
+/// weighs voters nearly alike, a first outcome alike to rounding, and a long
+/// one keeps the differences it has shown.
 fn shrunk_rows(record: &BTreeMap<String, (f64, f64)>) -> Vec<(String, String, f64)> {
     let counts: Vec<(&String, f64, f64)> = record
         .iter()

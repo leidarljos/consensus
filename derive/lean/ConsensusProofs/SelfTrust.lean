@@ -7,9 +7,10 @@ import Mathlib
 `w j` in every other voter's row. What the settle does with them depends on
 the diagonal.
 
-`earned_idempotent`: when each voter weighs itself as the others weigh it,
-every row is `w / S`, the matrix is idempotent, and one round leaves every
-voter on the weighted vote `∑ j, w j * x0 j / S`, which is then fixed.
+`earned_idempotent` and `earned_one_round`: when each voter weighs itself as
+the others weigh it, every row is `w / S` and the matrix is idempotent, and
+one round leaves every voter on the weighted vote `∑ j, w j * x0 j / S`,
+which stays fixed.
 
 `constant_stationary`: with one self-weight `c` for every voter instead, row
 `i` is `w` off the diagonal and `c` on it, divided by `S - w i + c`, and the

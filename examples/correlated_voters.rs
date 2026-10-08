@@ -1,22 +1,22 @@
-//! Correlated voters, measured where the truth is known: a panel in which
-//! several personas are answered by one model, so they share its mistakes,
-//! beside voters whose errors are their own.
+//! Correlated voters, measured where the truth is known. Several personas in
+//! the panel run on one model and share its mistakes; voters whose errors are
+//! their own sit beside them.
 //!
-//! Each question has a truth in {a, b}. The shared judge is right with
-//! probability `judge`; every clone casts the judge's ballot. Each
+//! A question has a truth in {a, b}. A shared judge is right with
+//! probability `judge_acc`, 0.70; every clone casts the judge's ballot. An
 //! independent voter is right with its own accuracy, drawn in [0.60, 0.75].
 //! Before each question the seat knows only the history: who voted what and
 //! what the outcome was.
 //!
 //! Arms, on the same ballots:
-//! - `majority`: one voter one vote; the clones are a bloc.
+//! - `majority`: one voter one vote. The clones are a bloc.
 //! - `learn log-odds online, earned self-trust`: each voter's record so far
-//!   as log-odds rows, the best rule of synthetic_voters.rs.
-//! - `... and the correlation discount`: the same rows, each voter's inbound
-//!   weight multiplied by the discount `correlation` reads off the history
-//!   every 25 questions, so the clones count as one voice
+//!   as log-odds rows, the best online rule of synthetic_voters.rs.
+//! - `... and the correlation discount`: the same rows, with each voter's
+//!   inbound weight multiplied by the discount. `correlation` reads it off
+//!   the history every 25 questions, so the clones count as one voice
 //!   (derive/sympy/jury.py).
-//! - `oracle, clones merged`: the clones counted once, true log-odds
+//! - `oracle, clones merged`: the clones counted once, with true log-odds
 //!   weights; the ceiling.
 //!
 //! ```console
@@ -24,9 +24,11 @@
 //! $ cargo run --release --example correlated_voters -- 5 4 400 20 infer
 //! ```
 //! clones, independent voters, questions, seeds; `infer` reads the
-//! correlation against the Dawid-Skene answer rather than the named
-//! outcomes, which leaves the clones looking independent (they make most
-//! of that answer) and the discount inert: 0.706 against 0.797.
+//! correlation against the Dawid-Skene answer rather than the named outcomes.
+//! The clones look independent (they make most of that answer); the discount
+//! falls on the independent voters instead. The discounted arm scores 0.706
+//! under `infer`, below the 0.710 of the same rows undiscounted, against
+//! 0.797 on named outcomes.
 
 use std::collections::BTreeMap;
 
@@ -111,8 +113,8 @@ fn main() {
     let solos: usize = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(4);
     let questions: usize = args.get(3).and_then(|a| a.parse().ok()).unwrap_or(400);
     let seeds: u64 = args.get(4).and_then(|a| a.parse().ok()).unwrap_or(20);
-    // `infer`: read the correlation against the Dawid-Skene answer instead
-    // of the named outcomes, as a project with no outcomes recorded would.
+    // `infer`: read the correlation against the Dawid-Skene answer, not the
+    // named outcomes, as a project with none recorded would.
     let infer = args.get(5).is_some_and(|a| a == "infer");
     let judge_acc = 0.70;
     let names: Vec<String> = (0..clones)

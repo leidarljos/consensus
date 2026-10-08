@@ -38,17 +38,20 @@ enum Cmd {
         seldon: bool,
         #[arg(long)]
         out: Option<PathBuf>,
-        /// A voter's weight on its own ballot when its row does not say: the
-        /// fallback under `--self-trust earned`, every voter's under `constant`.
+        /// A voter's weight on its own ballot when its row does not say:
+        /// the fallback under `--self-trust earned`, every voter's under
+        /// `constant`.
         #[arg(long, default_value_t = 0.5)]
         self_weight: f64,
-        /// `earned` (the default): a voter weighs itself as the others weigh it,
-        /// so rows that weigh each voter alike from everyone settle as that
-        /// weighted vote. `constant`: `--self-weight` for every voter.
+        /// `earned` (the default): a voter weighs itself as the others
+        /// weigh it. With no voter anchored, rows that weigh each voter
+        /// alike from everyone then settle as the weighted vote they
+        /// describe. `constant`: `--self-weight` for every voter.
         #[arg(long, default_value = "earned")]
         self_trust: String,
         /// JSON object of agent to the share of its inbound weight it keeps:
-        /// `correlation`'s `discount`, so correlated voices count once.
+        /// `correlation`'s `discount`, under which exact clones count as one
+        /// voice.
         #[arg(long)]
         discount_of: Option<String>,
         #[arg(long, default_value_t = 1.0)]
@@ -67,14 +70,15 @@ enum Cmd {
         max_iter: usize,
         #[arg(long, default_value_t = 1e-9)]
         tol: f64,
-        /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the fixed point read off in closed form. `energy`: the same settle as the minimum of its energy, found by rgmin; the influence is symmetrised.
+        /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the fixed point read off in closed form. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised.
         #[arg(long, default_value = "iterate")]
         engine: String,
     },
-    /// How much the voters share their mistakes: the correlation of their
-    /// correctness over a project's history (against named outcomes, else the
-    /// Dawid-Skene answer), the discount each voter keeps for `settle
-    /// --discount-of`, and how many independent voices the panel holds.
+    /// How much the voters share their mistakes: the correlation of
+    /// whether each was right, over a project's history. Truth is the
+    /// named outcome, else the Dawid-Skene answer. Prints each voter's
+    /// discount for `settle --discount-of`, and how many independent
+    /// voices the panel holds.
     Correlation {
         /// JSON array of items, each an array of {agent, choice}.
         #[arg(long)]
@@ -82,14 +86,16 @@ enum Cmd {
         /// JSON array, one per item, of the outcome it named or null.
         #[arg(long)]
         truths: Option<String>,
-        /// Read every issue of this tracker project that has two or more ballots.
+        /// Read every issue of this tracker project that has two or more
+        /// ballots.
         #[arg(long)]
         project: Option<String>,
         /// Items a pair must share before its correlation is read.
         #[arg(long, default_value_t = 5)]
         min_shared: usize,
         /// A pair counts only when sqrt(shared) times its correlation passes
-        /// this one-sided test of independence; 0 counts every positive reading.
+        /// this one-sided test of independence. 0 counts every positive
+        /// reading.
         #[arg(long, default_value_t = ljos_consensus::correlation::INDEPENDENCE_Z)]
         gate: f64,
         #[arg(long, default_value_t = 20)]

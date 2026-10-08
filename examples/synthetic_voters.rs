@@ -39,11 +39,11 @@
 //! $ cargo run --release --example synthetic_voters -- 9 400 20
 //! $ cargo run --release --example synthetic_voters -- 9 400 20 expert
 //! ```
-//! voters, questions, seeds, and the profile. `uniform` (the default) draws
-//! accuracies uniformly in [0.35, 0.95] per seed, so some voters are worse
-//! than chance, which is what a weighting has to survive. `expert` seats one
-//! voter at 0.92 among voters drawn in [0.52, 0.62]: the case where a weak
-//! crowd can outvote the one voter worth listening to.
+//! voters, questions, seeds, and `expert` for the second profile. The
+//! default draws accuracies uniformly in [0.35, 0.95] per seed, so some
+//! voters are worse than chance, which is what a weighting has to survive.
+//! `expert` seats one voter at 0.92 among voters drawn in [0.52, 0.62]: the
+//! case where a weak crowd can outvote its best voter.
 
 use std::collections::BTreeMap;
 

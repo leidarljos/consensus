@@ -1,24 +1,25 @@
 //! The settle's fixed point in closed form, and the social power it implies.
 //!
-//! The step is `x(t+1) = L W x(t) + (I - L) x0` with `L = diag(s)`. Its
-//! limit is `x* = P x0` for a row-stochastic `P` (derive/sympy/fj.py checks
-//! that `P 1 = 1`), so the shares are a weighted vote: voter i's ballot
-//! counts with weight `c_i = (1/n) sum_k P_ki`, its social power (Friedkin
-//! 1991, doi:10.1086/229694; Proskurnikov and Tempo 2017,
+//! The step is `x(t+1) = L W x(t) + (I - L) x0` with `L = diag(s)`. Its limit
+//! is `x* = P x0` for a row-stochastic `P` (derive/sympy/fj.py checks that
+//! `P 1 = 1`), so the shares are a weighted vote. Voter i's ballot counts
+//! with weight `c_i = (1/n) sum_k P_ki`, its social power (Friedkin 1991,
+//! doi:10.1086/229694; Proskurnikov and Tempo 2017,
 //! doi:10.1016/j.arcontrol.2017.03.002).
 //!
-//! Where every voter in a closed group of the trust graph listens fully
-//! (`s_i = 1`), that group is a DeGroot class: it converges, when it is
-//! aperiodic, to the average its stationary distribution weighs (Berger,
-//! doi:10.1080/01621459.1981.10477662), and the voters outside it settle
-//! by the linear system `(I - L W)` restricted to them, which is
-//! nonsingular there. A periodic class never settles; the solve says so.
+//! A closed group of the trust graph whose voters all listen fully
+//! (`s_i = 1`) is a DeGroot class. An aperiodic class converges to the
+//! average its stationary distribution weighs (Berger,
+//! doi:10.1080/01621459.1981.10477662). Voters outside it settle by the
+//! linear system `(I - L W)` restricted to them, which is nonsingular there.
+//! A periodic class can cycle for ever unless its members start in agreement;
+//! the solve refuses any periodic class, since it does not see the ballots.
 
 /// Why a fixed point could not be read off.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Unsettled {
     /// A closed group of fully listening voters cycles with this period, so
-    /// the iteration oscillates for ever (Berger 1981).
+    /// the iteration can oscillate for ever (Berger 1981).
     Periodic { members: Vec<usize>, period: usize },
     /// A system the arithmetic could not solve: a pivot this small.
     Singular(f64),
