@@ -35,12 +35,16 @@ ljos-consensus settle --ballots '[...]' --trust '[{"from":"a","to":"b","weight":
 `--issue` reads `vissue vote ID --json` when that works. Otherwise pass `--ballots`.
 
 ```
+ljos-consensus settle --issue ID --engine exact                           # the fixed point in closed form, with each voter's social power
 ljos-consensus settle --issue ID --susceptibility-of '{"reviewer":0.3}'   # a persona anchored to its ballot
 ljos-consensus settle --issue ID --epsilon 0.5                            # bounded confidence: clusters, not one position
 ljos-consensus reliability --project demo                                 # Dawid-Skene accuracy per voter, no truth labels
+ljos-consensus correlation --project demo                                 # who shares whose mistakes; discounts for --discount-of
 ljos-consensus surprising --issue ID --predictions '[{"agent":"a","expect":"ship"}]'   # the surprisingly popular answer
 ljos-consensus reputation --trust '[["a","b",0.8]]'                       # EigenTrust standing per voter
 ```
+
+Every settle is a weighted vote: the outcome prints each voter's social power (`influence`), how many equal voices that is worth (`effective_voters`), and whether the leading options are a `tie` the residual cannot order. A voter weighs its own ballot as the others weigh it (`--self-trust earned`, the default), which makes the log-odds rows `learn` writes settle as the Nitzan-Paroush weighted vote; voters that share a cause, such as personas of one model, count once with `correlation`'s discounts. The claims are derived with SymPy, proved in Lean 4 with Mathlib and certified for binary64 with Sollya under `derive/`; the explanation page has the table.
 
 Panels of parallel agents that debate and vote (self-consistency, multi-agent debate, mixture of agents, the commercial heavy modes) aggregate by count or by an aggregator model; the explanation page places this crate against them, with the literature. Every outcome carries `polarization` and `disagreement` (Musco, Musco and Tsourakakis, doi:10.1145/3178876.3186103). `reliability` is Dawid and Skene (doi:10.2307/2346806); `ljos calibrate` writes its accuracies back as trust rows.
 
