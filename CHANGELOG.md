@@ -24,15 +24,28 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   `--self-trust constant` keeps the old fill.
 - `correlation` and `settle --discount-of`: the correlation of the voters'
   correctness over a project's history, and the discount
-  `1 / (1 + sum_k max(rho_ik, 0))` that counts correlated voices once.
-  Five clones of one judge beside four independent voters, the discount
-  read against named outcomes: a count 0.701, log-odds 0.710, with the
-  discount 0.794, ceiling 0.805. Read against the Dawid-Skene answer the
-  clones look independent and the discount is inert (0.705).
-- `derive/`: the identities in SymPy, the contraction, the stopping
-  bound, the simplex, Nitzan and Paroush's theorem and the self-trust
-  weights proved in Lean 4 with Mathlib, and the binary64 floor, round
-  counts and tie allowance certified with Sollya.
+  `1 / (1 + sum_k rho_ik)` that counts correlated voices once. A pair
+  counts only when `sqrt(shared) rho` passes the one-sided test of
+  independence at five percent (`--gate`, 1.645), so a short history does
+  not discount independent voters by noise: at five named outcomes, seven
+  similar voters lose three points to the ungated discount and less than
+  one to the gated. Five clones of one judge beside four independent
+  voters, the discount read against named outcomes: a count 0.701,
+  log-odds 0.710, with the discount 0.797, ceiling 0.805. Read against the
+  Dawid-Skene answer the clones look independent and the discount is
+  inert (0.706).
+- `examples/correlation_history.rs`: the decision after each number of
+  named outcomes from one to a hundred. Log odds of a short record lose to
+  a count; shrinking each record toward the pooled accuracy by empirical
+  Bayes (Efron and Morris) keeps within two points of a count where a
+  count is best, and with the gated discount beside five clones and four
+  voters reaches 0.780 at five outcomes and 0.813 at a hundred, against
+  0.719 and 0.708 for plug-in log odds.
+- `derive/`: the identities in SymPy, the gate's `m rho^2` as the
+  two-by-two chi-square among them, the contraction, the stopping bound,
+  the simplex, Nitzan and Paroush's theorem and the self-trust weights
+  proved in Lean 4 with Mathlib, and the binary64 floor, round counts and
+  tie allowance certified with Sollya.
 
 ## 0.6.0 (2026-09-19)
 

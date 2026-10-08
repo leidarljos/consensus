@@ -60,17 +60,20 @@ of a tracker project that holds two or more ballots. Output: ``items``,
 ``rounds``, and ``accuracy`` as an object of voter to a value in (0, 1),
 Laplace smoothed so no voter reaches a certainty.
 
-``ljos-consensus correlation (--items JSON [--truths JSON] | --project P) [--min-shared N] [--rounds N]``
+``ljos-consensus correlation (--items JSON [--truths JSON] | --project P) [--min-shared N] [--gate Z] [--rounds N]``
 
 How much the voters share their mistakes. Each voter's correctness on each
 item is read against the item's named outcome (``--truths``, one string or
 null per item) or else the Dawid-Skene answer, and ``rho`` is the Pearson
 correlation of those indicators for each pair over the items both voted on
-(zero below ``--min-shared``, default 5). Output: ``agents``, ``rho`` and
-``shared`` as matrices in that order, ``discount`` as an object of voter to
-``1 / (1 + sum_k max(rho_ik, 0))``, ``effective_voters`` (``n^2 / sum_ij
-max(rho_ij, 0)``, what equal weights get), ``independent_voters`` (the sum
-of the discounts), ``items`` and ``named``.
+(zero below ``--min-shared``, default 5). A pair counts only when
+``sqrt(shared) rho`` passes ``--gate``, the one-sided test of independence,
+default 1.645 (five percent); 0 counts every positive reading. Output:
+``agents``, ``rho`` and ``shared`` as matrices in that order, ``gate``,
+``discount`` as an object of voter to ``1 / (1 + sum_k rho_ik)`` over the
+counted pairs, ``effective_voters`` (``n^2 / sum_ij rho_ij`` over the counted
+pairs, what equal weights get), ``independent_voters`` (the sum of the
+discounts), ``items`` and ``named``.
 
 The step
 ========
@@ -101,6 +104,6 @@ The crate root exports ``Ballot``, ``Outcome``, ``Opts``, ``SelfTrust``,
 ``ballots_from_json``, ``trust_from_json``, ``anchors_from_json``,
 ``predictions_from_json``, and ``settle_seldon``. ``exact`` holds
 ``fixed_point``, ``social_power`` and ``effective_voters``; ``correlation`` holds
-the reading above. The Seldon module
+the reading above and ``INDEPENDENCE_Z``. The Seldon module
 writes and reads the engine's files and links nothing under a copyleft
 licence.

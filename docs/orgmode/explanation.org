@@ -254,23 +254,75 @@ one.
 =correlation= reads =rho= off a project's history: each voter's
 correctness on each item, against the outcome where one was named and the
 Dawid-Skene answer otherwise, and the correlation of those indicators per
-pair. It prints the discount each voter keeps, =1 / (1 + sum_k max(rho_ik,
-0))=, for =settle --discount-of=, the panel's =effective_voters= under
-equal weights, and its =independent_voters= once discounted. Measured on
-five clones of one judge right 0.70 of the time beside four independent
-voters in [0.60, 0.75] (=examples/correlated_voters.rs=, the discount
-re-read every 25 questions against the named outcomes), a count scores
-0.701, log-odds weights 0.710, the same weights with the discount 0.794,
-and the true weights with the clones merged 0.805.
+pair. It prints the discount each voter keeps, =1 / (1 + sum_k rho_ik)=
+over the pairs it counts, for =settle --discount-of=, the panel's
+=effective_voters= under equal weights, and its =independent_voters= once
+discounted. Measured on five clones of one judge right 0.70 of the time
+beside four independent voters in [0.60, 0.75]
+(=examples/correlated_voters.rs=, the discount re-read every 25 questions
+against the named outcomes), a count scores 0.701, log-odds weights 0.710,
+the same weights with the discount 0.797, and the true weights with the
+clones merged 0.805.
 
 The reading needs those outcomes. Against the Dawid-Skene answer instead
 (the example's =infer= argument), the clone bloc is most of the answer it
 is read against, so its members look right on every item, their
 correctness never varies, and their correlation reads zero: the reading
-holds 8.40 independent voices where there are five, and the discount
-leaves the group at 0.705. It does no harm on a panel with no clones
-(0.832 against 0.834), but it buys nothing without named outcomes, which
-is why the seat does not apply it to a settle by default.
+holds 8.51 independent voices where there are five, and the discount
+leaves the group at 0.706. It does no harm on a panel with no clones
+(0.831 against 0.834), but it buys nothing without named outcomes. The
+seat records one each time =ljos learn= names the option an issue closed
+on, and applies the discount once five exist.
+
+** On a short history
+
+A seat decides a handful of issues, then tens, so both readings it learns
+from are short. Over =m= shared items the correlation of two voters who
+err apart reads about =N(0, 1/m)=, and counting every positive reading
+discounts independent voters by noise. =correlation= therefore counts a
+pair only when =sqrt(m) rho= passes the one-sided test of independence at
+five percent, 1.645 (=--gate=): =m rho^2= is Pearson's chi-square for the
+pair's two-by-two table of right and wrong, which =derive/sympy/jury.py=
+checks. Exact clones read one and pass from three shared items; voters who
+err apart pass about one time in twenty.
+
+A voter's record is as short. Log odds of a record of five (Nitzan and
+Paroush's weights, plugged in) drop a good voter who started unlucky to the
+floor, and on a panel of similar voters they lose to a plain count. The
+cure is old: shrink each voter's accuracy toward the panel's pooled
+accuracy, with the prior's strength read from how much more the records
+differ than sampling alone would make them, by empirical Bayes (Efron and
+Morris, doi:10.1080/01621459.1975.10479864). The sampling part is the
+pooled variance with =N / (N - 1)=, unbiased; on a panel's first outcome
+the spread between voters cannot be told from noise, and every voter
+weighs the same. A short record weighs the voters alike, and a long one
+keeps the differences it has shown. =examples/correlation_history.rs=
+measures the decision after =h= named outcomes, 4000 seeds a cell:
+
+| Panel | =h= | Count | Log odds | Log odds, gated discount | Shrunk, gated discount |
+|---+---+---+---+---+---|
+| 5 clones, 4 voters in [0.60, 0.75] | 3 | 0.698 | 0.730 | 0.730 | 0.702 |
+| | 5 | 0.700 | 0.719 | 0.736 | 0.780 |
+| | 100 | 0.700 | 0.708 | 0.805 | 0.813 |
+| 7 voters in [0.60, 0.75] | 1 | 0.837 | 0.812 | 0.812 | 0.837 |
+| | 5 | 0.843 | 0.780 | 0.773 | 0.826 |
+| | 100 | 0.836 | 0.824 | 0.821 | 0.834 |
+| 7 voters in [0.55, 0.90] | 5 | 0.904 | 0.884 | 0.876 | 0.896 |
+| | 30 | 0.888 | 0.909 | 0.906 | 0.902 |
+| | 100 | 0.900 | 0.920 | 0.919 | 0.918 |
+| 3 clones, 4 voters in [0.55, 0.90] | 5 | 0.780 | 0.789 | 0.808 | 0.830 |
+| | 100 | 0.774 | 0.830 | 0.876 | 0.879 |
+
+Ungated, the discount costs the panel of seven similar voters three points
+at five outcomes (0.750 against 0.780); gated, less than one (0.773).
+Shrinking and the gated discount together gain on plug-in log odds in
+every panel from five outcomes on, by up to ten points where clones sit,
+except on a long record of widely differing voters, where they trail by
+under a point. Before five outcomes the discount reads no pair, and where
+clones sit they trail by up to three points, because plug-in log odds'
+unlucky flooring happens to break the bloc. Where a count is best they stay
+within two points of it, and on the first outcome they are the count.
+=ljos learn= shrinks for that reason.
 
 * Independence before influence
 
@@ -302,7 +354,7 @@ of evidence, each runnable:
 | Tool | Run | What it shows |
 |---+---+---|
 | SymPy | =python3 derive/sympy/fj.py= | =P= is row-stochastic; the social power; the =w_j (S + sw - w_j)= weights a constant self-weight gives; earned self-trust as the weighted vote; the mixture under one anchor; the second eigenvalue |
-| SymPy | =python3 derive/sympy/jury.py= | =n_eff=; the cluster discount; the beta-binomial ceiling; extremizing; =rho= from agreement |
+| SymPy | =python3 derive/sympy/jury.py= | =n_eff=; the cluster discount; the beta-binomial ceiling; extremizing; =rho= from agreement; =m rho^2= as the two-by-two chi-square behind the gate |
 | SymPy | =python3 derive/sympy/golden.py= | four settles solved in rationals, which the Rust tests match to 1e-12 |
 | Lean 4 and Mathlib | =cd derive/lean && lake exe cache get && lake build= | the step is a contraction with one fixed point the iteration reaches; Banach's stopping bound; rows stay distributions; Nitzan and Paroush's theorem; idempotent earned rows; the stationary weights of constant ones |
 | Sollya | =sollya derive/sollya/rounding.sollya= | in interval arithmetic: the rounding floor of the bound, the rounds it needs, the tie allowance, the log-odds range of a record |
