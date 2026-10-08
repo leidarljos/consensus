@@ -4,51 +4,60 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## 0.7.0 (2026-10-08)
 
-- Every trust-graph outcome carries `agents`, `influence` (each voter's
-  social power, `c = (1/n) P^T 1` for the fixed point `x* = P x0`),
-  `effective_voters`, `margin` and `tie`. `exact::fixed_point` reads `P`
-  off in closed form, a closed group that listens fully by its stationary
-  distribution and a cycling one as `Unsettled::Periodic`;
-  `settle --engine exact` uses it.
-- `settled` now means within `--tol` of the fixed point. The iteration
-  stopped on a small step, which at a susceptibility near one left it far
-  from the fixed point; it stops on Banach's bound `q / (1 - q)` times the
-  step, plus the binary64 floor `gamma(n + 2) / (1 - q)`, and where some
-  voter listens fully on the distance to the closed form.
+- The iterate and exact engines report `agents`, `influence`,
+  `effective_voters`, `margin` and `tie`. `influence` is each voter's
+  social power, `c = (1/n) P^T 1` for the fixed point `x* = P x0`.
+  `exact::fixed_point` reads `P` off in closed form: a closed group that
+  listens fully gets its stationary distribution, and a periodic one is
+  reported as `Unsettled::Periodic`. `settle --engine exact` uses it. It
+  falls back to the iteration on a cycle or a singular system and marks
+  the result unsettled.
+- `settled` now means within `--tol` of the fixed point wherever the
+  distance can be bounded. The iteration used to stop on a small step,
+  which left it far from the fixed point at a susceptibility near one. It
+  now stops on Banach's bound, `q / (1 - q)` times the step, plus the
+  binary64 floor `gamma(n + 2) / (1 - q)`. A panel where some voter
+  listens fully stops on the distance to the closed form. A panel with
+  neither a contraction nor a closed form still stops on the step.
 - `--self-trust earned`, the default: a voter weighs its own ballot as the
-  others weigh it. Learned rows then settle as the weighted vote they
-  describe; a constant self-weight `sw` weighed voter j by
-  `w_j (S + sw - w_j)`. Unchanged on uniform accuracies; with one voter at
-  0.92 among voters in [0.52, 0.62], calibrate 0.887 to 0.907 and the
-  running record 0.901 to 0.913 against a 0.919 ceiling.
-  `--self-trust constant` keeps the old fill.
-- `correlation` and `settle --discount-of`: the correlation of the voters'
-  correctness over a project's history, and the discount
-  `1 / (1 + sum_k rho_ik)` that counts correlated voices once. A pair
-  counts only when `sqrt(shared) rho` passes the one-sided test of
-  independence at five percent (`--gate`, 1.645), so a short history does
-  not discount independent voters by noise: at five named outcomes, seven
-  similar voters lose three points to the ungated discount and less than
-  one to the gated. Five clones of one judge beside four independent
-  voters, the discount read against named outcomes: a count 0.701,
-  log-odds 0.710, with the discount 0.797, ceiling 0.805. Read against the
-  Dawid-Skene answer the clones look independent and the discount is
-  inert (0.706).
-- `examples/correlation_history.rs`: the decision after each number of
-  named outcomes from one to a hundred. Log odds of a short record lose to
-  a count; shrinking each record toward the pooled accuracy by empirical
-  Bayes (Efron and Morris) keeps within two points of a count where a
-  count is best, and with the gated discount beside five clones and four
-  voters reaches 0.780 at five outcomes and 0.813 at a hundred, against
-  0.719 and 0.708 for plug-in log odds.
+  others weigh it, and learned rows settle as the weighted vote they
+  describe. A constant self-weight `sw` weighed voter j by
+  `w_j (S + sw - w_j)`, with `S` the sum of the weights. Equal accuracies
+  settle as before. One voter at 0.92 among eight in [0.52, 0.62] takes
+  calibrate from 0.887 to 0.907, and the smoothed running record from
+  0.901 to 0.913, against a 0.919 ceiling. `--self-trust constant` keeps
+  the old fill.
+- `correlation` reads how far the voters' mistakes agree over a project's
+  history; `settle --discount-of` applies the discount it prints,
+  `1 / (1 + sum_{j != i} rho_ij)`. Exact clones with a hit and a miss
+  count once under it. A pair counts only when `sqrt(shared) rho` passes
+  the one-sided five percent test (`--gate`, 1.645), so a short history
+  does not discount independent voters by noise. Seven similar voters lose
+  three points to the ungated discount at five named outcomes, and less
+  than one to the gated one. A count of five clones of one judge and four
+  independent voters is right 0.701 of the time, and log odds 0.710. The
+  discount brings the settle to 0.797, against 0.805 for the oracle with
+  the clones merged. The clones look independent against the Dawid-Skene
+  answer. The discount then falls on the independent voters and costs a
+  little (0.706 against 0.710).
+- `examples/correlation_history.rs` scores the decision after one to a
+  hundred named outcomes. Log odds of a short record lose to a count on
+  similar voters. Shrinking each record's accuracy toward the pooled
+  accuracy by empirical Bayes (Efron and Morris) closes most of that gap.
+  Shrunk rows under the gated discount trail a count by 2.0 points at
+  worst (0.820 against 0.840 at eight outcomes). Five clones beside four
+  voters reach 0.780 at five outcomes and 0.813 at a hundred with
+  shrinking and the gated discount. Plug-in log odds reach 0.719 and
+  0.708; the gated discount alone, 0.736 and 0.805.
 - `examples/synthetic_voters.rs` scores the record shrunk as `ljos learn`
   keeps it: 0.929 on nine voters and 0.971 on fifteen, against 0.934 and
   0.974 for `calibrate`.
-- `derive/`: the identities in SymPy, the gate's `m rho^2` as the
-  two-by-two chi-square among them, the contraction, the stopping bound,
-  the simplex, Nitzan and Paroush's theorem and the self-trust weights
-  proved in Lean 4 with Mathlib, and the binary64 floor, round counts and
-  tie allowance certified with Sollya.
+- `derive/` checks the math three ways. SymPy checks the identities, among
+  them the gate's `m rho^2` as the two-by-two chi-square. Lean 4 with
+  Mathlib proves the contraction, the stopping bound, the simplex, Nitzan
+  and Paroush's theorem and the self-trust weights. Sollya certifies the
+  binary64 floor, the round counts and the tie allowance for any number of
+  options.
 
 ## 0.6.0 (2026-09-19)
 
