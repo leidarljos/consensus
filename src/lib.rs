@@ -846,12 +846,13 @@ fn outcome_of(
 /// The settle by iteration, stopped on a bound rather than a step. With
 /// `q = max s_i < 1` the step is a `q`-contraction in the sup norm, so
 /// `|x_t - x*| <= q / (1 - q) |x_t - x_(t-1)|` (Banach's estimate,
-/// derive/lean/ConsensusProofs/Contraction.lean): the iteration stops once
-/// that bound is under `tol`, and `residual` is the bound. When some voter
-/// listens fully the step is no contraction in that norm; the fixed point
-/// is read off in closed form ([`exact::fixed_point`]) and `residual` is
-/// the distance to it. Either way `settled` means within `tol` of the
-/// fixed point, not merely a small step.
+/// derive/lean/ConsensusProofs/Contraction.lean), and binary64 adds at most
+/// `gamma(n + 2) / (1 - q)` to it (derive/sollya/rounding.sollya): the
+/// iteration stops once that bound is under `tol`, and `residual` is the
+/// bound. When some voter listens fully the step is no contraction in that
+/// norm; the fixed point is read off in closed form ([`exact::fixed_point`])
+/// and `residual` is the distance to it. Either way `settled` means within
+/// `tol` of the fixed point, not merely a small step.
 #[must_use]
 pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Outcome {
     let Some(setup) = setup(ballots, trust, opts) else {
@@ -879,7 +880,7 @@ pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &O
         x = nxt;
         rounds = r;
         residual = if q < 1.0 {
-            q / (1.0 - q) * step
+            (q * step + gamma(n + 2)) / (1.0 - q)
         } else if let Some(t) = &target {
             max_gap(&x, t)
         } else {
@@ -888,6 +889,19 @@ pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &O
         if residual < opts.tol {
             settled = true;
             break;
+        }
+    }
+    // A stiff panel reaches its fixed point before its bound says so: at
+    // tol 1e-9 the bound needs more than 200 rounds once q passes 0.89
+    // (derive/sollya/rounding.sollya). The distance to the closed form then
+    // answers instead.
+    if !settled {
+        if let Some(t) = &target {
+            let measured = max_gap(&x, t);
+            if measured < residual {
+                residual = measured;
+                settled = measured < opts.tol;
+            }
         }
     }
     outcome_of(
@@ -899,6 +913,15 @@ pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &O
         residual,
         "degroot-fj",
     )
+}
+
+/// Higham's bound on the relative error of a `k`-term dot product in
+/// binary64. One computed step is within `gamma(n + 2)` of the exact one on
+/// opinions in `[0, 1]`, which Banach's bound has to absorb
+/// (derive/sollya/rounding.sollya).
+fn gamma(k: usize) -> f64 {
+    let ku = k as f64 * f64::EPSILON / 2.0;
+    ku / (1.0 - ku)
 }
 
 /// The settle read off in closed form: `x* = P x0` with `P` from
@@ -1719,6 +1742,37 @@ mod tests {
                 "tol {tol}: {true_gap} > {}",
                 it.residual
             );
+        }
+    }
+
+    /// A panel anchored at 0.95 contracts faster than its bound says: here
+    /// the opinions are within 1e-9 by round 36 while the bound, at
+    /// q / (1 - q) = 19 times the step, gets there only at 40. Stopped at
+    /// 36, the distance to the closed form answers.
+    #[test]
+    fn a_stiff_panel_settles_on_the_measured_distance() {
+        let ballots: Vec<Ballot> = [("a", "x"), ("b", "y"), ("c", "y")]
+            .iter()
+            .map(|(a, c)| Ballot {
+                agent: a.to_string(),
+                choice: c.to_string(),
+            })
+            .collect();
+        let rows: Vec<(String, String, f64)> = [("a", "b", 1.0), ("b", "c", 1.0), ("c", "a", 1.0)]
+            .iter()
+            .map(|(f, t, x)| (f.to_string(), t.to_string(), *x))
+            .collect();
+        let opts = Opts {
+            susceptibility: 0.95,
+            max_iter: 36,
+            ..Opts::default()
+        };
+        let it = settle_with(&ballots, &rows, &opts);
+        assert_eq!(it.rounds, 36, "{it:?}");
+        assert!(it.settled && it.residual < 1e-9, "{it:?}");
+        let ex = settle_exact(&ballots, &rows, &opts);
+        for (a, b) in it.shares.iter().zip(&ex.shares) {
+            assert!((a - b).abs() < 1e-9);
         }
     }
 
