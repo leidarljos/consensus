@@ -1,0 +1,53 @@
+name: derive
+
+on:
+  push:
+    branches: [main]
+    paths: ["derive/**", "src/**", "examples/**", ".github/workflows/derive.yml"]
+  pull_request:
+    paths: ["derive/**", "src/**", "examples/**", ".github/workflows/derive.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sympy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -q sympy
+      - run: python derive/sympy/fj.py
+      - run: python derive/sympy/jury.py
+      # The goldens the Rust tests read must be what the script derives.
+      - run: python derive/sympy/golden.py && git diff --exit-code derive/golden
+
+  sollya:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install -y --no-install-recommends sollya
+      # Sollya's quit takes no status; the verdict is the last line.
+      - run: sollya derive/sollya/rounding.sollya | tee /dev/stderr | grep -qx 'all certificates hold'
+
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: derive/lean
+          use-mathlib-cache: true
+          build: true
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test
+      - run: cargo run --release --example synthetic_voters -- 9 400 20 expert
+      - run: cargo run --release --example correlated_voters -- 5 4 400 20
