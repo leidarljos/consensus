@@ -13,59 +13,59 @@ symmetric.
 What a settle computes
 ======================
 
-The step is linear in the ballots, so where it ends is too: ``x* = P x0``
-for a matrix ``P`` whose rows each sum to one. The shares are the mean row,
-so a settle is a weighted vote. Voter i's ballot counts with weight
-``c_i = (1/n) sum_k P_ki``, its social power (Friedkin,
+The step is linear in the ballots, and so is where it ends: ``x* = P x0``
+for a matrix ``P`` whose rows each sum to one. The shares are the mean row
+of ``x*``. A settle is therefore a weighted vote. Voter i's ballot counts
+with weight ``c_i = (1/n) sum_k P_ki``, its social power (Friedkin,
 doi:10.1086/229694; Proskurnikov and Tempo,
-doi:10.1016/j.arcontrol.2017.03.002). Every outcome prints it as
-``influence``, beside ``effective_voters``, the inverse Herfindahl index
-``1 / sum c_i^2``: the number of equal voices the settle is worth. A crowd
-is wise only while no voice carries a share of the result that stays put
-as the crowd grows (Golub and Jackson, doi:10.1257/mic.2.1.112), and
-DeGroot's averaging counts the well connected again each round
-(DeMarzo, Vayanos and Zwiebel, doi:10.1162/00335530360698469). A settle
-with ``effective_voters`` near one is one voter's opinion, however many
-ballots it read.
+doi:10.1016/j.arcontrol.2017.03.002). The iterate and exact engines print
+it as ``influence``, beside ``effective_voters``, the inverse Herfindahl index
+``1 / sum c_i^2``: the number of equal voices the settle is worth.
 
-``--engine exact`` reads ``P`` off directly: the linear system
-``(I - L W) P = I - L`` where some voter is anchored, the stationary
-distribution of a closed group that listens fully. The iteration remains
-the default and lands on the same point.
+A crowd is wise only while no voice keeps a fixed share of the result as
+it grows (Golub and Jackson, doi:10.1257/mic.2.1.112). DeGroot's averaging
+counts the well connected again each round (DeMarzo, Vayanos and Zwiebel,
+doi:10.1162/00335530360698469). A settle with ``effective_voters`` near one
+is one voter's opinion, however many ballots it read.
+
+``--engine exact`` reads ``P`` off directly, solving ``(I - L W) P = I - L``
+where every closed group of the trust graph holds an anchored voter. A
+closed group that listens fully gets its stationary distribution; the
+voters outside it solve against that. The iteration stays the default and
+lands on the same point.
 
 Whose own voice counts
 ======================
 
 A trust row says how much a voter listens to each of the others. What it
-weighs its own ballot is the diagonal, and a row that does not say gets a
-fill. The tracker fills one constant for every voter. Under the rows that
-``learn`` and ``calibrate`` write, every voter weighs voter j alike, as ``w_j``,
-and with a constant self-weight ``sw`` the settle then weighs voter j by
-``w_j (S + sw - w_j)``, ``S`` the sum of the weights: not by ``w_j``. The best
-voter's lead shrinks, because its own row sends the same constant home as
-the weakest voter's does.
+weighs its own ballot is the diagonal. A row that does not say gets a
+fill; the tracker fills one constant for every voter. The rows ``learn`` and
+``calibrate`` write weigh voter j alike from everyone, as ``w_j``. A constant
+self-weight ``sw`` then weighs voter j by ``w_j (S + sw - w_j)``, with ``S`` the
+sum of the weights, not by ``w_j``. The best voter's lead shrinks: its own
+row sends the same constant home as the weakest voter's does.
 
 ``--self-trust earned``, the default since 0.7.0, fills the diagonal with
-what the others give the voter: the mean of the weights the rows that name
-it put on it. Every row is then ``w / S``, the matrix is idempotent, one
-round leaves every voter on the weighted vote ``sum_j w_j x0_j / S``, and
-with log-odds rows that is the Nitzan and Paroush optimum. With every
-voter anchored at ``s`` the settle is the mixture ``(1 - s) count + s
-weighted vote``, so the anchor reads as how far the group trusts its record
-over a show of hands. The empirical side is the same: people who revise
-least toward the group are the accurate ones, and weighing them more
-improves the crowd (Becker, Brackbill and Centola,
-doi:10.1073/pnas.1615978114; Madirolas and de Polavieja,
-doi:10.1371/journal.pcbi.1004594).
+what the others give the voter: the mean of the weights that name it.
+Every row is then ``w / S``. The matrix is idempotent, so one round leaves
+every voter on the weighted vote ``sum_j w_j x0_j / S``. For log-odds rows
+from independent voters on a two-way choice, that vote is the Nitzan and
+Paroush optimum. Every voter anchored at ``s`` gives the mixture
+``(1 - s) count + s weighted vote``. The anchor reads as how far the group
+trusts its record over a show of hands. People who revise least toward the
+group are the more accurate ones (Becker, Brackbill and Centola,
+doi:10.1073/pnas.1615978114). Weighing them more improves the crowd's
+estimate (Madirolas and de Polavieja, doi:10.1371/journal.pcbi.1004594).
 
-Measured where the truth is known (``examples/synthetic_voters.rs``, twenty
-seeds of four hundred two-way questions), the difference is nothing when
-accuracies are spread evenly: nine voters drawn in [0.35, 0.95] score
-0.934 and 0.933 for calibrate, fifteen 0.974 and 0.975. It shows where a
-weak crowd can outvote the one voter worth hearing. With one voter at
-0.92 among eight in [0.52, 0.62], calibrate goes from 0.887 to 0.907 and
-the running record from 0.901 to 0.913, against the 0.919 the true
-weights reach. ``--self-trust constant`` keeps the old fill.
+``examples/synthetic_voters.rs`` measures it where the truth is known, over
+twenty seeds of four hundred two-way questions. The two fills differ by a
+tenth of a point when accuracies are spread evenly. Nine voters drawn in
+[0.35, 0.95] score 0.934 for calibrate with a constant self-weight and
+0.933 with earned self-trust; fifteen score 0.974 and 0.975. The
+difference shows where a weak crowd can outvote its best voter. One voter
+at 0.92 among eight in [0.52, 0.62] takes calibrate from 0.887 to 0.907,
+and the smoothed running record from 0.901 to 0.913, against the 0.919 the
+true weights reach. ``--self-trust constant`` keeps the old fill.
 
 When it settles
 ===============
@@ -75,27 +75,32 @@ closed group every voter reaches, and that group is aperiodic (Berger,
 doi:10.1080/01621459.1981.10477662). Two teams that cite only each other
 never converge, and that is a fact about the team worth reporting rather
 than a number worth averaging. The tracker's own ``consensus`` verb reports
-the split; this crate reports ``settled: false`` when the budget runs out,
-and the exact engine names the cycle.
+the split; this crate reports ``settled: false`` when the budget runs out.
 
-``settled`` means within ``--tol`` of the fixed point, not that the last step
-was small. With every voter anchored, ``q`` the largest susceptibility, the
-step is a ``q``-contraction in the largest-entry norm, so one step from x
-the fixed point is no farther than ``q / (1 - q)`` times the step's length
-(Banach's estimate). The iteration stops when that bound falls under the
-tolerance, and ``residual`` is the bound. A small step alone said little:
-at ``q = 0.99`` the opinions could sit a hundred times the step away. Where
-some voter listens fully there is no such contraction, and ``residual`` is
-the distance to the closed-form point. Binary64 adds at most
-``gamma(n + 2) / (1 - q)`` to the bound, Higham's error of an ``n``-term dot
-product; at ``q = 0.99`` that floor is 1.1e-12 for a hundred voters, so the
-default tolerance of 1e-9 sits far above it. The bound needs more than the
-default two hundred rounds once ``q`` passes 0.89; a panel that has arrived
-sooner than its bound admits is then settled on the measured distance.
+``settled`` means within ``--tol`` of the fixed point wherever the distance
+can be bounded, not that the last step was small. The step is a
+``q``-contraction in the largest-entry norm when every voter is anchored,
+with ``q`` the largest susceptibility. Banach's estimate then puts the fixed
+point within ``q / (1 - q)`` times the last step's length. The iteration
+stops when that bound falls under the tolerance; ``residual`` is the bound.
+A small step alone said little: at ``q = 0.99`` the opinions could sit a
+hundred times the step away. A voter that listens fully breaks the
+contraction. ``residual`` is then the distance to the closed-form point. A
+panel with no closed form either still stops on the step, which bounds
+nothing. ``exact::fixed_point`` names a group that cycles, and
+``--engine exact`` falls back to the iteration for it. It does the same for
+a system too near singular to solve, and in both cases reports
+``settled: false``.
 
-``tie`` says the leading two shares are closer than twice the residual plus
-rounding: the settle cannot order them, and naming the first would be a
-coin the reader did not see tossed.
+Binary64 adds at most ``gamma(n + 2) / (1 - q)`` to the bound: Higham's
+gamma for the ``n``-term dot product, the product with ``s_i`` and the anchor
+term. That floor is 1.1e-12 for a hundred voters at ``q = 0.99``, far below
+the default tolerance of 1e-9. The bound needs more than the default two
+hundred rounds once ``q`` passes about 0.892; when it would, the settle
+measures the distance to the closed-form point instead.
+
+``tie`` says the two leading shares lie within twice the residual plus
+rounding of each other: the settle cannot order them.
 
 Anchoring
 =========
@@ -239,76 +244,79 @@ for that reason, and ``ljos learn`` keeps the record.
 Voices that share a cause
 =========================
 
-The jury theorem's promise, that a majority of better-than-chance voters is
-right more often the larger it grows, rests on independent errors
-(Grofman, Owen and Feld, doi:10.1007/BF00125672). Votes driven by a common
-cause are correlated, and correlation caps what more voters can add
+The jury theorem promises that a majority of better-than-chance voters is
+right more often the larger it grows. The promise rests on independent
+errors (Grofman, Owen and Feld, doi:10.1007/BF00125672). Votes driven by a
+common cause are correlated. Correlation caps what more voters can add
 (Ladha, doi:10.2307/2111584; Kaniovski, doi:10.1007/s11238-008-9120-4;
-Dietrich and Spiekermann, doi:10.1093/mind/fzt074). Personas answered by
-one model share that model: across more than 350 language models, two that
-both err agree on the wrong answer about 60% of the time, and more accurate
-models err more alike (Kim, Garg, Peng and Garg,
-doi:10.48550/arXiv.2506.07962). Five personas of one model are not five
-votes.
+Dietrich and Spiekermann, doi:10.1093/mind/fzt074). Personas that run on
+one model share its mistakes. Two of the Helm leaderboard's 71 models that
+both err pick the same wrong answer about 60% of the time, against a third
+by chance. More accurate models err more alike (Kim, Garg, Peng and Garg,
+doi:10.48550/arXiv.2506.07962).
 
-``derive/sympy/jury.py`` does the arithmetic. ``n`` voters correlated ``rho``
+``derive/sympy/jury.py`` does the arithmetic: ``n`` voters correlated ``rho``
 are worth ``n / (1 + (n - 1) rho)`` independent ones, at most ``1 / rho``
-however many sit. Modelling the common cause as a latent accuracy, the
-majority's chance saturates: at a mean accuracy of 0.7 and ``rho = 0.3`` a
-panel of 51 is right 0.770 of the time against a ceiling of 0.773, where
+however many sit. Model the common cause as a latent accuracy, and the
+majority's chance saturates. A panel of 51 at a mean accuracy of 0.7 and
+``rho = 0.3`` is right 0.770 of the time, against a ceiling of 0.773;
 independent voters would reach 0.9986. The weights that make the most of a
 cluster divide each member by ``1 + (k - 1) rho``, so a cluster of ``k``
-counts as ``k / (1 + (k - 1) rho)`` voices and, as ``rho`` goes to one, as
-one.
+counts as ``k / (1 + (k - 1) rho)`` voices. It counts as one as ``rho`` goes
+to one.
 
-``correlation`` reads ``rho`` off a project's history: each voter's
-correctness on each item, against the outcome where one was named and the
-Dawid-Skene answer otherwise, and the correlation of those indicators per
-pair. It prints the discount each voter keeps, ``1 / (1 + sum_k rho_ik)``
-over the pairs it counts, for ``settle --discount-of``, the panel's
-``effective_voters`` under equal weights, and its ``independent_voters`` once
-discounted. Measured on five clones of one judge right 0.70 of the time
-beside four independent voters in [0.60, 0.75]
-(``examples/correlated_voters.rs``, the discount re-read every 25 questions
-against the named outcomes), a count scores 0.701, log-odds weights 0.710,
-the same weights with the discount 0.797, and the true weights with the
-clones merged 0.805.
+``correlation`` reads ``rho`` off a project's history, scoring each voter's
+correctness on each item against the outcome where one was named and the
+Dawid-Skene answer otherwise. ``rho`` is the correlation of those scores for
+each pair. The discount each voter keeps for ``settle --discount-of`` is
+``1 / (1 + sum_{j !`` i} rho\ :sub:`ij`)= over the pairs it counts. The command
+prints it beside the panel's ``effective_voters`` under equal weights and
+its ``independent_voters`` once discounted.
 
-The reading needs those outcomes. Against the Dawid-Skene answer instead
-(the example's ``infer`` argument), the clone bloc is most of the answer it
-is read against, so its members look right on every item, their
-correctness never varies, and their correlation reads zero: the reading
-holds 8.51 independent voices where there are five, and the discount
-leaves the group at 0.706. It does no harm on a panel with no clones
-(0.831 against 0.834), but it buys nothing without named outcomes. The
-seat records one each time ``ljos learn`` names the option an issue closed
-on, and applies the discount once five exist.
+``examples/correlated_voters.rs`` seats five clones of one judge, right 0.70
+of the time, beside four independent voters in [0.60, 0.75]. The discount
+is read again every 25 questions against the named outcomes. A count
+scores 0.701 and log-odds weights 0.710; the same weights with the
+discount score 0.797, and the true weights with the clones merged 0.805.
+
+The reading needs those outcomes. The clone bloc makes up most of the
+Dawid-Skene answer (the example's ``infer`` argument), and read against it,
+its members look right on every item. Their correctness never varies.
+Their correlation reads zero: the reading holds 8.51 independent voices
+where there are five, and the discount leaves the group at 0.706. It does
+little harm on seven voters with no clones: 0.831 on named outcomes and
+0.833 under ``infer``, against 0.834. Without named outcomes it buys
+nothing. The seat records one each time ``ljos learn`` names the option an
+issue closed on, and applies the discount once five exist.
 
 On a short history
 ------------------
 
-A seat decides a handful of issues, then tens, so both readings it learns
-from are short. Over ``m`` shared items the correlation of two voters who
-err apart reads about ``N(0, 1/m)``, and counting every positive reading
-discounts independent voters by noise. ``correlation`` therefore counts a
-pair only when ``sqrt(m) rho`` passes the one-sided test of independence at
-five percent, 1.645 (``--gate``): ``m rho^2`` is Pearson's chi-square for the
-pair's two-by-two table of right and wrong, which ``derive/sympy/jury.py``
-checks. Exact clones read one and pass from three shared items; voters who
-err apart pass about one time in twenty.
+A seat decides a handful of issues, then tens, so the correlations and the
+voters' records it learns from are both short. The correlation of two
+voters who err apart reads about ``N(0, 1/m)`` over ``m`` shared items, so
+counting every positive reading would discount independent voters by
+noise. ``correlation`` counts a pair only when ``sqrt(m) rho`` passes the
+one-sided test of independence at five percent, 1.645 (``--gate``).
+``m rho^2`` is Pearson's chi-square for the pair's two-by-two table of right
+and wrong, which ``derive/sympy/jury.py`` checks. Exact clones with both a
+hit and a miss among the shared items read one. They would pass the gate
+from three shared items, though by default ``--min-shared`` skips any pair
+with fewer than five. Voters who err apart pass about one time in twenty.
 
-A voter's record is as short. Log odds of a record of five (Nitzan and
-Paroush's weights, plugged in) drop a good voter who started unlucky to the
-floor, and on a panel of similar voters they lose to a plain count. The
-cure is old: shrink each voter's accuracy toward the panel's pooled
-accuracy, with the prior's strength read from how much more the records
-differ than sampling alone would make them, by empirical Bayes (Efron and
-Morris, doi:10.1080/01621459.1975.10479864). The sampling part is the
-pooled variance with ``N / (N - 1)``, unbiased; on a panel's first outcome
-the spread between voters cannot be told from noise, and every voter
-weighs the same. A short record weighs the voters alike, and a long one
-keeps the differences it has shown. ``examples/correlation_history.rs``
-measures the decision after ``h`` named outcomes, 4000 seeds a cell:
+A voter's record is as short. The plug-in log odds of a record of five
+drop a good voter who started unlucky to the floor. They lose to a plain
+count on a panel of similar voters. Empirical Bayes shrinks each voter's
+accuracy toward the panel's pooled accuracy (Efron and Morris,
+doi:10.1080/01621459.1975.10479864); the prior weakens as the records
+spread beyond sampling noise. That noise is the pooled variance times
+``N / (N - 1)``, with ``N`` the ballots the records hold, divided by each
+record's length and averaged. The spread between voters cannot be told
+from noise on a panel's first outcome. Every voter weighs the same. A long
+record keeps the differences it shows.
+
+``examples/correlation_history.rs`` measures the decision after ``h`` named
+outcomes, 4000 seeds a cell:
 
 ================================== ===== ===== ======== ======================== ======================
 Panel                              ``h`` Count Log odds Log odds, gated discount Shrunk, gated discount
@@ -317,6 +325,7 @@ Panel                              ``h`` Count Log odds Log odds, gated discount
 \                                  5     0.700 0.719    0.736                    0.780
 \                                  100   0.700 0.708    0.805                    0.813
 7 voters in [0.60, 0.75]           1     0.837 0.812    0.812                    0.837
+\                                  3     0.836 0.772    0.772                    0.824
 \                                  5     0.843 0.780    0.773                    0.826
 \                                  100   0.836 0.824    0.821                    0.834
 7 voters in [0.55, 0.90]           5     0.904 0.884    0.876                    0.896
@@ -326,45 +335,45 @@ Panel                              ``h`` Count Log odds Log odds, gated discount
 \                                  100   0.774 0.830    0.876                    0.879
 ================================== ===== ===== ======== ======================== ======================
 
-Ungated, the discount costs the panel of seven similar voters three points
-at five outcomes (0.750 against 0.780); gated, less than one (0.773).
-Shrinking and the gated discount together gain on plug-in log odds in
-every panel from five outcomes on, by up to ten points where clones sit,
-except on a long record of widely differing voters, where they trail by
-under a point. Before five outcomes the discount reads no pair, and where
-clones sit they trail by up to three points, because plug-in log odds'
-unlucky flooring happens to break the bloc. Where a count is best they stay
-within two points of it, and on the first outcome they are the count.
+The ungated discount costs the panel of seven similar voters three points
+at five outcomes (0.750 against 0.780); the gated one costs less than one
+(0.773). Shrinking with the gated discount beats plug-in log odds in every
+panel but one from five outcomes on, by up to ten and a half points where
+clones sit. The exception is the panel of widely differing voters, where
+the shrunk rows trail plug-in log odds by under a point from thirty
+outcomes on. The discount reads no pair before five outcomes. The shrunk
+rows then trail by up to three points where clones sit, because plug-in
+log odds floor the clones that start unlucky, which breaks the bloc. They
+trail a count by 2.0 points at worst where a count is best (0.820 against
+0.840 at eight outcomes), and on the first outcome they are the count.
 ``ljos learn`` shrinks for that reason.
 
 Independence before influence
 =============================
 
-A settle is social influence run to its end, and influence can destroy
-the information a crowd holds. Ballots seen before ballots are cast become
-cascades: each voter rationally follows the ones before it and its private
-evidence never reaches the count (Bikhchandani, Hirshleifer and Welch,
-doi:10.1086/261849). Exposure to others' estimates narrows a crowd
-without making it more accurate (Lorenz, Rauhut, Schweitzer and Helbing,
-doi:10.1073/pnas.1008636108), and people give a wrong answer to agree
-with a room (Asch, doi:10.1037/h0093718). The Delphi method collects
-judgments apart for that reason (Dalkey and Helmer,
-doi:10.1287/mnsc.9.3.458). Panels of language models repeat it: most of
-what multi-agent debate gains, majority voting over the first answers
-already had, and debate alone leaves expected correctness where it was
-(Choi, Zhu and Li, doi:10.48550/arXiv.2508.17536).
+A settle is social influence run to its end. Influence can destroy the
+information a crowd holds. Ballots seen before one's own is cast start
+cascades (Bikhchandani, Hirshleifer and Welch, doi:10.1086/261849). A
+voter rationally follows the ones before it; its private evidence never
+reaches the count. Seeing what others guess narrows a crowd without making
+it more accurate (Lorenz, Rauhut, Schweitzer and Helbing,
+doi:10.1073/pnas.1008636108). People give a wrong answer to agree with a
+room (Asch, doi:10.1037/h0093718); the Delphi method collects judgments
+apart for that reason (Dalkey and Helmer, doi:10.1287/mnsc.9.3.458).
+Panels of language models show the same. Majority voting over the first
+answers already has most of what debate gains, and debate alone leaves
+expected correctness where it was (Choi, Zhu and Li,
+doi:10.48550/arXiv.2508.17536).
 
-So the ballots a settle reads should be cast before any voter saw another's.
-The seat's panel hands each persona a brief that carries no ballot and
-records each vote before it prints the tally, and the settle does the
-listening afterwards, where it can be weighed and reported, rather than in
-the voters' heads, where it cannot.
+The ballots a settle reads should therefore be cast before any voter sees
+another's. The seat's panel hands each persona a brief that carries no
+ballot and records each vote before it prints the tally. The settle does
+the listening afterwards, where it can be weighed and reported.
 
 Derivations, proofs and certificates
 ====================================
 
-The claims above are checked, not only cited. ``derive/`` holds three kinds
-of evidence, each runnable:
+One command runs each check:
 
 ================== ====================================================== =====================================================================================================================================================================================================================
 Tool               Run                                                    What it shows
@@ -373,10 +382,11 @@ SymPy              ``python3 derive/sympy/fj.py``                         ``P`` 
 SymPy              ``python3 derive/sympy/jury.py``                       ``n_eff``; the cluster discount; the beta-binomial ceiling; extremizing; ``rho`` from agreement; ``m rho^2`` as the two-by-two chi-square behind the gate
 SymPy              ``python3 derive/sympy/golden.py``                     four settles solved in rationals, which the Rust tests match to 1e-12
 Lean 4 and Mathlib ``cd derive/lean && lake exe cache get && lake build`` the step is a contraction with one fixed point the iteration reaches; Banach's stopping bound; rows stay distributions; Nitzan and Paroush's theorem; idempotent earned rows; the stationary weights of constant ones
-Sollya             ``sollya derive/sollya/rounding.sollya``               in interval arithmetic: the rounding floor of the bound, the rounds it needs, the tie allowance, the log-odds range of a record
+Sollya             ``sollya derive/sollya/rounding.sollya``               in interval arithmetic: the rounding floor of the bound, the rounds it needs, the tie allowance, the log-odds range of calibrate's smoothed accuracies
 ================== ====================================================== =====================================================================================================================================================================================================================
 
-The Lean theorems rest on the three standard axioms and nothing else.
+``#print axioms`` on each Lean theorem lists only ``propext``,
+``Classical.choice`` and ``Quot.sound``.
 
 Seldon
 ======
