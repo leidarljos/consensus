@@ -3,26 +3,35 @@ Command line
 
 ``ljos-consensus settle [FLAGS]``
 
-=================================== ==========================================================================================================================
+=================================== ==================================================================================================================================================================
 Flag                                Meaning
-=================================== ==========================================================================================================================
+=================================== ==================================================================================================================================================================
 ``--issue ID``                      ballots from ``vissue vote ID --json``
 ``--ballots JSON``                  ``[{agent, choice}]``, or an object with ``ballots``, ``votes`` or ``agents[].voted``
 ``--trust JSON``                    ``[[from, to, weight], ...]`` or ``[{from, to, weight}, ...]``
-``--self-weight W``                 the diagonal when a row does not name it; default 0.5
+``--self-trust MODE``               how a voter weighs its own ballot when its row does not say: ``earned`` (the default) as the others weigh it, or ``constant`` at ``--self-weight`` for every voter
+``--self-weight W``                 the self-weight under ``constant``, and the fallback under ``earned`` for a voter nobody names; default 0.5
+``--discount-of JSON``              ``\{agent: d\}``, the share of its inbound weight each voter keeps; ``correlation`` prints it
 ``--susceptibility S``              1 is DeGroot; below 1 anchors each voter to its ballot; default 1
 ``--susceptibility-of JSON``        ``\{agent: s\}``, a persona's own anchor per voter
 ``--epsilon E [--epsilon-of JSON]`` bounded confidence instead of the trust graph: each voter averages only voters within L1 distance ``E`` of its own opinion
 ``--max-iter N``, ``--tol T``       the fixed-point budget; defaults 200 and 1e-9
+``--engine NAME``                   ``iterate`` (the default) steps to the fixed point and stops on a bound; ``exact`` reads it off in closed form; ``energy`` minimises the Friedkin-Johnsen energy
 ``--seldon [--out DIR]``            write Seldon inputs, run ``seldon``, read the result
-=================================== ==========================================================================================================================
+=================================== ==================================================================================================================================================================
 
-Output: ``options`` sorted, ``shares`` in that order, ``rounds``, ``settled``,
-``engine`` (``degroot-fj``, ``bounded-confidence``, ``seldon``, or ``empty``),
-``polarization`` (the sum over voters of the squared distance from the mean
-final opinion) and ``disagreement`` (the sum over trust edges of weight times
-the squared distance between the two ends), both after Musco, Musco and
-Tsourakakis (doi:10.1145/3178876.3186103).
+Output: ``options`` sorted, ``shares`` in that order, ``rounds``, ``settled``
+(within ``--tol`` of the fixed point), ``residual`` (the bound or distance
+that says so), ``engine`` (``degroot-fj``, ``fj-exact``, ``fj-energy``,
+``bounded-confidence``, ``seldon``, or ``empty``), ``polarization`` (the sum over
+voters of the squared distance from the mean final opinion) and
+``disagreement`` (the sum over trust edges of weight times the squared
+distance between the two ends), both after Musco, Musco and Tsourakakis
+(doi:10.1145/3178876.3186103). The trust-graph engines add ``agents``,
+``influence`` (each voter's social power, the weight its ballot carries in
+the shares, summing to one), ``effective_voters`` (``1 / sum influence^2``),
+``margin`` (the leading share less the next) and ``tie`` (the margin is
+within twice the residual and rounding).
 
 ``ljos-consensus surprising (--issue ID | --ballots JSON) --predictions JSON``
 
@@ -51,23 +60,47 @@ of a tracker project that holds two or more ballots. Output: ``items``,
 ``rounds``, and ``accuracy`` as an object of voter to a value in (0, 1),
 Laplace smoothed so no voter reaches a certainty.
 
+``ljos-consensus correlation (--items JSON [--truths JSON] | --project P) [--min-shared N] [--rounds N]``
+
+How much the voters share their mistakes. Each voter's correctness on each
+item is read against the item's named outcome (``--truths``, one string or
+null per item) or else the Dawid-Skene answer, and ``rho`` is the Pearson
+correlation of those indicators for each pair over the items both voted on
+(zero below ``--min-shared``, default 5). Output: ``agents``, ``rho`` and
+``shared`` as matrices in that order, ``discount`` as an object of voter to
+``1 / (1 + sum_k max(rho_ik, 0))``, ``effective_voters`` (``n^2 / sum_ij
+max(rho_ij, 0)``, what equal weights get), ``independent_voters`` (the sum
+of the discounts), ``items`` and ``named``.
+
 The step
 ========
 
 ``x(t+1) = (1 - s) x(0) + s W x(t)``, with ``W`` the row-stochastic trust matrix
 and ``s`` the susceptibility. A voter's opinion is a distribution over the
-options, one-hot at the start. Missing self weight is filled with
-``--self-weight``; a voter with no row of its own listens to everyone
-equally, itself included. Shares are the
-column sums of the fixed point, normalised.
+options, one-hot at the start. A missing self weight is filled by
+``--self-trust``; a voter with no row of its own listens to everyone
+equally, itself included, and each voter's inbound weight is scaled by its
+discount before the rows are normalised. Shares are the column sums of the
+fixed point, normalised.
+
+The fixed point is ``x* = P x(0)`` with ``P = (I - L W)^{-1} (I - L)`` where
+some voter is anchored, ``L`` the diagonal of susceptibilities, and the
+stationary distribution of a closed group that listens fully. The
+iteration stops when ``q / (1 - q)`` times its last step, plus the
+binary64 floor ``gamma(n + 2) / (1 - q)``, is under ``--tol``, ``q`` the largest
+susceptibility; where some voter listens fully, when its distance to ``x*``
+is.
 
 Library
 =======
 
-The crate root exports ``Ballot``, ``Outcome``, ``roster``,
-``influence_matrix``, ``settle``, ``settle_anchored``, ``settle_bounded``,
-``dawid_skene``, ``surprisingly_popular``, ``eigentrust``,
+The crate root exports ``Ballot``, ``Outcome``, ``Opts``, ``SelfTrust``,
+``roster``, ``influence_matrix``, ``influence_matrix_with``, ``settle``,
+``settle_anchored``, ``settle_with``, ``settle_exact``, ``settle_bounded``,
+``settle_energy``, ``dawid_skene``, ``surprisingly_popular``, ``eigentrust``,
 ``ballots_from_json``, ``trust_from_json``, ``anchors_from_json``,
-``predictions_from_json``, and ``settle_seldon``. The Seldon module
+``predictions_from_json``, and ``settle_seldon``. ``exact`` holds
+``fixed_point``, ``social_power`` and ``effective_voters``; ``correlation`` holds
+the reading above. The Seldon module
 writes and reads the engine's files and links nothing under a copyleft
 licence.

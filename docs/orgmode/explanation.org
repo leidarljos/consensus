@@ -12,6 +12,61 @@ weighted average of the voters it trusts, =x(t+1) = W x(t)=. Where that
 settles is the group's position, and it is the mean only when trust is
 symmetric.
 
+* What a settle computes
+
+The step is linear in the ballots, so where it ends is too: =x* = P x0=
+for a matrix =P= whose rows each sum to one. The shares are the mean row,
+so a settle is a weighted vote. Voter i's ballot counts with weight
+=c_i = (1/n) sum_k P_ki=, its social power (Friedkin,
+doi:10.1086/229694; Proskurnikov and Tempo,
+doi:10.1016/j.arcontrol.2017.03.002). Every outcome prints it as
+=influence=, beside =effective_voters=, the inverse Herfindahl index
+=1 / sum c_i^2=: the number of equal voices the settle is worth. A crowd
+is wise only while no voice carries a share of the result that stays put
+as the crowd grows (Golub and Jackson, doi:10.1257/mic.2.1.112), and
+DeGroot's averaging counts the well connected again each round
+(DeMarzo, Vayanos and Zwiebel, doi:10.1162/00335530360698469). A settle
+with =effective_voters= near one is one voter's opinion, however many
+ballots it read.
+
+=--engine exact= reads =P= off directly: the linear system
+=(I - L W) P = I - L= where some voter is anchored, the stationary
+distribution of a closed group that listens fully. The iteration remains
+the default and lands on the same point.
+
+* Whose own voice counts
+
+A trust row says how much a voter listens to each of the others. What it
+weighs its own ballot is the diagonal, and a row that does not say gets a
+fill. The tracker fills one constant for every voter. Under the rows that
+=learn= and =calibrate= write, every voter weighs voter j alike, as =w_j=,
+and with a constant self-weight =sw= the settle then weighs voter j by
+=w_j (S + sw - w_j)=, =S= the sum of the weights: not by =w_j=. The best
+voter's lead shrinks, because its own row sends the same constant home as
+the weakest voter's does.
+
+=--self-trust earned=, the default since 0.7.0, fills the diagonal with
+what the others give the voter: the mean of the weights the rows that name
+it put on it. Every row is then =w / S=, the matrix is idempotent, one
+round leaves every voter on the weighted vote =sum_j w_j x0_j / S=, and
+with log-odds rows that is the Nitzan and Paroush optimum. With every
+voter anchored at =s= the settle is the mixture =(1 - s) count + s
+weighted vote=, so the anchor reads as how far the group trusts its record
+over a show of hands. The empirical side is the same: people who revise
+least toward the group are the accurate ones, and weighing them more
+improves the crowd (Becker, Brackbill and Centola,
+doi:10.1073/pnas.1615978114; Madirolas and de Polavieja,
+doi:10.1371/journal.pcbi.1004594).
+
+Measured where the truth is known (=examples/synthetic_voters.rs=, twenty
+seeds of four hundred two-way questions), the difference is nothing when
+accuracies are spread evenly: nine voters drawn in [0.35, 0.95] score
+0.934 and 0.933 for calibrate, fifteen 0.974 and 0.975. It shows where a
+weak crowd can outvote the one voter worth hearing. With one voter at
+0.92 among eight in [0.52, 0.62], calibrate goes from 0.887 to 0.907 and
+the running record from 0.901 to 0.913, against the 0.919 the true
+weights reach. =--self-trust constant= keeps the old fill.
+
 * When it settles
 
 The iteration converges to agreement exactly when the trust graph has one
@@ -19,7 +74,27 @@ closed group every voter reaches, and that group is aperiodic (Berger,
 doi:10.1080/01621459.1981.10477662). Two teams that cite only each other
 never converge, and that is a fact about the team worth reporting rather
 than a number worth averaging. The tracker's own =consensus= verb reports
-the split; this crate reports =settled: false= when the budget runs out.
+the split; this crate reports =settled: false= when the budget runs out,
+and the exact engine names the cycle.
+
+=settled= means within =--tol= of the fixed point, not that the last step
+was small. With every voter anchored, =q= the largest susceptibility, the
+step is a =q=-contraction in the largest-entry norm, so one step from x
+the fixed point is no farther than =q / (1 - q)= times the step's length
+(Banach's estimate). The iteration stops when that bound falls under the
+tolerance, and =residual= is the bound. A small step alone said little:
+at =q = 0.99= the opinions could sit a hundred times the step away. Where
+some voter listens fully there is no such contraction, and =residual= is
+the distance to the closed-form point. Binary64 adds at most
+=gamma(n + 2) / (1 - q)= to the bound, Higham's error of an =n=-term dot
+product; at =q = 0.99= that floor is 1.1e-12 for a hundred voters, so the
+default tolerance of 1e-9 sits far above it. The bound needs more than the
+default two hundred rounds once =q= passes 0.89; a panel that has arrived
+sooner than its bound admits is then settled on the measured distance.
+
+=tie= says the leading two shares are closer than twice the residual plus
+rounding: the settle cannot order them, and naming the first would be a
+coin the reader did not see tossed.
 
 * Anchoring
 
@@ -151,6 +226,81 @@ within half a point of the ceiling whether estimated in one batch or
 kept as a running record; multiplicative shrinking does not, even with
 recovery. =ljos calibrate= writes log odds for that reason, and =ljos
 learn= keeps the record.
+
+* Voices that share a cause
+
+The jury theorem's promise, that a majority of better-than-chance voters is
+right more often the larger it grows, rests on independent errors
+(Grofman, Owen and Feld, doi:10.1007/BF00125672). Votes driven by a common
+cause are correlated, and correlation caps what more voters can add
+(Ladha, doi:10.2307/2111584; Kaniovski, doi:10.1007/s11238-008-9120-4;
+Dietrich and Spiekermann, doi:10.1093/mind/fzt074). Personas answered by
+one model share that model: across more than 350 language models, two that
+both err agree on the wrong answer about 60% of the time, and more accurate
+models err more alike (Kim, Garg, Peng and Garg,
+doi:10.48550/arXiv.2506.07962). Five personas of one model are not five
+votes.
+
+=derive/sympy/jury.py= does the arithmetic. =n= voters correlated =rho=
+are worth =n / (1 + (n - 1) rho)= independent ones, at most =1 / rho=
+however many sit. Modelling the common cause as a latent accuracy, the
+majority's chance saturates: at a mean accuracy of 0.7 and =rho = 0.3= a
+panel of 51 is right 0.770 of the time against a ceiling of 0.773, where
+independent voters would reach 0.9986. The weights that make the most of a
+cluster divide each member by =1 + (k - 1) rho=, so a cluster of =k=
+counts as =k / (1 + (k - 1) rho)= voices and, as =rho= goes to one, as
+one.
+
+=correlation= reads =rho= off a project's history: each voter's
+correctness on each item, against the outcome where one was named and the
+Dawid-Skene answer otherwise, and the correlation of those indicators per
+pair. It prints the discount each voter keeps, =1 / (1 + sum_k max(rho_ik,
+0))=, for =settle --discount-of=, the panel's =effective_voters= under
+equal weights, and its =independent_voters= once discounted. Against an
+inferred answer the majority bloc defines the truth and its correlation
+reads high; named outcomes do not have that bias, so =learn= is worth
+running. Measured on five clones of one judge right 0.70 of the time
+beside four independent voters in [0.60, 0.75] (=examples/correlated_voters.rs=,
+the discount re-read every 25 questions), a count scores 0.701, log-odds
+weights 0.710, the same weights with the discount 0.794, and the true
+weights with the clones merged 0.805.
+
+* Independence before influence
+
+A settle is social influence run to its end, and influence can destroy
+the information a crowd holds. Ballots seen before ballots are cast become
+cascades: each voter rationally follows the ones before it and its private
+evidence never reaches the count (Bikhchandani, Hirshleifer and Welch,
+doi:10.1086/261849). Exposure to others' estimates narrows a crowd
+without making it more accurate (Lorenz, Rauhut, Schweitzer and Helbing,
+doi:10.1073/pnas.1008636108), and people give a wrong answer to agree
+with a room (Asch, doi:10.1037/h0093718). The Delphi method collects
+judgments apart for that reason (Dalkey and Helmer,
+doi:10.1287/mnsc.9.3.458). Panels of language models repeat it: most of
+what multi-agent debate gains, majority voting over the first answers
+already had, and debate alone leaves expected correctness where it was
+(Choi, Zhu and Li, doi:10.48550/arXiv.2508.17536).
+
+So the ballots a settle reads should be cast before any voter saw another's.
+The seat's panel hands each persona a brief that carries no ballot and
+records each vote before it prints the tally, and the settle does the
+listening afterwards, where it can be weighed and reported, rather than in
+the voters' heads, where it cannot.
+
+* Derivations, proofs and certificates
+
+The claims above are checked, not only cited. =derive/= holds three kinds
+of evidence, each runnable:
+
+| Tool | Run | What it shows |
+|---+---+---|
+| SymPy | =python3 derive/sympy/fj.py= | =P= is row-stochastic; the social power; the =w_j (S + sw - w_j)= weights a constant self-weight gives; earned self-trust as the weighted vote; the mixture under one anchor; the second eigenvalue |
+| SymPy | =python3 derive/sympy/jury.py= | =n_eff=; the cluster discount; the beta-binomial ceiling; extremizing; =rho= from agreement |
+| SymPy | =python3 derive/sympy/golden.py= | four settles solved in rationals, which the Rust tests match to 1e-12 |
+| Lean 4 and Mathlib | =cd derive/lean && lake exe cache get && lake build= | the step is a contraction with one fixed point the iteration reaches; Banach's stopping bound; rows stay distributions; Nitzan and Paroush's theorem; idempotent earned rows; the stationary weights of constant ones |
+| Sollya | =sollya derive/sollya/rounding.sollya= | in interval arithmetic: the rounding floor of the bound, the rounds it needs, the tie allowance, the log-odds range of a record |
+
+The Lean theorems rest on the three standard axioms and nothing else.
 
 * Seldon
 
