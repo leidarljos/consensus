@@ -88,6 +88,10 @@ enum Cmd {
         /// Items a pair must share before its correlation is read.
         #[arg(long, default_value_t = 5)]
         min_shared: usize,
+        /// A pair counts only when sqrt(shared) times its correlation passes
+        /// this one-sided test of independence; 0 counts every positive reading.
+        #[arg(long, default_value_t = ljos_consensus::correlation::INDEPENDENCE_Z)]
+        gate: f64,
         #[arg(long, default_value_t = 20)]
         rounds: usize,
     },
@@ -205,6 +209,7 @@ fn main() -> Result<()> {
             truths,
             project,
             min_shared,
+            gate,
             rounds,
         } => {
             let items = load_items(items.as_deref(), project.as_deref())?;
@@ -215,7 +220,7 @@ fn main() -> Result<()> {
                 None => vec![None; items.len()],
             };
             let reading =
-                ljos_consensus::correlation::correlation(&items, &truths, rounds, min_shared);
+                ljos_consensus::correlation::correlation(&items, &truths, rounds, min_shared, gate);
             println!("{}", serde_json::to_string_pretty(&reading)?);
         }
         Cmd::Settle {

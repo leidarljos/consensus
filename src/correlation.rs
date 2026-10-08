@@ -13,13 +13,24 @@
 //! vote divide each member by `1 + (k - 1) rho`, so the cluster counts as
 //! `k / (1 + (k - 1) rho)` voters and, as `rho` goes to one, as one. The
 //! discount here is that rule with the cluster read off the matrix:
-//! `1 / (1 + sum_{k != i} max(rho_ik, 0))`.
+//! `1 / (1 + sum_{k != i} rho_ik)` over the pairs the gate below counts.
 //!
 //! Against an inferred answer the majority bloc defines the truth, so its
 //! members look right together and their correlation reads high; named
 //! outcomes do not have that bias.
+//!
+//! A seat's history is short, and over `m` shared items the correlation of
+//! two voters who err apart reads about `N(0, 1/m)`. Counting every positive
+//! reading would discount independent voters by noise, so a pair counts
+//! only when `sqrt(m) rho` passes the one-sided test of independence at
+//! `gate`: `m rho^2` is Pearson's chi-square for the pair's 2x2 table
+//! (derive/sympy/jury.py). Exact clones read one and pass from three items.
 
 use std::collections::BTreeMap;
+
+/// The one-sided five percent point of the standard normal: the gate a
+/// pair's `sqrt(m) rho` must pass before its correlation is counted.
+pub const INDEPENDENCE_Z: f64 = 1.645;
 
 use serde::{Deserialize, Serialize};
 
@@ -32,12 +43,15 @@ pub struct Correlation {
     pub rho: Vec<Vec<f64>>,
     /// Items each pair both voted on.
     pub shared: Vec<Vec<usize>>,
+    /// The test a pair's `sqrt(shared) rho` passed to be counted; zero
+    /// counts every positive reading.
+    pub gate: f64,
     /// The weight each voter's ballot keeps once its correlated company is
-    /// counted: `1 / (1 + sum_{k != i} max(rho_ik, 0))`.
+    /// counted: `1 / (1 + sum_{k != i} rho_ik)` over the pairs that passed.
     pub discount: BTreeMap<String, f64>,
     /// How many independent voters the panel is worth with equal weights:
-    /// `n^2 / sum_ij max(rho_ij, 0)`, `n` when nobody shares errors. A count
-    /// gets this much.
+    /// `n^2 / sum_ij rho_ij` over the pairs that passed, `n` when nobody
+    /// shares errors. A count gets this much.
     pub effective_voters: f64,
     /// How many independent voices the panel holds once each is discounted:
     /// the sum of the discounts, `k / (1 + (k - 1) rho)` a cluster.
@@ -94,13 +108,15 @@ fn answers(
 
 /// The correlation of the voters' correctness over `items`, each a list of
 /// `(voter, choice)`, with `truths[t]` the outcome item `t` named, if any.
-/// A pair with fewer than `min_shared` items in common reads zero.
+/// A pair with fewer than `min_shared` items in common reads zero; a pair
+/// whose `sqrt(shared) rho` does not pass `gate` is not counted.
 #[must_use]
 pub fn correlation(
     items: &[Vec<(String, String)>],
     truths: &[Option<String>],
     rounds: usize,
     min_shared: usize,
+    gate: f64,
 ) -> Correlation {
     let mut agents: Vec<String> = items
         .iter()
@@ -153,15 +169,26 @@ pub fn correlation(
             }
         }
     }
+    let counted = |i: usize, k: usize| {
+        let r = rho[i][k];
+        if i == k || (r > 0.0 && r * (shared[i][k] as f64).sqrt() > gate) {
+            r
+        } else {
+            0.0
+        }
+    };
     let discount: BTreeMap<String, f64> = agents
         .iter()
         .enumerate()
         .map(|(i, a)| {
-            let company: f64 = (0..n).filter(|&k| k != i).map(|k| rho[i][k].max(0.0)).sum();
+            let company: f64 = (0..n).filter(|&k| k != i).map(|k| counted(i, k)).sum();
             (a.clone(), 1.0 / (1.0 + company))
         })
         .collect();
-    let total: f64 = rho.iter().flatten().map(|r| r.max(0.0)).sum();
+    let total: f64 = (0..n)
+        .flat_map(|i| (0..n).map(move |k| (i, k)))
+        .map(|(i, k)| counted(i, k))
+        .sum();
     let independent_voters = discount.values().sum();
     Correlation {
         effective_voters: if total > 0.0 {
@@ -173,6 +200,7 @@ pub fn correlation(
         agents,
         rho,
         shared,
+        gate,
         discount,
         items: items.len(),
         named: truths.iter().filter(|t| t.is_some()).count(),
@@ -211,7 +239,7 @@ mod tests {
             ]);
             truths.push(Some(truth.to_string()));
         }
-        let c = correlation(&items, &truths, 20, 10);
+        let c = correlation(&items, &truths, 20, 10, INDEPENDENCE_Z);
         let at = |a: &str| c.agents.iter().position(|x| x == a).unwrap();
         assert!((c.rho[at("clone1")][at("clone2")] - 1.0).abs() < 1e-9);
         assert!(c.rho[at("solo1")][at("solo2")].abs() < 0.2, "{:?}", c.rho);
@@ -233,5 +261,53 @@ mod tests {
             c.independent_voters
         );
         assert_eq!(c.named, 300);
+    }
+
+    /// Six named outcomes: two clones always agree, and a voter who errs on
+    /// its own happens to read 0.25 against the other independent voter and
+    /// against each clone. Ungated, that noise leaves it 1/1.75 of its
+    /// weight; the gate (sqrt(6) 0.25 = 0.61 < 1.645) leaves it whole and
+    /// still halves each clone.
+    #[test]
+    fn on_a_short_history_the_gate_counts_clones_and_not_noise() {
+        let right = |who: &str, pattern: &[bool], items: &mut Vec<Vec<(String, String)>>| {
+            for (t, ok) in pattern.iter().enumerate() {
+                let choice = if *ok { "a" } else { "b" };
+                items[t].push((who.to_string(), choice.to_string()));
+            }
+        };
+        let mut items = vec![Vec::new(); 6];
+        let judge = [true, true, false, true, false, true];
+        right("clone1", &judge, &mut items);
+        right("clone2", &judge, &mut items);
+        right("solo1", &[true, true, true, false, false, true], &mut items);
+        right("solo2", &[true, false, true, false, true, true], &mut items);
+        let truths = vec![Some("a".to_string()); 6];
+        let gated = correlation(&items, &truths, 20, 5, INDEPENDENCE_Z);
+        let at = |a: &str| gated.agents.iter().position(|x| x == a).unwrap();
+        let (s1, s2) = (at("solo1"), at("solo2"));
+        assert!((gated.rho[s1][s2] - 0.25).abs() < 1e-9, "{:?}", gated.rho);
+        assert!(
+            (gated.rho[s1][at("clone1")] - 0.25).abs() < 1e-9,
+            "{:?}",
+            gated.rho
+        );
+        assert!(
+            (gated.discount["solo1"] - 1.0).abs() < 1e-12,
+            "{:?}",
+            gated.discount
+        );
+        assert!(
+            (gated.discount["clone1"] - 0.5).abs() < 1e-12,
+            "{:?}",
+            gated.discount
+        );
+        let ungated = correlation(&items, &truths, 20, 5, 0.0);
+        assert!(
+            (ungated.discount["solo1"] - 1.0 / 1.75).abs() < 1e-12,
+            "{:?}",
+            ungated.discount
+        );
+        assert!(ungated.gate.abs() < f64::EPSILON);
     }
 }

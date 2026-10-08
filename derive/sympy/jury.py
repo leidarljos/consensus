@@ -127,6 +127,31 @@ def main():
     clone = sp.refine(sp.simplify(rho_ij.subs({A: 1, pj: pi_})), sp.Q.lt(pi_, 1))
     results.append(check("clones (A = 1, p_i = p_j) give rho = 1", clone - 1))
 
+    # 6. The gate on a short history. Over m items, two voters' correctness
+    #    fills a 2x2 table: a both right, b only i, c only j, d neither. The
+    #    Pearson correlation of the two indicators, as correlation.rs reads
+    #    it, squared and times m, is Pearson's chi-square for the table, so
+    #    sqrt(m) rho is its signed root: about N(0, 1) when the voters err
+    #    apart. A pair counts toward the discount only when sqrt(m) rho
+    #    passes the one-sided five percent test, z = 1.645.
+    a, b, c, d = sp.symbols("a b c d", positive=True)
+    m = a + b + c + d
+    xbar, ybar = (a + b) / m, (a + c) / m
+    cov = (a * (1 - xbar) * (1 - ybar) - b * (1 - xbar) * ybar
+           - c * xbar * (1 - ybar) + d * xbar * ybar) / m
+    rho_hat = cov / sp.sqrt(xbar * (1 - xbar) * ybar * (1 - ybar))
+    cells = [(a, a + b, a + c), (b, a + b, b + d), (c, c + d, a + c), (d, c + d, b + d)]
+    chi2 = sum((obs - row * col / m) ** 2 / (row * col / m) for obs, row, col in cells)
+    results.append(check("m rho^2 is Pearson's chi-square of the 2x2 table", sp.factor(m * rho_hat**2 - chi2)))
+    z95 = float(sp.sqrt(2) * sp.erfinv(sp.Rational(9, 10)))
+    near = abs(z95 - 1.645) < 1e-3
+    print(f"{'ok ' if near else 'FAIL'} the gate's 1.645 is the one-sided five percent point of N(0, 1), {z95:.6f}, to 1e-3")
+    results.append(near)
+    # Exact clones read rho = 1, so they pass from sqrt(m) > 1.645: three
+    # shared items. Independent voters pass about one time in twenty.
+    results.append(check("clones pass the gate from three shared items",
+                         sp.Integer(int(sp.ceiling(sp.Float(1.645) ** 2))) - 3))
+
     print()
     if all(results):
         print(f"all {len(results)} checks hold")
