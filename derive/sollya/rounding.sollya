@@ -1,16 +1,18 @@
-/* What binary64 arithmetic does to the settle, bounded rigorously.
+/* Bounds on what binary64 arithmetic does to the settle.
  *
  * Run: sollya derive/sollya/rounding.sollya | grep -x 'all certificates hold'
  * (Sollya's quit takes no status, so the verdict is the last line)
  *
- * Every quantity below is computed in interval arithmetic: an interval is
- * evaluated with outward rounding, and only its lower or upper bound is used
- * in a comparison, so a printed "ok" is a proof about the reals, not a
- * floating-point estimate.
+ * The bounds below are intervals, evaluated with outward rounding at 300
+ * bits. A comparison takes the end that makes it safe: the upper end against
+ * a ceiling, the lower end against a floor. Inputs and thresholds are rounded
+ * to 300 bits once, far finer than any margin checked, so a printed "ok" is
+ * not a floating-point estimate.
  *
- * u is the unit roundoff of binary64 and gamma(k) = k u / (1 - k u) Higham's
- * bound on the relative error of a k-term dot product (Accuracy and
- * Stability of Numerical Algorithms, 2nd ed., Thm 3.1).
+ * u is the unit roundoff of binary64, and gamma(k) = k u / (1 - k u) is
+ * Higham's gamma (Accuracy and Stability of Numerical Algorithms, 2nd ed.,
+ * Lemma 3.1). A k-term dot product of nonnegative terms carries at most
+ * gamma(k) relative error (his section 3.1).
  */
 
 prec = 300!;
@@ -27,19 +29,19 @@ gamma = proc(k) {
 /* 1. The floor a settle's residual cannot go below.
  *
  * One computed Friedkin-Johnsen step on opinions in [0, 1] differs from the
- * exact step by at most gamma(n + 2): a dot product of n terms, a product
- * with s_i, and the anchor term added. The computed iterates then satisfy
- * |x_t - x*| <= (q |x_t - x_(t-1)| + gamma(n + 2)) / (1 - q), so the
- * rounding adds gamma(n + 2) / (1 - q) to Banach's bound (settle_with adds
- * it). The function grows with n and with q, so the largest panel and the
- * stiffest anchor are the worst case. */
+ * exact step by at most gamma(n + 2). The n + 2 cover a dot product of n
+ * terms, a product with s_i and the added anchor term. Computed iterates
+ * satisfy |x_t - x*| <= (q |x_t - x_(t-1)| + gamma(n + 2)) / (1 - q).
+ * Rounding adds gamma(n + 2) / (1 - q) to Banach's bound, and settle_with
+ * counts that term. It grows with n and with q, so the largest panel and the
+ * q closest to 1 are the worst case. */
 floor_of = proc(n, q) {
   return gamma(n + 2) / ([1] - [q]);
 };
 worst = floor_of(1000, 99/100);
 small = floor_of(100, 99/100);
 print("1. rounding floor of the bound, q = 0.99:", sup(small), "for 100 voters,", sup(worst), "for 1000");
-if sup(small) * 500 < 1e-9 && sup(worst) * 50 < 1e-9 then
+if sup(small * 500) < 1e-9 && sup(worst * 50) < 1e-9 then
   print("   ok: the default tolerance 1e-9 is over 500 times the floor up to 100 voters, over 50 times up to 1000")
 else {
   print("   FAIL: 1e-9 is too near the rounding floor");
@@ -47,51 +49,60 @@ else {
 };
 
 /* 2. The rounds the bound needs. Opinions start in [0, 1], so the first
- * step is at most one and the t-th at most q^(t-1); the bound
- * q / (1 - q) q^(t-1) falls under tol once t >= ln(tol (1 - q)) / ln q.
- * The default max_iter is 200. */
-rounds_for = proc(q, tol) {
-  return ceil(sup(log([tol] * ([1] - [q])) / log([q])));
+ * step is at most one and the t-th at most q^(t-1). The bound
+ * q / (1 - q) q^(t-1) falls under tol once t >= ln(tol (1 - q)) / ln q, and
+ * max_iter defaults to 200. */
+ratio = proc(q, tol) {
+  return log([tol] * ([1] - [q])) / log([q]);
 };
 print("2. worst-case rounds for the bound to reach 1e-9:");
 for q in [|1/2, 7/10, 4/5, 89/100, 9/10, 95/100, 99/100|] do {
-  r = rounds_for(q, 1e-9);
+  r = ceil(sup(ratio(q, 1e-9)));
   if r <= 200 then print("   q =", q, ":", r, "rounds, within max_iter 200")
-  else print("   q =", q, ":", r, "rounds, past max_iter 200: settle_with then measures the distance to the closed form");
+  else print("   q =", q, ":", ceil(inf(ratio(q, 1e-9))), "rounds or more, past max_iter 200: settle_with then measures the distance to the closed form");
 };
-if rounds_for(89/100, 1e-9) <= 200 && rounds_for(9/10, 1e-9) > 200 then
+if ceil(sup(ratio(89/100, 1e-9))) <= 200 && ceil(inf(ratio(9/10, 1e-9))) > 200 then
   print("   ok: max_iter 200 certifies every panel with q <= 0.89 by the bound alone")
 else {
   print("   FAIL: the q = 0.89 / 0.9 boundary moved");
   failures = failures + 1;
 };
 
-/* 3. The tie allowance. A share is a sum of n opinions over the total; each
- * sum carries at most gamma(n - 1) relative error and the quotient one more
- * rounding, so a share is off by at most 2 gamma(n) and a margin by
- * 4 gamma(n). outcome_of allows 4 n eps. Written as 4 n u (2 - 1 / (1 - n u))
- * the difference is positive exactly when n u < 1/2; the interval evaluation
- * over every panel up to 2^40 voters checks it. */
-nn = [1; 2^40];
-slack = 4 * nn * u * (2 - 1 / (1 - nn * u));
-print("3. 4 n eps - 4 gamma(n) over n in [1, 2^40] lies in", slack);
-if inf(slack) > 0 then
+/* 3. The tie allowance. outcome_of sums each option's n opinions, sums the
+ * m option sums into a total, and divides. Counting the roundings as in
+ * Higham's Lemma 3.1, a share then carries at most gamma(2 n + m - 2)
+ * relative error. Two shares sum to at most one, so a margin is off by at
+ * most that much. An option needs a ballot and a voter casts one, so m <= n,
+ * and gamma(3 n - 2) bounds every margin. outcome_of allows 4 n eps = 8 n u,
+ * and over u the difference is 5 n + 2 - (3 n - 2) b / (1 - b), where
+ * b = (3 n - 2) u. The check takes each doubling of n up to 2^40 voters as
+ * one interval, which keeps the overestimate small. */
+least = 2^60;
+for j from 0 to 39 do {
+  nn = [2^j; 2^(j + 1)];
+  b = (3 * nn - 2) * u;
+  over_u = 5 * nn + 2 - (3 * nn - 2) * b / (1 - b);
+  if inf(over_u) < least then least = inf(over_u);
+};
+print("3. (4 n eps - gamma(3 n - 2)) / u over n in [1, 2^40] is at least", least);
+if least > 0 then
   print("   ok: the tie allowance covers the rounding of every share")
 else {
   print("   FAIL: the tie allowance does not cover the share rounding");
   failures = failures + 1;
 };
 
-/* 4. The weights calibrate writes. The record rule gives a voter seen N
- * times the accuracy (h + 1) / (N + 2), so its log odds lie in
- * [-ln(N + 1), ln(N + 1)], the ends at h = 0 and h = N: no voter's weight
- * runs away on a short record. The clamp to [0.01, 0.99] binds once a
- * perfect record reaches (N + 1) / (N + 2) >= 0.99, which is N = 98. */
+/* 4. The weights calibrate writes. Dawid-Skene's Laplace smoothing gives a
+ * voter seen N times the accuracy (h + 1) / (N + 2), with h its expected
+ * hits. Its log odds then lie in [-ln(N + 1), ln(N + 1)], with the ends at
+ * h = 0 and h = N, so no voter's weight runs away on a short record. The
+ * clamp to [0.01, 0.99] binds once a perfect record reaches
+ * (N + 1) / (N + 2) >= 0.99, which is N = 98. */
 big = 10^6;
-lo = log([1/(big + 2)] / [(big + 1)/(big + 2)]);
-gap = abs(inf(lo) + sup(log([big + 1])));
+lo = log(([1] / [big + 2]) / ([big + 1] / [big + 2]));
+gap = sup(abs(lo + log([big + 1])));
 print("4. the log odds of a record of 10^6 misses is", inf(lo), "within", gap, "of -ln(10^6 + 1)");
-if gap < 1e-80 && sup([98 + 1] / [98 + 2]) >= 99/100 && inf([97 + 1] / [97 + 2]) < 99/100 then
+if gap < 1e-80 && (98 + 1) * 100 >= 99 * (98 + 2) && (97 + 1) * 100 < 99 * (97 + 2) then
   print("   ok: |logit| <= ln(N + 1); the clamp at ln 99 binds from a perfect record of 98")
 else {
   print("   FAIL: the record bound");
