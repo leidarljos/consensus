@@ -1,6 +1,8 @@
 //! Discrete DeGroot / Friedkin–Johnsen. Seldon is the ODE engine
 //! (`seldon` on PATH). This crate does not link GPL Seldon.
 
+
+pub mod exact;
 pub mod seldon;
 
 use serde::{Deserialize, Serialize};
@@ -11,7 +13,7 @@ pub struct Ballot {
     pub choice: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Outcome {
     pub options: Vec<String>,
     pub shares: Vec<f64>,
@@ -31,6 +33,25 @@ pub struct Outcome {
     /// two ends' final opinions, the same source's disagreement.
     #[serde(default)]
     pub disagreement: f64,
+    /// The voters, in the order `influence` reads.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agents: Vec<String>,
+    /// Each voter's social power: the weight its ballot carries in the
+    /// shares, `c = (1/n) P^T 1` for the fixed point `x* = P x0` (Friedkin,
+    /// doi:10.1086/229694). Sums to one; the shares are the vote it weighs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub influence: Vec<f64>,
+    /// `1 / sum c_i^2`: how many equal voices the settle is worth. One when
+    /// one voter carries it (Golub and Jackson, doi:10.1257/mic.2.1.112).
+    #[serde(default)]
+    pub effective_voters: f64,
+    /// The leading share less the next.
+    #[serde(default)]
+    pub margin: f64,
+    /// The margin is inside what the residual and rounding leave open: two
+    /// options the settle cannot order.
+    #[serde(default)]
+    pub tie: bool,
 }
 
 /// Distinct agents and choices, each sorted.
@@ -50,37 +71,12 @@ pub fn influence_matrix(
     trust: &[(String, String, f64)],
     self_weight: f64,
 ) -> Vec<Vec<f64>> {
-    let n = agents.len();
-    let mut w = vec![vec![0.0; n]; n];
-    for (from, to, wt) in trust {
-        let Some(i) = agents.iter().position(|a| a == from) else {
-            continue;
-        };
-        let Some(j) = agents.iter().position(|a| a == to) else {
-            continue;
-        };
-        w[i][j] += *wt;
-    }
-    for (i, row) in w.iter_mut().enumerate() {
-        // A voter with no row of its own listens to everyone equally, itself
-        // included. Listening to nobody would make a settle with no rows a
-        // count, and the tracker's default listens to everyone; the two
-        // settles have to agree when neither has been told anything.
-        if row.iter().all(|x| *x == 0.0) {
-            for x in row.iter_mut() {
-                *x = 1.0 / n as f64;
-            }
-            continue;
-        }
-        if row[i] == 0.0 {
-            row[i] = self_weight;
-        }
-        let s: f64 = row.iter().sum();
-        for x in row.iter_mut() {
-            *x /= s;
-        }
-    }
-    w
+    influence_matrix_with(
+        agents,
+        trust,
+        SelfTrust::Constant(self_weight),
+        &std::collections::BTreeMap::new(),
+    )
 }
 
 /// Parse a vote dump: an array of `{agent, choice}`, or an object with
@@ -176,6 +172,7 @@ pub fn settle_bounded(
             engine: "empty".into(),
             polarization: 0.0,
             disagreement: 0.0,
+            ..Outcome::default()
         };
     }
     let bound: Vec<f64> = agents
@@ -249,6 +246,7 @@ pub fn settle_bounded(
         engine: "bounded-confidence".into(),
         polarization,
         disagreement,
+        ..Outcome::default()
     }
 }
 
@@ -600,65 +598,211 @@ pub fn settle_anchored(
     max_iter: usize,
     tol: f64,
 ) -> Outcome {
-    let (agents, options) = roster(ballots);
+    settle_with(
+        ballots,
+        trust,
+        &Opts {
+            self_trust: SelfTrust::Constant(self_weight),
+            susceptibility,
+            anchors: anchors.clone(),
+            discount: std::collections::BTreeMap::new(),
+            max_iter,
+            tol,
+        },
+    )
+}
+
+/// How a voter weighs its own ballot when its row does not say.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SelfTrust {
+    /// The same weight for every voter; the tracker's default is 0.5.
+    Constant(f64),
+    /// What the others give it: the mean weight the rows that name the
+    /// voter put on it, else the fallback. With rows that weigh each voter
+    /// alike from everyone, as `learn` and `calibrate` write them, every row
+    /// is then the same, the settle is the weighted vote with those weights
+    /// in one round, and with log-odds rows that vote is Nitzan and
+    /// Paroush's optimum (doi:10.2307/2526438). A constant self-weight `sw`
+    /// weighs voter j by `w_j (S + sw - w_j)` instead (derive/sympy/fj.py,
+    /// identities 3 to 5).
+    Earned(f64),
+}
+
+/// [`influence_matrix`] with the self-weight rule named and each voter's
+/// inbound weight scaled by its discount (a voter absent from `discount`
+/// keeps 1): a voice correlated with others counts once among them
+/// ([`correlation`]).
+#[must_use]
+pub fn influence_matrix_with(
+    agents: &[String],
+    trust: &[(String, String, f64)],
+    self_trust: SelfTrust,
+    discount: &std::collections::BTreeMap<String, f64>,
+) -> Vec<Vec<f64>> {
     let n = agents.len();
-    let m = options.len();
-    if n == 0 || m == 0 {
-        return Outcome {
-            options,
-            shares: vec![],
-            rounds: 0,
-            settled: true,
-            residual: 0.0,
-            engine: "empty".into(),
-            polarization: 0.0,
-            disagreement: 0.0,
+    let d: Vec<f64> = agents
+        .iter()
+        .map(|a| discount.get(a).copied().unwrap_or(1.0).max(0.0))
+        .collect();
+    let mut w = vec![vec![0.0; n]; n];
+    for (from, to, wt) in trust {
+        let (Some(i), Some(j)) = (
+            agents.iter().position(|a| a == from),
+            agents.iter().position(|a| a == to),
+        ) else {
+            continue;
         };
+        w[i][j] += *wt;
     }
-    let w = influence_matrix(&agents, trust, self_weight);
+    let inbound: Vec<Option<f64>> = (0..n)
+        .map(|j| {
+            let named: Vec<f64> = (0..n)
+                .filter(|&i| i != j && w[i][j] > 0.0)
+                .map(|i| w[i][j])
+                .collect();
+            (!named.is_empty()).then(|| named.iter().sum::<f64>() / named.len() as f64)
+        })
+        .collect();
+    for (i, row) in w.iter_mut().enumerate() {
+        // A voter with no row of its own listens to everyone equally, itself
+        // included. Listening to nobody would make a settle with no rows a
+        // count, and the tracker's default listens to everyone; the two
+        // settles have to agree when neither has been told anything.
+        if row.iter().all(|x| *x == 0.0) {
+            row.clone_from(&d);
+        } else {
+            if row[i] == 0.0 {
+                row[i] = match self_trust {
+                    SelfTrust::Constant(sw) => sw,
+                    SelfTrust::Earned(fallback) => inbound[i].unwrap_or(fallback),
+                };
+            }
+            for (x, dj) in row.iter_mut().zip(&d) {
+                *x *= dj;
+            }
+        }
+        let s: f64 = row.iter().sum();
+        if s > 0.0 {
+            for x in row.iter_mut() {
+                *x /= s;
+            }
+        } else {
+            row.fill(1.0 / n as f64);
+        }
+    }
+    w
+}
+
+/// What a settle is asked beyond the ballots and the rows.
+#[derive(Debug, Clone)]
+pub struct Opts {
+    pub self_trust: SelfTrust,
+    /// How far a voter not in `anchors` moves off its ballot, in `[0, 1]`.
+    pub susceptibility: f64,
+    pub anchors: std::collections::BTreeMap<String, f64>,
+    /// Each voter's inbound weight multiplier ([`influence_matrix_with`]).
+    pub discount: std::collections::BTreeMap<String, f64>,
+    pub max_iter: usize,
+    pub tol: f64,
+}
+
+impl Default for Opts {
+    fn default() -> Self {
+        Self {
+            self_trust: SelfTrust::Constant(0.5),
+            susceptibility: 1.0,
+            anchors: std::collections::BTreeMap::new(),
+            discount: std::collections::BTreeMap::new(),
+            max_iter: 200,
+            tol: 1e-9,
+        }
+    }
+}
+
+/// The pieces every settle of the trust graph starts from.
+struct Setup {
+    agents: Vec<String>,
+    options: Vec<String>,
+    w: Vec<Vec<f64>>,
+    pull: Vec<f64>,
+    x0: Vec<Vec<f64>>,
+}
+
+fn setup(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Option<Setup> {
+    let (agents, options) = roster(ballots);
+    if agents.is_empty() || options.is_empty() {
+        return None;
+    }
+    let w = influence_matrix_with(&agents, trust, opts.self_trust, &opts.discount);
     let pull: Vec<f64> = agents
         .iter()
         .map(|a| {
-            anchors
+            opts.anchors
                 .get(a)
                 .copied()
-                .unwrap_or(susceptibility)
+                .unwrap_or(opts.susceptibility)
                 .clamp(0.0, 1.0)
         })
         .collect();
-    // x[agent][option]
-    let mut x = vec![vec![0.0; m]; n];
-    let mut x0 = vec![vec![0.0; m]; n];
+    let mut x0 = vec![vec![0.0; options.len()]; agents.len()];
     for b in ballots {
         let i = agents.iter().position(|a| *a == b.agent).unwrap();
         let k = options.iter().position(|o| *o == b.choice).unwrap();
-        x[i][k] = 1.0;
         x0[i][k] = 1.0;
     }
-    let mut rounds = 0;
-    let mut settled = false;
-    for r in 1..=max_iter {
-        let mut nxt = vec![vec![0.0; m]; n];
-        for (((row, w_i), x0_i), s_i) in nxt.iter_mut().zip(&w).zip(&x0).zip(&pull) {
-            for (k, cell) in row.iter_mut().enumerate() {
-                let heard: f64 = w_i.iter().zip(&x).map(|(wij, x_j)| wij * x_j[k]).sum();
-                *cell = (1.0 - s_i) * x0_i[k] + s_i * heard;
-            }
-        }
-        let err = nxt
-            .iter()
-            .zip(&x)
-            .flat_map(|(a, b)| a.iter().zip(b).map(|(p, q)| (p - q).abs()))
-            .fold(0.0_f64, f64::max);
-        x = nxt;
-        rounds = r;
-        if err < tol {
-            settled = true;
-            break;
-        }
+    Some(Setup {
+        agents,
+        options,
+        w,
+        pull,
+        x0,
+    })
+}
+
+fn empty(options: Vec<String>) -> Outcome {
+    Outcome {
+        options,
+        settled: true,
+        engine: "empty".into(),
+        ..Outcome::default()
     }
+}
+
+/// `p x0`: the opinions the fixed point holds.
+fn apply(p: &[Vec<f64>], x0: &[Vec<f64>]) -> Vec<Vec<f64>> {
+    let m = x0.first().map_or(0, Vec::len);
+    p.iter()
+        .map(|row| {
+            (0..m)
+                .map(|k| row.iter().zip(x0).map(|(pij, xj)| pij * xj[k]).sum())
+                .collect()
+        })
+        .collect()
+}
+
+fn max_gap(a: &[Vec<f64>], b: &[Vec<f64>]) -> f64 {
+    a.iter()
+        .zip(b)
+        .flat_map(|(r, s)| r.iter().zip(s).map(|(p, q)| (p - q).abs()))
+        .fold(0.0_f64, f64::max)
+}
+
+/// The outcome of a settle that ended at opinions `x`: shares, spread,
+/// social power from `p` when the fixed point was read off, and whether
+/// the leading two options are farther apart than `residual` leaves open.
+#[allow(clippy::too_many_arguments)]
+fn outcome_of(
+    setup: Setup,
+    x: &[Vec<f64>],
+    p: Option<&[Vec<f64>]>,
+    rounds: usize,
+    settled: bool,
+    residual: f64,
+    engine: &str,
+) -> Outcome {
+    let m = setup.options.len();
     let mut shares = vec![0.0; m];
-    for row in &x {
+    for row in x {
         for (share, cell) in shares.iter_mut().zip(row) {
             *share += cell;
         }
@@ -669,17 +813,123 @@ pub fn settle_anchored(
             *share /= s;
         }
     }
-    let (polarization, disagreement) = spread(&x, &w);
+    let (polarization, disagreement) = spread(x, &setup.w);
+    let influence = p.map(exact::social_power).unwrap_or_default();
+    let mut ranked = shares.clone();
+    ranked.sort_by(|a, b| b.total_cmp(a));
+    let margin = if ranked.len() >= 2 {
+        ranked[0] - ranked[1]
+    } else {
+        ranked.first().copied().unwrap_or(0.0)
+    };
+    // Each opinion is within `residual` of the fixed point, so each share is
+    // and a difference of two within twice that; rounding adds a few ulps a
+    // voter.
+    let open = 2.0 * residual + 4.0 * setup.agents.len() as f64 * f64::EPSILON;
     Outcome {
-        options,
+        effective_voters: exact::effective_voters(&influence),
+        options: setup.options,
         shares,
         rounds,
         settled,
-        residual: 0.0,
-        engine: "degroot-fj".into(),
+        residual,
+        engine: engine.into(),
         polarization,
         disagreement,
+        agents: setup.agents,
+        influence,
+        margin,
+        tie: ranked.len() >= 2 && margin <= open,
     }
+}
+
+/// The settle by iteration, stopped on a bound rather than a step. With
+/// `q = max s_i < 1` the step is a `q`-contraction in the sup norm, so
+/// `|x_t - x*| <= q / (1 - q) |x_t - x_(t-1)|` (Banach's estimate,
+/// derive/lean/ConsensusProofs/Contraction.lean): the iteration stops once
+/// that bound is under `tol`, and `residual` is the bound. When some voter
+/// listens fully the step is no contraction in that norm; the fixed point
+/// is read off in closed form ([`exact::fixed_point`]) and `residual` is
+/// the distance to it. Either way `settled` means within `tol` of the
+/// fixed point, not merely a small step.
+#[must_use]
+pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Outcome {
+    let Some(setup) = setup(ballots, trust, opts) else {
+        return empty(roster(ballots).1);
+    };
+    let (n, m) = (setup.agents.len(), setup.options.len());
+    let q = setup.pull.iter().copied().fold(0.0_f64, f64::max);
+    let p = exact::fixed_point(&setup.w, &setup.pull).ok();
+    let target = p.as_ref().map(|p| apply(p, &setup.x0));
+    let mut x = setup.x0.clone();
+    let mut rounds = 0;
+    let mut settled = false;
+    let mut residual = f64::INFINITY;
+    for r in 1..=opts.max_iter {
+        let mut nxt = vec![vec![0.0; m]; n];
+        for (((row, w_i), x0_i), s_i) in
+            nxt.iter_mut().zip(&setup.w).zip(&setup.x0).zip(&setup.pull)
+        {
+            for (k, cell) in row.iter_mut().enumerate() {
+                let heard: f64 = w_i.iter().zip(&x).map(|(wij, x_j)| wij * x_j[k]).sum();
+                *cell = (1.0 - s_i) * x0_i[k] + s_i * heard;
+            }
+        }
+        let step = max_gap(&nxt, &x);
+        x = nxt;
+        rounds = r;
+        residual = if q < 1.0 {
+            q / (1.0 - q) * step
+        } else if let Some(t) = &target {
+            max_gap(&x, t)
+        } else {
+            step
+        };
+        if residual < opts.tol {
+            settled = true;
+            break;
+        }
+    }
+    outcome_of(
+        setup,
+        &x,
+        p.as_deref(),
+        rounds,
+        settled,
+        residual,
+        "degroot-fj",
+    )
+}
+
+/// The settle read off in closed form: `x* = P x0` with `P` from
+/// [`exact::fixed_point`], no iteration. `residual` is the defect of one
+/// more step from `x*`, which only rounding leaves; `settled` is false
+/// only for a DeGroot class that cycles, which no settle ends.
+#[must_use]
+pub fn settle_exact(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Outcome {
+    let Some(setup) = setup(ballots, trust, opts) else {
+        return empty(roster(ballots).1);
+    };
+    let Ok(p) = exact::fixed_point(&setup.w, &setup.pull) else {
+        let mut out = settle_with(ballots, trust, opts);
+        out.settled = false;
+        return out;
+    };
+    let x = apply(&p, &setup.x0);
+    let stepped: Vec<Vec<f64>> = x
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            (0..row.len())
+                .map(|k| {
+                    let heard: f64 = setup.w[i].iter().zip(&x).map(|(wij, xj)| wij * xj[k]).sum();
+                    (1.0 - setup.pull[i]) * setup.x0[i][k] + setup.pull[i] * heard
+                })
+                .collect()
+        })
+        .collect();
+    let residual = max_gap(&stepped, &x);
+    outcome_of(setup, &x, Some(&p), 0, true, residual, "fj-exact")
 }
 
 /// The Friedkin-Johnsen settle as the minimum of an energy, found by
@@ -723,6 +973,7 @@ pub fn settle_energy(
             engine: "empty".into(),
             polarization: 0.0,
             disagreement: 0.0,
+            ..Outcome::default()
         };
     }
     let w = influence_matrix(&agents, trust, self_weight);
@@ -935,6 +1186,7 @@ pub fn settle_energy(
         engine: "fj-energy".into(),
         polarization,
         disagreement,
+        ..Outcome::default()
     }
 }
 
@@ -1031,6 +1283,7 @@ mod tests {
     }
 
     use super::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn two_agents_who_listen_meet_in_the_middle() {
@@ -1155,7 +1408,13 @@ mod tests {
             .collect();
         let out = settle(&ballots, &[], 0.5, 1.0, 200, 1e-9);
         assert!(out.settled);
-        assert!(out.rounds > 1, "a count would settle in one round");
+        // A count is everyone listening to itself alone: nobody moves.
+        let own: Vec<(String, String, f64)> = ["a", "b", "c"]
+            .iter()
+            .map(|a| (a.to_string(), a.to_string(), 1.0))
+            .collect();
+        let count = settle(&ballots, &own, 0.5, 1.0, 200, 1e-9);
+        assert!(count.polarization > 0.5, "{}", count.polarization);
         assert!((out.shares[1] - 2.0 / 3.0).abs() < 1e-6, "{:?}", out.shares);
         assert!(
             out.polarization < 1e-9,
@@ -1272,6 +1531,257 @@ mod tests {
         assert!(acc["steady"] > acc["noisy"], "{acc:?}");
         assert!(acc["noisy"] > acc["coin"], "{acc:?}");
         assert!(acc["steady"] > 0.9, "{acc:?}");
+    }
+
+    /// The exact solver against fixed points SymPy solved in rationals
+    /// (derive/sympy/golden.py): P, the social power and the shares.
+    #[test]
+    fn the_exact_settle_matches_the_rational_fixed_points() {
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../derive/golden/fj.json")).unwrap();
+        let num = |v: &serde_json::Value| -> f64 {
+            let t = v.as_str().unwrap();
+            match t.split_once('/') {
+                Some((a, b)) => a.parse::<f64>().unwrap() / b.parse::<f64>().unwrap(),
+                None => t.parse().unwrap(),
+            }
+        };
+        for case in cases.as_array().unwrap() {
+            let name = case["name"].as_str().unwrap();
+            let agents: Vec<String> = case["agents"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|a| a.as_str().unwrap().to_string())
+                .collect();
+            let rows: Vec<(String, String, f64)> = case["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| {
+                    (
+                        r[0].as_str().unwrap().to_string(),
+                        r[1].as_str().unwrap().to_string(),
+                        num(&r[2]),
+                    )
+                })
+                .collect();
+            let fallback = num(&case["fallback"]);
+            let self_trust = if case["self_trust"] == "earned" {
+                SelfTrust::Earned(fallback)
+            } else {
+                SelfTrust::Constant(fallback)
+            };
+            let s: Vec<f64> = case["s"].as_array().unwrap().iter().map(num).collect();
+            let w = influence_matrix_with(&agents, &rows, self_trust, &BTreeMap::new());
+            let p = exact::fixed_point(&w, &s).unwrap();
+            for (i, row) in case["p"].as_array().unwrap().iter().enumerate() {
+                for (j, v) in row.as_array().unwrap().iter().enumerate() {
+                    assert!((p[i][j] - num(v)).abs() < 1e-12, "{name}: P[{i}][{j}]");
+                }
+            }
+            let ballots: Vec<Ballot> = case["ballots"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(a, c)| Ballot {
+                    agent: a.clone(),
+                    choice: c.as_str().unwrap().to_string(),
+                })
+                .collect();
+            let anchors: BTreeMap<String, f64> =
+                agents.iter().cloned().zip(s.iter().copied()).collect();
+            let opts = Opts {
+                self_trust,
+                anchors,
+                ..Opts::default()
+            };
+            let out = settle_exact(&ballots, &rows, &opts);
+            assert_eq!(out.engine, "fj-exact");
+            assert!(out.residual < 1e-12, "{name}: {}", out.residual);
+            for (k, o) in out.options.iter().enumerate() {
+                let want = num(&case["shares"][o]);
+                assert!((out.shares[k] - want).abs() < 1e-12, "{name}: share of {o}");
+            }
+            for (i, c) in case["influence"].as_array().unwrap().iter().enumerate() {
+                assert!((out.influence[i] - num(c)).abs() < 1e-12, "{name}: c[{i}]");
+            }
+            // The iteration lands on the same point within its own bound.
+            let iterated = settle_with(
+                &ballots,
+                &rows,
+                &Opts {
+                    max_iter: 5000,
+                    ..opts.clone()
+                },
+            );
+            assert!(iterated.settled, "{name}: {iterated:?}");
+            for (a, b) in iterated.shares.iter().zip(&out.shares) {
+                assert!((a - b).abs() <= 2e-9, "{name}: {a} vs {b}");
+            }
+        }
+    }
+
+    /// Learned rows weigh every voter alike from everyone. Earned self-trust
+    /// makes the settle the weighted vote with those weights; a constant
+    /// self-weight compresses them to w (S + sw - w).
+    #[test]
+    fn earned_self_trust_makes_learned_rows_the_weighted_vote() {
+        let w = [("a", 1.0), ("b", 0.6), ("c", 0.2)];
+        let mut rows = Vec::new();
+        for (from, _) in &w {
+            for (to, x) in &w {
+                if from != to {
+                    rows.push((from.to_string(), to.to_string(), *x));
+                }
+            }
+        }
+        let ballots: Vec<Ballot> = [("a", "ship"), ("b", "hold"), ("c", "hold")]
+            .iter()
+            .map(|(a, c)| Ballot {
+                agent: a.to_string(),
+                choice: c.to_string(),
+            })
+            .collect();
+        let s_total: f64 = w.iter().map(|x| x.1).sum();
+        let earned = settle_exact(
+            &ballots,
+            &rows,
+            &Opts {
+                self_trust: SelfTrust::Earned(0.5),
+                ..Opts::default()
+            },
+        );
+        for (i, (_, x)) in w.iter().enumerate() {
+            assert!(
+                (earned.influence[i] - x / s_total).abs() < 1e-12,
+                "{earned:?}"
+            );
+        }
+        // The vote a weighs at 1.0 against b and c's 0.8 together: ship wins.
+        let ship = earned.options.iter().position(|o| o == "ship").unwrap();
+        assert!((earned.shares[ship] - 1.0 / 1.8).abs() < 1e-12);
+        let constant = settle_exact(&ballots, &rows, &Opts::default());
+        let compressed: Vec<f64> = w.iter().map(|(_, x)| x * (s_total + 0.5 - x)).collect();
+        let z: f64 = compressed.iter().sum();
+        for (i, c) in compressed.iter().enumerate() {
+            assert!(
+                (constant.influence[i] - c / z).abs() < 1e-12,
+                "{constant:?}"
+            );
+        }
+        assert!(
+            constant.shares[ship] < earned.shares[ship],
+            "the constant self-weight hands b and c more than their rows say"
+        );
+    }
+
+    /// With every voter anchored the iteration stops on Banach's bound, and
+    /// the bound holds: the reported residual is no smaller than the true
+    /// distance to the fixed point.
+    #[test]
+    fn the_residual_bounds_the_distance_to_the_fixed_point() {
+        let ballots: Vec<Ballot> = [("a", "x"), ("b", "y"), ("c", "y"), ("d", "x")]
+            .iter()
+            .map(|(a, c)| Ballot {
+                agent: a.to_string(),
+                choice: c.to_string(),
+            })
+            .collect();
+        let rows: Vec<(String, String, f64)> = [
+            ("a", "b", 0.9),
+            ("b", "c", 0.4),
+            ("c", "a", 0.7),
+            ("d", "a", 0.2),
+            ("d", "c", 0.8),
+        ]
+        .iter()
+        .map(|(f, t, x)| (f.to_string(), t.to_string(), *x))
+        .collect();
+        for tol in [1e-3, 1e-6, 1e-9] {
+            let opts = Opts {
+                susceptibility: 0.95,
+                tol,
+                max_iter: 10_000,
+                ..Opts::default()
+            };
+            let it = settle_with(&ballots, &rows, &opts);
+            let ex = settle_exact(&ballots, &rows, &opts);
+            assert!(it.settled && it.residual < tol, "{it:?}");
+            let true_gap = it
+                .shares
+                .iter()
+                .zip(&ex.shares)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0, f64::max);
+            assert!(
+                true_gap <= it.residual + 1e-15,
+                "tol {tol}: {true_gap} > {}",
+                it.residual
+            );
+        }
+    }
+
+    /// Two even blocs that hear each other alike end level: the settle says
+    /// it cannot order them rather than naming the first option.
+    #[test]
+    fn an_even_split_is_a_tie_and_a_clear_one_is_not() {
+        let even: Vec<Ballot> = [("a", "x"), ("b", "x"), ("c", "y"), ("d", "y")]
+            .iter()
+            .map(|(a, c)| Ballot {
+                agent: a.to_string(),
+                choice: c.to_string(),
+            })
+            .collect();
+        let out = settle_with(&even, &[], &Opts::default());
+        assert!(out.tie, "{out:?}");
+        let clear: Vec<Ballot> = [("a", "x"), ("b", "x"), ("c", "x"), ("d", "y")]
+            .iter()
+            .map(|(a, c)| Ballot {
+                agent: a.to_string(),
+                choice: c.to_string(),
+            })
+            .collect();
+        let out = settle_with(&clear, &[], &Opts::default());
+        assert!(!out.tie && (out.margin - 0.5).abs() < 1e-9, "{out:?}");
+    }
+
+    /// Three clones of one judge outvote two independent voters on a count;
+    /// discounted by the correlation reading they count as one voice, and
+    /// the independents carry the settle.
+    #[test]
+    fn a_discount_counts_correlated_clones_once() {
+        let ballots: Vec<Ballot> = [
+            ("clone1", "wrong"),
+            ("clone2", "wrong"),
+            ("clone3", "wrong"),
+            ("solo1", "right"),
+            ("solo2", "right"),
+        ]
+        .iter()
+        .map(|(a, c)| Ballot {
+            agent: a.to_string(),
+            choice: c.to_string(),
+        })
+        .collect();
+        let count = settle_exact(&ballots, &[], &Opts::default());
+        let wrong = count.options.iter().position(|o| o == "wrong").unwrap();
+        assert!(count.shares[wrong] > 0.5);
+        let discount: BTreeMap<String, f64> = ["clone1", "clone2", "clone3"]
+            .iter()
+            .map(|a| (a.to_string(), 1.0 / 3.0))
+            .collect();
+        let fair = settle_exact(
+            &ballots,
+            &[],
+            &Opts {
+                discount,
+                ..Opts::default()
+            },
+        );
+        assert!((fair.shares[wrong] - 1.0 / 3.0).abs() < 1e-12, "{fair:?}");
+        let bloc: f64 = fair.influence[..3].iter().sum();
+        assert!((bloc - fair.influence[3]).abs() < 1e-12, "{fair:?}");
     }
 
     #[test]

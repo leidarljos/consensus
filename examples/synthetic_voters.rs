@@ -28,17 +28,24 @@
 //!   record of hits and misses so far, smoothed by one of each, gives its
 //!   accuracy, and the rows are the log odds of that scaled to the best at
 //!   one, before each question. The online form of `calibrate`.
+//! - `..., earned self-trust`: the same rows with each voter weighing its
+//!   own ballot as the others weigh it rather than at a constant 0.5, which
+//!   makes the settle the weighted vote the rows describe
+//!   (derive/sympy/fj.py).
 //!
 //! ```console
 //! $ cargo run --release --example synthetic_voters -- 9 400 20
+//! $ cargo run --release --example synthetic_voters -- 9 400 20 expert
 //! ```
-//! voters, questions, seeds. Accuracies are drawn uniformly in [0.35, 0.95]
-//! per seed, so some voters are worse than chance, which is what a
-//! weighting has to survive.
+//! voters, questions, seeds, and the profile. `uniform` (the default) draws
+//! accuracies uniformly in [0.35, 0.95] per seed, so some voters are worse
+//! than chance, which is what a weighting has to survive. `expert` seats one
+//! voter at 0.92 among voters drawn in [0.52, 0.62]: the case where a weak
+//! crowd can outvote the one voter worth listening to.
 
 use std::collections::BTreeMap;
 
-use ljos_consensus::{dawid_skene, settle_anchored, Ballot};
+use ljos_consensus::{dawid_skene, settle_anchored, settle_with, Ballot, Opts, SelfTrust};
 
 /// A small deterministic generator, so a seed is a run.
 struct Lcg(u64);
@@ -105,6 +112,22 @@ fn decide(ballots: &[Ballot], rows: &[(String, String, f64)]) -> String {
     best.0
 }
 
+/// [`decide`] with earned self-trust.
+fn decide_earned(ballots: &[Ballot], rows: &[(String, String, f64)]) -> String {
+    let opts = Opts {
+        self_trust: SelfTrust::Earned(0.5),
+        ..Opts::default()
+    };
+    let out = settle_with(ballots, rows, &opts);
+    let mut best = (String::new(), f64::NEG_INFINITY);
+    for (o, s) in out.options.iter().zip(&out.shares) {
+        if *s > best.1 {
+            best = (o.clone(), *s);
+        }
+    }
+    best.0
+}
+
 fn weighted_majority(ballots: &[Ballot], weight: &BTreeMap<String, f64>) -> String {
     let mut tally: BTreeMap<&str, f64> = BTreeMap::new();
     for b in ballots {
@@ -127,6 +150,7 @@ fn main() {
     let voters: usize = args.get(1).and_then(|a| a.parse().ok()).unwrap_or(9);
     let questions: usize = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(400);
     let seeds: u64 = args.get(3).and_then(|a| a.parse().ok()).unwrap_or(20);
+    let expert = args.get(4).is_some_and(|a| a == "expert");
     let names: Vec<String> = (0..voters).map(|i| format!("v{i}")).collect();
     let arms = [
         "majority",
@@ -136,6 +160,8 @@ fn main() {
         "learn hedge",
         "learn hedge, share 0.1",
         "learn log-odds online",
+        "calibrate log-odds, earned self-trust",
+        "learn log-odds online, earned self-trust",
     ];
     const SHARE: f64 = 0.1;
     let mut right = vec![0usize; arms.len()];
@@ -144,7 +170,17 @@ fn main() {
         let mut rng = Lcg(seed.wrapping_mul(7919).wrapping_add(17));
         let acc: BTreeMap<String, f64> = names
             .iter()
-            .map(|n| (n.clone(), 0.35 + 0.60 * rng.next_f64()))
+            .enumerate()
+            .map(|(i, n)| {
+                let p = if !expert {
+                    0.35 + 0.60 * rng.next_f64()
+                } else if i == 0 {
+                    0.92
+                } else {
+                    0.52 + 0.10 * rng.next_f64()
+                };
+                (n.clone(), p)
+            })
             .collect();
         // Every question: a truth in {a, b} and each voter's ballot.
         let mut items: Vec<(String, Vec<Ballot>)> = Vec::with_capacity(questions);
@@ -210,6 +246,8 @@ fn main() {
                 decide(ballots, &rows_of(&hedge)),
                 decide(ballots, &rows_of(&shared)),
                 decide(ballots, &online),
+                decide_earned(ballots, &logodds),
+                decide_earned(ballots, &online),
             ];
             for (k, d) in decisions.iter().enumerate() {
                 if d == truth {
@@ -241,8 +279,13 @@ fn main() {
             }
         }
     }
+    let profile = if expert {
+        "one at 0.92, the rest uniform in [0.52, 0.62]"
+    } else {
+        "accuracies uniform in [0.35, 0.95]"
+    };
     println!(
-        "{voters} voters, accuracies uniform in [0.35, 0.95], {questions} two-way questions, {seeds} seeds ({asked} decisions)\n"
+        "{voters} voters, {profile}, {questions} two-way questions, {seeds} seeds ({asked} decisions)\n"
     );
     println!("| rule | group accuracy |\n|---|---|");
     for (k, arm) in arms.iter().enumerate() {
