@@ -26,11 +26,11 @@
 //! clones, independent voters, questions, seeds; `infer` reads the
 //! correlation against the Dawid-Skene answer rather than the named
 //! outcomes, which leaves the clones looking independent (they make most
-//! of that answer) and the discount inert: 0.705 against 0.794.
+//! of that answer) and the discount inert: 0.706 against 0.797.
 
 use std::collections::BTreeMap;
 
-use ljos_consensus::correlation::correlation;
+use ljos_consensus::correlation::{correlation, INDEPENDENCE_Z};
 use ljos_consensus::{settle_with, Ballot, Opts, SelfTrust};
 
 struct Lcg(u64);
@@ -167,7 +167,7 @@ fn main() {
                 } else {
                     truths.clone()
                 };
-                let reading = correlation(&history, &named, 20, 10);
+                let reading = correlation(&history, &named, 20, 10, INDEPENDENCE_Z);
                 discount = reading.discount;
                 n_eff = reading.independent_voters;
             }
