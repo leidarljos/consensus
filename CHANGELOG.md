@@ -25,8 +25,10 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 - `correlation` and `settle --discount-of`: the correlation of the voters'
   correctness over a project's history, and the discount
   `1 / (1 + sum_k max(rho_ik, 0))` that counts correlated voices once.
-  Five clones of one judge beside four independent voters: a count 0.701,
-  log-odds 0.710, with the discount 0.794, ceiling 0.805.
+  Five clones of one judge beside four independent voters, the discount
+  read against named outcomes: a count 0.701, log-odds 0.710, with the
+  discount 0.794, ceiling 0.805. Read against the Dawid-Skene answer the
+  clones look independent and the discount is inert (0.705).
 - `derive/`: the identities in SymPy, the contraction, the stopping
   bound, the simplex, Nitzan and Paroush's theorem and the self-trust
   weights proved in Lean 4 with Mathlib, and the binary64 floor, round
