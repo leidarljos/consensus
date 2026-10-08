@@ -7,7 +7,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use ljos_consensus::seldon::{parse_opinions_dir, write_seldon_inputs};
 use ljos_consensus::{
-    anchors_from_json, ballots_from_json, settle_anchored, settle_energy, trust_from_json, Ballot,
+    anchors_from_json, ballots_from_json, settle_energy, settle_exact, settle_with,
+    trust_from_json, Ballot, Opts, SelfTrust,
 };
 
 #[derive(Parser)]
@@ -37,8 +38,19 @@ enum Cmd {
         seldon: bool,
         #[arg(long)]
         out: Option<PathBuf>,
+        /// A voter's weight on its own ballot when its row does not say: the
+        /// fallback under `--self-trust earned`, every voter's under `constant`.
         #[arg(long, default_value_t = 0.5)]
         self_weight: f64,
+        /// `earned` (the default): a voter weighs itself as the others weigh it,
+        /// so rows that weigh each voter alike from everyone settle as that
+        /// weighted vote. `constant`: `--self-weight` for every voter.
+        #[arg(long, default_value = "earned")]
+        self_trust: String,
+        /// JSON object of agent to the share of its inbound weight it keeps:
+        /// `correlation`'s `discount`, so correlated voices count once.
+        #[arg(long)]
+        discount_of: Option<String>,
         #[arg(long, default_value_t = 1.0)]
         susceptibility: f64,
         /// JSON object of agent to susceptibility: a persona's own anchor.
@@ -55,7 +67,7 @@ enum Cmd {
         max_iter: usize,
         #[arg(long, default_value_t = 1e-9)]
         tol: f64,
-        /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration. `energy`: the same settle as the minimum of its energy, found by rgmin; the influence is symmetrised.
+        /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the fixed point read off in closed form. `energy`: the same settle as the minimum of its energy, found by rgmin; the influence is symmetrised.
         #[arg(long, default_value = "iterate")]
         engine: String,
     },
@@ -175,6 +187,8 @@ fn main() -> Result<()> {
             seldon: use_seldon,
             out,
             self_weight,
+            self_trust,
+            discount_of,
             susceptibility,
             susceptibility_of,
             epsilon,
@@ -229,20 +243,43 @@ fn main() -> Result<()> {
                 );
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             } else {
-                let outcome = settle_anchored(
-                    &ballots,
-                    &trust,
-                    self_weight,
+                let self_trust = match self_trust.as_str() {
+                    "earned" => SelfTrust::Earned(self_weight),
+                    "constant" => SelfTrust::Constant(self_weight),
+                    other => bail!("--self-trust is earned or constant, not {other:?}"),
+                };
+                let discount = match discount_of.as_deref() {
+                    Some(raw) => discount_from_json(raw)?,
+                    None => std::collections::BTreeMap::new(),
+                };
+                let opts = Opts {
+                    self_trust,
                     susceptibility,
-                    &anchors,
+                    anchors,
+                    discount,
                     max_iter,
                     tol,
-                );
+                };
+                let outcome = match engine.as_str() {
+                    "exact" => settle_exact(&ballots, &trust, &opts),
+                    "iterate" => settle_with(&ballots, &trust, &opts),
+                    other => bail!("--engine is iterate, exact or energy, not {other:?}"),
+                };
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             }
         }
     }
     Ok(())
+}
+
+/// A discount per agent, each a share in `[0, 1]`.
+fn discount_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>> {
+    let map: std::collections::BTreeMap<String, f64> =
+        serde_json::from_str(raw).context("--discount-of: a JSON object of agent to share")?;
+    if let Some((a, d)) = map.iter().find(|(_, d)| !(0.0..=1.0).contains(*d)) {
+        bail!("--discount-of: {a} must be in [0, 1], got {d}");
+    }
+    Ok(map)
 }
 
 fn load_ballots(issue: Option<&str>, ballots: Option<&str>) -> Result<Vec<Ballot>> {

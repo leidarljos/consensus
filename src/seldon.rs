@@ -86,6 +86,7 @@ pub fn parse_opinions_dir(
         engine: "seldon".into(),
         polarization: 0.0,
         disagreement: 0.0,
+        ..Outcome::default()
     })
 }
 
