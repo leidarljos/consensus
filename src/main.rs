@@ -71,6 +71,26 @@ enum Cmd {
         #[arg(long, default_value = "iterate")]
         engine: String,
     },
+    /// How much the voters share their mistakes: the correlation of their
+    /// correctness over a project's history (against named outcomes, else the
+    /// Dawid-Skene answer), the discount each voter keeps for `settle
+    /// --discount-of`, and how many independent voices the panel holds.
+    Correlation {
+        /// JSON array of items, each an array of {agent, choice}.
+        #[arg(long)]
+        items: Option<String>,
+        /// JSON array, one per item, of the outcome it named or null.
+        #[arg(long)]
+        truths: Option<String>,
+        /// Read every issue of this tracker project that has two or more ballots.
+        #[arg(long)]
+        project: Option<String>,
+        /// Items a pair must share before its correlation is read.
+        #[arg(long, default_value_t = 5)]
+        min_shared: usize,
+        #[arg(long, default_value_t = 20)]
+        rounds: usize,
+    },
     /// The surprisingly popular answer (Prelec, Seung and McCoy,
     /// doi:10.1038/nature21054): ballots plus each voter's forecast of the
     /// others' shares; the answer is the option whose actual share most
@@ -179,6 +199,24 @@ fn main() -> Result<()> {
                 "accuracy": accuracy,
             });
             println!("{}", serde_json::to_string_pretty(&out)?);
+        }
+        Cmd::Correlation {
+            items,
+            truths,
+            project,
+            min_shared,
+            rounds,
+        } => {
+            let items = load_items(items.as_deref(), project.as_deref())?;
+            let truths: Vec<Option<String>> = match truths.as_deref() {
+                Some(raw) => {
+                    serde_json::from_str(raw).context("truths: a JSON array of strings or nulls")?
+                }
+                None => vec![None; items.len()],
+            };
+            let reading =
+                ljos_consensus::correlation::correlation(&items, &truths, rounds, min_shared);
+            println!("{}", serde_json::to_string_pretty(&reading)?);
         }
         Cmd::Settle {
             issue,
