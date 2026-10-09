@@ -7,8 +7,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use ljos_consensus::seldon::{parse_opinions_dir, write_seldon_inputs};
 use ljos_consensus::{
-    anchors_from_json, ballots_from_json, settle_energy, settle_exact, settle_with,
-    trust_from_json, Ballot, Opts, SelfTrust,
+    anchors_from_json, ballots_from_json, fj_contraction_bound, fj_rounds_to_tol, settle_energy,
+    settle_exact, settle_with, trust_from_json, Ballot, Opts, SelfTrust,
 };
 
 #[derive(Parser)]
@@ -143,6 +143,24 @@ enum Cmd {
         #[arg(long, default_value_t = 20)]
         rounds: usize,
     },
+    /// The contraction bound of an anchored settle and the round count it
+    /// guarantees: `max s_i` over the voters, and `1 + ceil(ln(tol) /
+    /// ln(bound))` rounds to reach `tol`. A pure DeGroot panel reports no
+    /// count, only the bound of one: size `--max-iter` by judgement, since
+    /// convergence there is asymptotic. See `docs/orgmode/derivation.org`.
+    Rounds {
+        /// Agents to cover, comma-separated; the rows' names when absent
+        /// are not available here, so this list is required.
+        #[arg(long)]
+        agents: String,
+        #[arg(long, default_value_t = 1.0)]
+        susceptibility: f64,
+        /// JSON object of agent to susceptibility: a persona's own anchor.
+        #[arg(long)]
+        susceptibility_of: Option<String>,
+        #[arg(long, default_value_t = 1e-9)]
+        tol: f64,
+    },
 }
 
 fn main() -> Result<()> {
@@ -228,6 +246,27 @@ fn main() -> Result<()> {
             let reading =
                 ljos_consensus::correlation::correlation(&items, &truths, rounds, min_shared, gate);
             println!("{}", serde_json::to_string_pretty(&reading)?);
+        }
+        Cmd::Rounds {
+            agents,
+            susceptibility,
+            susceptibility_of,
+            tol,
+        } => {
+            let names: Vec<String> = agents
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if names.is_empty() {
+                bail!("rounds: --agents names no voter");
+            }
+            let anchors = match susceptibility_of.as_deref() {
+                Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                None => std::collections::BTreeMap::new(),
+            };
+            let out = rounds_report(&names, susceptibility, &anchors, tol);
+            println!("{}", serde_json::to_string_pretty(&out)?);
         }
         Cmd::Settle {
             issue,
@@ -441,4 +480,56 @@ fn settle_seldon(
 fn which_ok(bin: &str) -> bool {
     std::env::var_os("PATH")
         .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(bin).is_file()))
+}
+
+/// The `rounds` report: the contraction bound over the voters and the
+/// round count it guarantees, or a null count with the reason when no
+/// contraction holds (pure DeGroot: size `--max-iter` by judgement).
+fn rounds_report(
+    agents: &[String],
+    susceptibility: f64,
+    anchors: &std::collections::BTreeMap<String, f64>,
+    tol: f64,
+) -> serde_json::Value {
+    let bound = fj_contraction_bound(agents, susceptibility, anchors);
+    let predicted = fj_rounds_to_tol(bound, tol);
+    let note = match predicted {
+        Some(_) => None,
+        None => Some(
+            "no contraction: every susceptibility is 1 (or tol is outside (0, 1)); \
+             convergence is asymptotic under Berger's closed-group conditions"
+                .to_string(),
+        ),
+    };
+    serde_json::json!({
+        "agents": agents.len(),
+        "bound": bound,
+        "tol": tol,
+        "predicted_rounds": predicted,
+        "note": note,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rounds_report_guarantees_an_anchored_panel() {
+        let agents: Vec<String> = ["a", "b"].iter().map(|s| s.to_string()).collect();
+        let out = rounds_report(&agents, 0.5, &std::collections::BTreeMap::new(), 1e-9);
+        assert_eq!(out["agents"], 2);
+        assert!((out["bound"].as_f64().unwrap() - 0.5).abs() < 1e-12);
+        assert_eq!(out["predicted_rounds"], 31);
+        assert!(out["note"].is_null());
+    }
+
+    #[test]
+    fn rounds_report_refuses_a_pure_panel() {
+        let agents: Vec<String> = ["a", "b"].iter().map(|s| s.to_string()).collect();
+        let out = rounds_report(&agents, 1.0, &std::collections::BTreeMap::new(), 1e-9);
+        assert!((out["bound"].as_f64().unwrap() - 1.0).abs() < 1e-12);
+        assert!(out["predicted_rounds"].is_null());
+        assert!(out["note"].as_str().unwrap().contains("asymptotic"));
+    }
 }

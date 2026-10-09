@@ -90,6 +90,16 @@ counts every positive reading.
 | =independent_voters= | the sum of the discounts |
 | =items=, =named= | the items read, and how many had a named outcome |
 
+=ljos-consensus rounds --agents a,b,c [--susceptibility S] [--susceptibility-of JSON] [--tol T]=
+
+The contraction bound over the named voters and the round count it
+guarantees: =bound= is the largest susceptibility, and
+=predicted_rounds= is =1 + ceil(ln(tol) / ln(bound))= rounds to reach
+=tol= (default 1e-9). A pure DeGroot panel reports the bound of one and
+a null count with the reason, since convergence there is asymptotic;
+size =--max-iter= by judgement. One unanchored voter voids the
+guarantee for the whole panel, which is what the maximum says.
+
 * The step
 
 =x(t+1) = (1 - s) x(0) + s W x(t)=, with =W= the row-stochastic trust
@@ -116,10 +126,11 @@ The crate root exports the types =Ballot=, =Outcome=, =Opts=, =SelfTrust=,
 =Prediction= and =Surprise=, and the helpers =roster=, =influence_matrix=
 and =influence_matrix_with=. Its settles are =settle=, =settle_anchored=,
 =settle_with=, =settle_exact=, =settle_bounded=, =settle_energy= and
-=settle_seldon=. Its readings are =dawid_skene=, =surprisingly_popular=
-and =eigentrust=; its parsers are =ballots_from_json=, =trust_from_json=,
-=anchors_from_json= and =predictions_from_json=. =exact= holds
-=fixed_point=, =social_power=, =effective_voters= and =Unsettled=, the
-reason a fixed point could not be read off. =correlation= holds the
-reading above and =INDEPENDENCE_Z=. The Seldon module writes and reads the
-engine's files and links nothing under a copyleft licence.
+=settle_seldon=. Its readings are =dawid_skene=, =surprisingly_popular=,
+=eigentrust=, =fj_contraction_bound= and =fj_rounds_to_tol=; its parsers
+are =ballots_from_json=, =trust_from_json=, =anchors_from_json= and
+=predictions_from_json=. =exact= holds =fixed_point=, =social_power=,
+=effective_voters= and =Unsettled=, the reason a fixed point could not be
+read off. =correlation= holds the reading above and =INDEPENDENCE_Z=. The
+Seldon module writes and reads the engine's files and links nothing under
+a copyleft licence.
