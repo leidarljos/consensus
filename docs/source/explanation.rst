@@ -47,15 +47,16 @@ row sends the same constant home as the weakest voter's does.
 
 ``--self-trust earned``, the default since 0.7.0, fills the diagonal with
 what the others give the voter: the mean of the weights that name it.
-Every row is then ``w / S``. The matrix is idempotent, so one round leaves
-every voter on the weighted vote ``sum_j w_j x0_j / S``. For log-odds rows
-from independent voters on a two-way choice, that vote is the Nitzan and
-Paroush optimum. Every voter anchored at ``s`` gives the mixture
-``(1 - s) count + s weighted vote``. The anchor reads as how far the group
-trusts its record over a show of hands. People who revise least toward the
-group are the more accurate ones (Becker, Brackbill and Centola,
-doi:10.1073/pnas.1615978114). Weighing them more improves the crowd's
-estimate (Madirolas and de Polavieja, doi:10.1371/journal.pcbi.1004594).
+Without a discount every row is then ``w / S``. The matrix is idempotent, so
+one round leaves every voter on the weighted vote ``sum_j w_j x0_j / S``.
+For log-odds rows from independent voters on a two-way choice, that vote
+is the Nitzan and Paroush optimum. Every voter anchored at ``s`` gives the
+mixture ``(1 - s) count + s weighted vote``. The anchor reads as how far the
+group trusts its record over a show of hands. People who revise least
+toward the group are the more accurate ones (Becker, Brackbill and
+Centola, doi:10.1073/pnas.1615978114). Weighing them more improves the
+crowd's estimate (Madirolas and de Polavieja,
+doi:10.1371/journal.pcbi.1004594).
 
 ``examples/synthetic_voters.rs`` measures it where the truth is known, over
 twenty seeds of four hundred two-way questions. The two fills differ by a
@@ -86,18 +87,18 @@ stops when that bound falls under the tolerance; ``residual`` is the bound.
 A small step alone said little: at ``q = 0.99`` the opinions could sit a
 hundred times the step away. A voter that listens fully breaks the
 contraction. ``residual`` is then the distance to the closed-form point. A
-panel with no closed form either still stops on the step, which bounds
-nothing. ``exact::fixed_point`` names a group that cycles, and
-``--engine exact`` falls back to the iteration for it. It does the same for
-a system too near singular to solve, and in both cases reports
-``settled: false``.
+panel with neither a contraction nor a closed form still stops on the
+step, which bounds nothing. ``exact::fixed_point`` names a group that
+cycles, and ``--engine exact`` falls back to the iteration for it. It does
+the same for a system too near singular to solve, and in both cases
+reports ``settled: false``.
 
 Binary64 adds at most ``gamma(n + 2) / (1 - q)`` to the bound: Higham's
 gamma for the ``n``-term dot product, the product with ``s_i`` and the anchor
 term. That floor is 1.1e-12 for a hundred voters at ``q = 0.99``, far below
-the default tolerance of 1e-9. The bound needs more than the default two
-hundred rounds once ``q`` passes about 0.892; when it would, the settle
-measures the distance to the closed-form point instead.
+the default tolerance of 1e-9. In the worst case the bound needs more
+than the default two hundred rounds once ``q`` passes about 0.892; when it
+would, the settle measures the distance to the closed-form point instead.
 
 ``tie`` says the two leading shares lie within twice the residual plus
 rounding of each other: the settle cannot order them.

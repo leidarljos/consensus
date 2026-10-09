@@ -20,13 +20,13 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   listens fully stops on the distance to the closed form. A panel with
   neither a contraction nor a closed form still stops on the step.
 - `--self-trust earned`, the default: a voter weighs its own ballot as the
-  others weigh it, and learned rows settle as the weighted vote they
-  describe. A constant self-weight `sw` weighed voter j by
-  `w_j (S + sw - w_j)`, with `S` the sum of the weights. Equal accuracies
-  settle as before. One voter at 0.92 among eight in [0.52, 0.62] takes
-  calibrate from 0.887 to 0.907, and the smoothed running record from
-  0.901 to 0.913, against a 0.919 ceiling. `--self-trust constant` keeps
-  the old fill.
+  others weigh it, and with no voter anchored and no discount, learned
+  rows settle as the weighted vote they describe. A constant self-weight
+  `sw` weighed voter j by `w_j (S + sw - w_j)`, with `S` the sum of the
+  weights. Equal accuracies settle as before. One voter at 0.92 among
+  eight in [0.52, 0.62] takes calibrate from 0.887 to 0.907, and the
+  smoothed running record from 0.901 to 0.913, against a 0.919 ceiling.
+  `--self-trust constant` keeps the old fill.
 - `correlation` reads how far the voters' mistakes agree over a project's
   history; `settle --discount-of` applies the discount it prints,
   `1 / (1 + sum_{j != i} rho_ij)`. Exact clones with a hit and a miss
