@@ -42,7 +42,7 @@ def main():
                          sp.simplify(n**2 * var_one / var_sum) - n_eff))
     results.append(check("n_eff -> 1/rho as n -> oo", sp.limit(n_eff, n, sp.oo) - 1 / rho))
 
-    # 2. The weights. The least-variance combination of unbiased signals
+    # 2. Weights. The least-variance combination of unbiased signals
     # weighs them in proportion to Sigma^-1 1 (Bates and Granger 1969,
     # doi:10.2307/3008764). Sherman-Morrison solves it for a cluster of k
     # voters of equal strength and equicorrelation rho:
@@ -100,10 +100,10 @@ def main():
 
     # 4. Extremizing. When each voter's log odds L_i are conditionally
     # independent evidence on a uniform prior, the posterior log odds are
-    # sum L_i = n mean(L). The mean of the log odds is too timid by a factor n
-    # (Baron et al. 2014, doi:10.1287/deca.2014.0293; Satopaa et al. 2014,
-    # doi:10.1016/j.ijforecast.2013.09.009). With equicorrelated evidence of
-    # equal strength the factor is n_eff, and nothing below checks it.
+    # sum L_i = n mean(L), so the mean of the log odds is too timid by a
+    # factor n (Baron et al. 2014, doi:10.1287/deca.2014.0293; Satopaa et al.
+    # 2014, doi:10.1016/j.ijforecast.2013.09.009). Equicorrelated evidence of
+    # equal strength makes the factor n_eff. Nothing below checks that.
     L = sp.symbols("L0:3", real=True)
     prior = sp.Rational(1, 2)
     lik_yes = sp.prod([sp.exp(Li) / (1 + sp.exp(Li)) for Li in L])
@@ -114,7 +114,7 @@ def main():
 
     # 5. Correlation from agreement, with two options. Voters i and j agree
     # when both are right or both are wrong. Their agreement is
-    # A = P_bc + P_bw, with P_bw = 1 - p_i - p_j + P_bc, so
+    # A = P_bc + P_bw where P_bw = 1 - p_i - p_j + P_bc, so
     # P_bc = (A - 1 + p_i + p_j) / 2 and
     #     rho_ij = (P_bc - p_i p_j) / sqrt(p_i (1-p_i) p_j (1-p_j)).
     pi_, pj, A, Pbc = sp.symbols("p_i p_j A P_bc", positive=True)
@@ -129,13 +129,12 @@ def main():
     clone = sp.refine(sp.simplify(rho_ij.subs({A: 1, pj: pi_})), sp.Q.lt(pi_, 1))
     results.append(check("clones (A = 1, p_i = p_j) give rho = 1", clone - 1))
 
-    # 6. The gate on a short history. Two voters' correctness over m items
-    # fills a 2x2 table: a both right, b only i, c only j, d neither. Their
-    # Pearson correlation rho, as correlation.rs reads it, gives Pearson's
-    # chi-square for the table as m rho^2. Its signed root, sqrt(m) rho, is
-    # about N(0, 1) when the voters err apart. A pair counts toward the
-    # discount only when sqrt(m) rho passes the one-sided five percent test,
-    # z = 1.645.
+    # 6. A gate for a short history. Two voters' correctness over m items
+    # fills a 2x2 table: a both right, b only i, c only j, d neither.
+    # correlation.rs reads its Pearson correlation rho. The table's chi-square
+    # is m rho^2, so sqrt(m) rho is about N(0, 1) when the voters err apart,
+    # and a pair counts toward the discount only when it passes the one-sided
+    # five percent test, z = 1.645.
     a, b, c, d = sp.symbols("a b c d", positive=True)
     m = a + b + c + d
     xbar, ybar = (a + b) / m, (a + c) / m

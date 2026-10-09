@@ -38,8 +38,7 @@ pub struct Outcome {
     pub agents: Vec<String>,
     /// Each voter's social power: the weight its ballot carries in the
     /// shares, `c = (1/n) P^T 1` for the fixed point `x* = P x0` (Friedkin,
-    /// doi:10.1086/229694). They sum to one. The shares are the vote they
-    /// weigh.
+    /// doi:10.1086/229694). They sum to one.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub influence: Vec<f64>,
     /// `1 / sum c_i^2`: how many equal voices the settle is worth. One when
@@ -619,22 +618,23 @@ pub enum SelfTrust {
     /// The same weight for every voter; the tracker's default is 0.5.
     Constant(f64),
     /// What the others give it: the mean weight the rows that name the voter
-    /// put on it, else the fallback. When the rows weigh each voter alike
-    /// from everyone, as `learn` and `calibrate` write them, every row is
-    /// the same. With every voter listening fully (`s_i = 1`, the default),
-    /// the settle is then the weighted vote with those weights in one round
-    /// (derive/sympy/fj.py, identity 4). That vote is Nitzan and Paroush's
-    /// optimum (doi:10.2307/2526438) for log-odds rows from independent
-    /// voters, all better than chance, on a two-way choice. A constant
-    /// self-weight `sw` weighs voter j by `w_j (S + sw - w_j)` instead, with
-    /// `S` the sum of the weights (identity 3).
+    /// put on it, else the fallback. `learn` and `calibrate` write rows in
+    /// which every voter gives voter j the same weight `w_j`, and this fill
+    /// gives `w_j` to the diagonal too, so every row is `w / S` with `S` the
+    /// sum of the weights. With every voter listening fully (`s_i = 1`, the
+    /// default) and no discount, the settle is then the weighted vote with
+    /// weights `w` in one round (derive/sympy/fj.py, identity 4). That vote
+    /// is Nitzan and Paroush's optimum (doi:10.2307/2526438) for log-odds
+    /// rows from independent voters, all better than chance, on a two-way
+    /// choice. A constant self-weight `sw` weighs voter j by
+    /// `w_j (S + sw - w_j)` instead (identity 3).
     Earned(f64),
 }
 
 /// [`influence_matrix`] with the self-weight rule named, and each voter's
 /// inbound weight scaled by its discount. A voter absent from `discount`
-/// keeps its whole weight. Exact clones then count as one voice, and a
-/// looser cluster as more than one ([`correlation`]).
+/// keeps its whole weight. Exact clones count as one voice; a looser
+/// cluster counts as more than one ([`correlation`]).
 #[must_use]
 pub fn influence_matrix_with(
     agents: &[String],
@@ -830,8 +830,8 @@ fn outcome_of(
     // Where `residual` bounds the distance to the fixed point, every opinion
     // is within it, so every share is too, and the gap between two shares is
     // off by at most twice `residual`. `residual` bounds nothing on the
-    // last-step fallback, and on the exact path it is only rounding.
-    // Rounding adds a few ulps a voter.
+    // last-step fallback; on the exact path it is one step's defect.
+    // Rounding adds a few ulps per voter.
     let open = 2.0 * residual + 4.0 * setup.agents.len() as f64 * f64::EPSILON;
     Outcome {
         effective_voters: exact::effective_voters(&influence),
@@ -856,12 +856,12 @@ fn outcome_of(
 /// `|x_t - x*| <= q / (1 - q) |x_t - x_(t-1)|`
 /// (derive/lean/ConsensusProofs/Contraction.lean). Binary64 adds at most
 /// `gamma(n + 2) / (1 - q)` to it (derive/sollya/rounding.sollya). Iteration
-/// stops once that bound is under `tol`; `residual` is the bound. A voter
-/// that listens fully breaks the contraction in that norm. `residual` is
+/// stops once that bound is under `tol`. `residual` is the bound. A voter
+/// that listens fully breaks the contraction in that norm, and `residual` is
 /// then the distance to the closed-form fixed point
-/// ([`exact::fixed_point`]). When there is no closed form, `residual` is the
-/// last step, which bounds nothing. When `max_iter` runs out first, the
-/// distance to the closed form is reported if it is smaller.
+/// ([`exact::fixed_point`]); when there is no closed form, it is the last
+/// step, which bounds nothing. When `max_iter` runs out first, the distance
+/// to the closed form is reported if it is smaller.
 #[must_use]
 pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Outcome {
     let Some(setup) = setup(ballots, trust, opts) else {
@@ -1657,9 +1657,9 @@ mod tests {
         }
     }
 
-    /// Learned rows weigh every voter alike from everyone. Earned self-trust
-    /// makes the settle the weighted vote with those weights; a constant
-    /// self-weight compresses them to w (S + sw - w).
+    /// Learned rows, one weight per voter. Earned self-trust makes the
+    /// settle the weighted vote with those weights; a constant self-weight
+    /// compresses them to w (S + sw - w).
     #[test]
     fn earned_self_trust_makes_learned_rows_the_weighted_vote() {
         let w = [("a", 1.0), ("b", 0.6), ("c", 0.2)];
@@ -1759,10 +1759,10 @@ mod tests {
     }
 
     /// A panel with susceptibility 0.95 contracts faster than its bound
-    /// says. Its opinions are within 1e-9 of the fixed point from round 34,
-    /// but the bound, at `q / (1 - q) = 19` times the step, gets there only
-    /// at round 40. A run stopped at 36 settles on the distance to the
-    /// closed form.
+    /// says: opinions are within 1e-9 of the fixed point from round 34, but
+    /// the bound, at `q / (1 - q) = 19` times the step, gets there only at
+    /// round 40. A run stopped at 36 settles on the distance to the closed
+    /// form.
     #[test]
     fn a_stiff_panel_settles_on_the_measured_distance() {
         let ballots: Vec<Ballot> = [("a", "x"), ("b", "y"), ("c", "y")]

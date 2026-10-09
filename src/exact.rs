@@ -1,14 +1,14 @@
 //! The settle's fixed point in closed form, and the social power it implies.
 //!
-//! The step is `x(t+1) = L W x(t) + (I - L) x0` with `L = diag(s)`. Its limit
-//! is `x* = P x0` for a row-stochastic `P` (derive/sympy/fj.py checks that
-//! `P 1 = 1`), so the shares are a weighted vote. Voter i's ballot counts
-//! with weight `c_i = (1/n) sum_k P_ki`, its social power (Friedkin 1991,
-//! doi:10.1086/229694; Proskurnikov and Tempo 2017,
+//! The step is `x(t+1) = L W x(t) + (I - L) x0` with `L = diag(s)`, and its
+//! limit is `x* = P x0` for a row-stochastic `P` (derive/sympy/fj.py checks
+//! that `P 1 = 1`), so the shares are a weighted vote. Voter i's ballot
+//! counts with weight `c_i = (1/n) sum_k P_ki`, its social power (Friedkin
+//! 1991, doi:10.1086/229694; Proskurnikov and Tempo 2017,
 //! doi:10.1016/j.arcontrol.2017.03.002).
 //!
 //! A closed group of the trust graph whose voters all listen fully
-//! (`s_i = 1`) is a DeGroot class. An aperiodic class converges to the
+//! (`s_i = 1`) is a DeGroot class; an aperiodic class converges to the
 //! average its stationary distribution weighs (Berger,
 //! doi:10.1080/01621459.1981.10477662). Voters outside it settle by the
 //! linear system `(I - L W)` restricted to them, which is nonsingular there.
@@ -104,9 +104,9 @@ pub fn social_power(p: &[Vec<f64>]) -> Vec<f64> {
 }
 
 /// How many equal voters the social power is worth: `1 / sum c_i^2`, the
-/// inverse Herfindahl index. `n` when every voice carries alike, one when
-/// one voice carries the settle. A crowd is wise only while this grows
-/// with the crowd (Golub and Jackson, doi:10.1257/mic.2.1.112).
+/// inverse Herfindahl index. `n` when every voter has the same power, one
+/// when one voter has it all. A crowd is wise only while this grows with
+/// the crowd (Golub and Jackson, doi:10.1257/mic.2.1.112).
 #[must_use]
 pub fn effective_voters(c: &[f64]) -> f64 {
     let s: f64 = c.iter().map(|x| x * x).sum();

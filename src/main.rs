@@ -44,9 +44,9 @@ enum Cmd {
         #[arg(long, default_value_t = 0.5)]
         self_weight: f64,
         /// `earned` (the default): a voter weighs itself as the others
-        /// weigh it. With no voter anchored, rows that weigh each voter
-        /// alike from everyone then settle as the weighted vote they
-        /// describe. `constant`: `--self-weight` for every voter.
+        /// weigh it. With no voter anchored and no discount, the rows
+        /// `learn` and `calibrate` write then settle as the weighted vote
+        /// they describe. `constant`: `--self-weight` for every voter.
         #[arg(long, default_value = "earned")]
         self_trust: String,
         /// JSON object of agent to the share of its inbound weight it keeps:
@@ -70,7 +70,7 @@ enum Cmd {
         max_iter: usize,
         #[arg(long, default_value_t = 1e-9)]
         tol: f64,
-        /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the fixed point read off in closed form. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised.
+        /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised.
         #[arg(long, default_value = "iterate")]
         engine: String,
     },

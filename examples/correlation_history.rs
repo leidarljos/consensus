@@ -68,13 +68,13 @@ fn rows_of(record: &BTreeMap<String, (f64, f64)>) -> Vec<(String, String, f64)> 
     rows
 }
 
-/// Log-odds rows from each voter's accuracy, shrunk toward the panel's pooled
-/// accuracy by empirical Bayes (Efron and Morris). The prior weakens as the
-/// voters' spread exceeds sampling noise. The noise is the pooled Bernoulli
+/// Log-odds rows from each voter's accuracy, shrunk toward the panel's
+/// pooled accuracy by empirical Bayes (Efron and Morris). The prior weakens
+/// as the voters' spread exceeds sampling noise: the pooled Bernoulli
 /// variance times `N / (N - 1)`, divided by each record's length and
-/// averaged, where `N` counts the ballots the records hold. A short record
-/// weighs voters nearly alike, a first outcome alike to rounding, and a long
-/// one keeps the differences it has shown.
+/// averaged, where `N` counts the ballots the records hold. Short records
+/// keep voters near the pooled accuracy. A first outcome leaves them on it,
+/// up to rounding; a long record keeps the differences it has shown.
 fn shrunk_rows(record: &BTreeMap<String, (f64, f64)>) -> Vec<(String, String, f64)> {
     let counts: Vec<(&String, f64, f64)> = record
         .iter()
