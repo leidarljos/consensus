@@ -2,6 +2,20 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
+## Unreleased
+
+- `fj_contraction_bound` and `fj_rounds_to_tol`, and
+  `ljos-consensus rounds --agents ...`: the contraction bound over the
+  voters and the round count it guarantees, or the null count with its
+  reason for a pure DeGroot panel.
+- `docs/orgmode/derivation.org`: the closed form the iteration solves
+  for, the SymPy check and interval enclosure behind it
+  (`scripts/verify_fj.py`), and the social-science reading.
+- `log_odds` is the Nitzan and Paroush weight of an independent binary
+  voter. `discursive_dilemma` is the premise-wise majority against the
+  conclusion. `runtime_vote` is the anchored panel over herdr,
+  erlang-plugin and go-rewrite.
+
 ## 0.7.0 (2026-10-08)
 
 - The energy cites Bindel, Kleinberg and Oren,
