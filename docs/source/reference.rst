@@ -107,7 +107,7 @@ are normalised. Shares are the column sums of the fixed point, normalised.
 
 The fixed point is ``x* = P x(0)``. ``P`` is ``(I - L W)^{-1} (I - L)``, with
 ``L`` the diagonal of susceptibilities, wherever every closed group of the
-trust graph holds an anchored voter. A closed group that listens fully
+trust graph holds an anchored voter; a closed group that listens fully
 settles on its stationary distribution, and the voters outside it solve
 against that. The iteration stops when ``q / (1 - q)`` times its last step,
 plus the binary64 floor ``gamma(n + 2) / (1 - q)``, is under ``--tol``, with
