@@ -129,5 +129,5 @@ outside Rust too: =python3 scripts/verify_fj.py= (SymPy; =pip install
 sympy=) verifies the exact rational fixed point, the Neumann-series
 limit, the per-round contraction, the round-count prediction, and the
 shipped =ljos-consensus= binary's agreement with the closed form over
-eight random panels, and =.github/workflows/test.yml= runs it with
-=cargo test= on every push.
+eight random panels, and =.github/workflows/derive.yml= runs it with
+=cargo test= when the library, the derivation, or the script changes.

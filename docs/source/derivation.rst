@@ -131,4 +131,5 @@ count the bound predicts. The full derivation is checked outside Rust too:
 exact rational fixed point, the Neumann-series limit, the per-round
 contraction, the round-count prediction, and the shipped ``ljos-consensus``
 binary's agreement with the closed form over eight random panels, and
-``.github/workflows/test.yml`` runs it with ``cargo test`` on every push.
+``.github/workflows/derive.yml`` runs it with ``cargo test`` when the
+library, the derivation, or the script changes.
