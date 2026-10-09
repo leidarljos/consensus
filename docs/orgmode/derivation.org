@@ -118,4 +118,10 @@ The calibration table on the explanation page regenerates from
 between 0.35 and 0.95 answer two-way questions under each rule, twenty
 seeds, four hundred questions each. The contraction test runs with the
 unit tests: =cargo test contraction= holds the anchored settle inside
-the round count the bound predicts.
+the round count the bound predicts. The full derivation is checked
+outside Rust too: =python3 scripts/verify_fj.py= (SymPy; =pip install
+sympy=) verifies the exact rational fixed point, the Neumann-series
+limit, the per-round contraction, the round-count prediction, and the
+shipped =ljos-consensus= binary's agreement with the closed form over
+eight random panels, and =.github/workflows/test.yml= runs it with
+=cargo test= on every push.
