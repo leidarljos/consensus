@@ -971,7 +971,7 @@ pub fn settle_exact(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &
 /// equilibrium is the unique minimiser of
 /// `sum_i (1 - s_i) |x_i - x0_i|^2 + (1/2) sum_ij M_ij |x_i - x_j|^2` with
 /// `M_ij = s_i W_ij + s_j W_ji` (Bindel, Kleinberg and Oren,
-/// doi:10.1016/j.geb.2015.02.005): the anchor terms hold each voter near
+/// doi:10.1016/j.geb.2014.06.004): the anchor terms hold each voter near
 /// its ballot by how little it listens, the pair terms pull listeners
 /// together by how much. Opinions live on the simplex through a softmax
 /// of free logits, and L-BFGS descends the energy. For asymmetric rows
@@ -1318,6 +1318,41 @@ mod tests {
 
     use super::*;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn highams_gamma_is_the_dot_product_bound() {
+        for n in [1_usize, 2, 8, 32] {
+            let k = n + 2;
+            let ku = k as f64 * f64::EPSILON / 2.0;
+            let expect = ku / (1.0 - ku);
+            assert!(
+                (gamma(k) - expect).abs() <= f64::EPSILON,
+                "gamma({k}) {} vs {expect}",
+                gamma(k)
+            );
+        }
+    }
+
+    #[test]
+    fn a_tie_is_a_margin_within_twice_the_residual_and_four_ulps_a_voter() {
+        let ballots = vec![
+            Ballot {
+                agent: "a".into(),
+                choice: "ship".into(),
+            },
+            Ballot {
+                agent: "b".into(),
+                choice: "hold".into(),
+            },
+        ];
+        let rows = vec![
+            ("a".to_string(), "b".to_string(), 1.0),
+            ("b".to_string(), "a".to_string(), 1.0),
+        ];
+        let out = settle_anchored(&ballots, &rows, 0.5, 0.5, &BTreeMap::new(), 200, 1e-12);
+        let open = 2.0 * out.residual + 4.0 * out.agents.len() as f64 * f64::EPSILON;
+        assert_eq!(out.tie, out.margin <= open, "{out:?}");
+    }
 
     #[test]
     fn two_agents_who_listen_meet_in_the_middle() {

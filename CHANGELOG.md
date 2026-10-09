@@ -4,6 +4,10 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## 0.7.0 (2026-10-08)
 
+- The energy cites Bindel, Kleinberg and Oren,
+  doi:10.1016/j.geb.2014.06.004. A susceptibility near zero stays on
+  the ballot. `tie` is a margin within twice the residual plus four
+  units in the last place per voter.
 - The iterate and exact engines report `agents`, `influence`,
   `effective_voters`, `margin` and `tie`. `influence` is each voter's
   social power, `c = (1/n) P^T 1` for the fixed point `x* = P x0`.

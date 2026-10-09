@@ -219,7 +219,7 @@ row a voter gets is its accuracy, which is the weight a linear opinion pool
 gives a source believed that reliable (Genest and Zidek,
 doi:10.1214/ss/1177013825). Acemoglu, Como, Fagnani and Ozdaglar
 (doi:10.1287/moor.1120.0570) show what a stubborn voter does to such a
-pool: with an anchor near one it never moves and pulls the rest, which is
+pool: with an anchor near zero it stays on its ballot and pulls the rest, which is
 why a persona's anchor is a parameter here and not a default.
 
 The rules were measured where the truth is known
