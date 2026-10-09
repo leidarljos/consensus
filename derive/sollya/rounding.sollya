@@ -48,9 +48,9 @@ else {
   failures = failures + 1;
 };
 
-/* 2. The rounds the bound needs. Opinions start in [0, 1], so the first
- * step is at most one and the t-th at most q^(t-1). The bound
- * q / (1 - q) q^(t-1) falls under tol once t >= ln(tol (1 - q)) / ln q, and
+/* 2. How long the bound takes. Opinions start in [0, 1], so the first
+ * step is at most one and the t-th at most q^(t-1), and the bound
+ * q / (1 - q) q^(t-1) falls under tol once t >= ln(tol (1 - q)) / ln q.
  * max_iter defaults to 200. */
 ratio = proc(q, tol) {
   return log([tol] * ([1] - [q])) / log([q]);
@@ -92,12 +92,12 @@ else {
   failures = failures + 1;
 };
 
-/* 4. The weights calibrate writes. Dawid-Skene's Laplace smoothing gives a
- * voter seen N times the accuracy (h + 1) / (N + 2), with h its expected
- * hits. Its log odds then lie in [-ln(N + 1), ln(N + 1)], with the ends at
- * h = 0 and h = N, so no voter's weight runs away on a short record. The
- * clamp to [0.01, 0.99] binds once a perfect record reaches
- * (N + 1) / (N + 2) >= 0.99, which is N = 98. */
+/* 4. What calibrate writes. Dawid-Skene's Laplace smoothing gives a
+ * voter seen N times the accuracy (h + 1) / (N + 2), h its expected hits,
+ * so its log odds lie in [-ln(N + 1), ln(N + 1)] and no voter's weight runs
+ * away on a short record. h = 0 and h = N give the ends. The clamp to
+ * [0.01, 0.99] binds from N = 98, where a perfect record reaches
+ * (N + 1) / (N + 2) >= 0.99. */
 big = 10^6;
 lo = log(([1] / [big + 2]) / ([big + 1] / [big + 2]));
 gap = sup(abs(lo + log([big + 1])));

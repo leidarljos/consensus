@@ -49,18 +49,18 @@ def main():
     P = (I - L * W).inv() * (I - L)
     results.append(check("P 1 = 1 (P row-stochastic)", P * one - one))
 
-    # 2. The shares are a weighted vote: shares = (1/n) 1^T P X0, and X0's
-    # rows are ballot indicators. Option k's share is the sum of c_i over its
-    # voters, with c = (1/n) P^T 1, the social power (Friedkin 1991,
-    # doi:10.1086/229694). They sum to one.
+    # 2. The shares are a weighted vote. shares = (1/n) 1^T P X0 and the rows
+    # of X0 are ballot indicators, so option k's share is the sum of c_i over
+    # its voters, where c = (1/n) P^T 1 is each voter's social power
+    # (Friedkin 1991, doi:10.1086/229694). The c_i sum to one.
     c = (P.T * one) / n
     results.append(check("sum of social power = 1", sum(c) - 1))
 
-    # 3. The rows `learn` writes: every voter gives voter j the same weight
-    # w_j; the settle gives each a constant self-weight sw. Its DeGroot limit
-    # is the left eigenvector pi, with pi_j proportional to w_j (S + sw - w_j)
-    # where S = sum w. Since pi is not proportional to w, the settle
-    # compresses the log-odds weights it was handed.
+    # 3. The rows `learn` writes, under a constant self-weight. Every voter
+    # gives voter j the same weight w_j and itself sw; the DeGroot limit is
+    # the left eigenvector pi with pi_j proportional to w_j (S + sw - w_j),
+    # where S = sum w. pi is not proportional to w. The settle compresses the
+    # log-odds weights it was handed.
     w = sp.symbols(f"w0:{n}", positive=True)
     sw = sp.Symbol("sw", positive=True)
     S = sum(w)
@@ -109,13 +109,13 @@ def main():
     lam2 = (sw - wq) / D
     results.append(check("second eigenvalue (sw - w) / ((n-1) w + sw)", charpoly.subs(lam, lam2)))
 
-    # 7. The a-posteriori bound the iteration stops on. This map is a
-    # q-contraction in the sup norm for q = max s_i < 1, since each row of W
-    # averages. The distance to the fixed point is at most the last step times
-    # the tail of the geometric series sum_{k>=1} q^k:
+    # 7. The a-posteriori bound the iteration stops on. Each row of W
+    # averages, so the map is a q-contraction in the sup norm for
+    # q = max s_i < 1, and the distance to the fixed point is at most the last
+    # step times the tail of the geometric series sum_{k>=1} q^k:
     #     |x_t - x*| <= q / (1 - q) |x_t - x_(t-1)|.
-    # derive/lean/ConsensusProofs/Contraction.lean proves the bound. Only the
-    # series is checked here; derive/sollya/rounding.sollya counts the rounds.
+    # derive/lean/ConsensusProofs/Contraction.lean proves it. Only the series
+    # is checked here. derive/sollya/rounding.sollya counts the rounds.
     q, k = sp.symbols("q k", positive=True)
     tail = sp.summation(q**k, (k, 1, sp.oo))
     results.append(check("sum_{k>=1} q^k = q/(1-q) for |q|<1", sp.piecewise_fold(tail).args[0][0] - q / (1 - q)))

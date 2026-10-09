@@ -2,31 +2,30 @@
 //!
 //! Personas that run on one model share its mistakes (Kim et al. 2025,
 //! doi:10.48550/arXiv.2506.07962). The jury theorem's promise weakens as
-//! errors correlate (Ladha, doi:10.2307/2111584), and Dietrich and
-//! Spiekermann (doi:10.1093/mind/fzt074) show what a shared cause does to it.
-//! This module reads correlated errors, the trace of that shared cause, off a
-//! project's history. A voter's correctness on each item is scored against
-//! the outcome where one was named, and the Dawid-Skene answer otherwise. A
-//! Pearson correlation of those scores is taken for each pair, over the items
+//! errors correlate (Ladha, doi:10.2307/2111584); Dietrich and Spiekermann
+//! (doi:10.1093/mind/fzt074) show what a shared cause does to it. This
+//! module measures correlated errors, the trace of that shared cause, in a
+//! project's history. Truth is the named outcome, else the Dawid-Skene
+//! answer. A voter is scored right or wrong against it on each item, and
+//! each pair gets the Pearson correlation of those scores over the items
 //! both voted on.
 //!
 //! derive/sympy/jury.py derives the discount. For a cluster of `k` voters
 //! correlated `rho`, the weights that minimise the variance of the combined
-//! vote divide each member's weight by `1 + (k - 1) rho`. The cluster
+//! vote divide each member's weight by `1 + (k - 1) rho`; the cluster then
 //! counts as `k / (1 + (k - 1) rho)` voters, and as `rho` goes to one, as
-//! one. The discount here is that rule with the cluster read off the
-//! matrix, `1 / (1 + sum_{j != i} rho_ij)` over the pairs the gate below
-//! counts.
+//! one. Here the cluster comes from the matrix: the discount is
+//! `1 / (1 + sum_{j != i} rho_ij)` over the pairs the gate below counts.
 //!
 //! An inferred answer is whatever the majority bloc says, and the bloc's
-//! members look right on nearly every item, so their correctness barely
-//! varies and their correlation reads near zero. Named outcomes do not
+//! members look right on almost every item, so their correctness varies
+//! little and their correlation reads close to zero. Named outcomes do not
 //! have that bias.
 //!
 //! A seat's history is short. The correlation of two voters who err apart
 //! reads about `N(0, 1/m)` over `m` shared items, so counting every positive
 //! reading would discount independent voters by noise. A pair counts only
-//! when `sqrt(m) rho` passes the one-sided test of independence at `gate`.
+//! when `sqrt(m) rho` passes the one-sided test of independence at `gate`;
 //! `m rho^2` is Pearson's chi-square for the pair's 2x2 table
 //! (derive/sympy/jury.py). On its own the gate would pass exact clones from
 //! three shared items when they have both a hit and a miss there. By default
@@ -272,10 +271,10 @@ mod tests {
 
     /// Six named outcomes: two clones always agree. An independent voter
     /// whose misses each land on another voter's happens to read 0.25 against
-    /// the other independent voter and against each clone. That noise would
+    /// the other independent voter and against each clone, noise that would
     /// leave it 1/1.75 of its weight without the gate. The gate leaves that
-    /// voter whole, since `sqrt(6) 0.25 = 0.61 < 1.645`, and still halves
-    /// each clone.
+    /// voter whole, since `sqrt(6) 0.25 = 0.61 < 1.645`. Each clone is still
+    /// halved.
     #[test]
     fn on_a_short_history_the_gate_counts_clones_and_not_noise() {
         let right = |who: &str, pattern: &[bool], items: &mut Vec<Vec<(String, String)>>| {

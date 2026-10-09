@@ -3,13 +3,13 @@
 //! their own sit beside them.
 //!
 //! A question has a truth in {a, b}. A shared judge is right with
-//! probability `judge_acc`, 0.70; every clone casts the judge's ballot. An
-//! independent voter is right with its own accuracy, drawn in [0.60, 0.75].
-//! Before each question the seat knows only the history: who voted what and
-//! what the outcome was.
+//! probability `judge_acc`, 0.70, and every clone casts the judge's
+//! ballot; an independent voter is right with its own accuracy, drawn
+//! uniformly in [0.60, 0.75]. Before each question the seat knows only
+//! the history: who voted what and what the outcome was.
 //!
 //! Arms, on the same ballots:
-//! - `majority`: one voter one vote. The clones are a bloc.
+//! - `majority`: one voter one vote. Clones vote as a bloc.
 //! - `learn log-odds online, earned self-trust`: each voter's record so far
 //!   as log-odds rows, the best online rule of synthetic_voters.rs.
 //! - `... and the correlation discount`: the same rows, with each voter's
@@ -24,11 +24,12 @@
 //! $ cargo run --release --example correlated_voters -- 5 4 400 20 infer
 //! ```
 //! clones, independent voters, questions, seeds; `infer` reads the
-//! correlation against the Dawid-Skene answer rather than the named outcomes.
-//! The clones look independent (they make most of that answer); the discount
-//! falls on the independent voters instead. The discounted arm scores 0.706
-//! under `infer`, below the 0.710 of the same rows undiscounted, against
-//! 0.797 on named outcomes.
+//! correlation against the Dawid-Skene answer rather than the named
+//! outcomes. The clones make most of that answer, so they look
+//! independent against it and the discount falls on the independent
+//! voters instead: the discounted arm scores 0.706 under `infer`, below
+//! the 0.710 of the same rows undiscounted. On named outcomes it scores
+//! 0.797.
 
 use std::collections::BTreeMap;
 
