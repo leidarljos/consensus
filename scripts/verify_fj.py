@@ -14,6 +14,10 @@ For random small panels this script checks the four claims made in
    ``1 + ceil(ln(tol) / ln(bound))`` rounds, the count
    ``fj_rounds_to_tol`` returns -- and the shipped ``ljos-consensus``
    binary agrees with the closed form end to end.
+5. Interval enclosure (Sollya-style): the same settle replayed in
+   outward-rounded ``mpmath.iv`` intervals contains the float stop and
+   the closed form, with a small final width -- the stop at ``tol``
+   sits above the rounding floor.
 
 Usage: ``cargo build`` first (or let this script build), then
 ``python3 scripts/verify_fj.py``. Exits non-zero on any failure.
@@ -209,8 +213,67 @@ def main() -> int:
         check(f"binary agrees with closed form [{tag}]",
               agree and outcome["settled"], f"shares={outcome['shares']}")
 
+    interval_case(check)
+
     print(f"\n{checks - failures}/{checks} checks passed")
     return 1 if failures else 0
+
+def interval_case(check):
+    """Sollya-style enclosure: the FJ iterate in outward-rounded intervals.
+
+    Replays one anchored settle (seed 1: three voters, three options, a
+    real split) with every value an ``mpmath.iv`` interval, so each step
+    encloses all rounding of the float evaluation. Three things must hold:
+    the float iterate at the stopping round lies inside the enclosure
+    (the stop at ``tol`` is above the rounding floor), the closed form
+    lies inside the final enclosure (both name the same point), and the
+    final width is small (contraction squeezes rounding instead of
+    accumulating it). This is the interval half of the floating-point
+    budget on the derivation page; a Sollya certificate of the compiled
+    Rust evaluation order remains the open half.
+    """
+    from mpmath import iv
+
+    rng = random.Random(1)
+    n, m = 3, 3
+    agents, options, Wf, susf, choices = build_case(rng, n, m)
+    sus = [susf[a] for a in agents]
+    x0f = [[1.0 if choices[a] == o else 0.0 for o in options] for a in agents]
+    W = [[iv.mpf(v) for v in row] for row in Wf]
+    S = [iv.mpf(s) for s in sus]
+    A = [[iv.mpf(v) for v in row] for row in x0f]
+    X = [row[:] for row in A]
+    xf = [row[:] for row in x0f]
+    one = iv.mpf(1)
+    stopped_at = None
+    inside_at_stop = False
+    for t in range(1, 301):
+        Xn = []
+        for i in range(n):
+            row = []
+            for k in range(m):
+                heard = iv.mpf(0)
+                for j in range(n):
+                    heard += W[i][j] * X[j][k]
+                row.append((one - S[i]) * A[i][k] + S[i] * heard)
+            Xn.append(row)
+        X = Xn
+        xf = fj_step(Wf, sus, x0f, xf)
+        prev = xf_prev if t > 1 else x0f
+        if stopped_at is None and sup_diff(xf, prev) < TOL:
+            stopped_at = t
+            inside_at_stop = all(
+                X[i][k].a <= xf[i][k] <= X[i][k].b
+                for i in range(n) for k in range(m))
+        xf_prev = [row[:] for row in xf]
+    xs = closed_form_float(Wf, sus, x0f)
+    inside_cf = all(
+        X[i][k].a <= xs[i][k] <= X[i][k].b for i in range(n) for k in range(m))
+    width = max(float(X[i][k].b - X[i][k].a) for i in range(n) for k in range(m))
+    check("interval enclosure contains float stop",
+          stopped_at is not None and inside_at_stop, f"round={stopped_at}")
+    check("interval enclosure contains closed form", inside_cf)
+    check("interval enclosure width is small", width < 1e-12, f"width={width:.2e}")
 
 
 if __name__ == "__main__":

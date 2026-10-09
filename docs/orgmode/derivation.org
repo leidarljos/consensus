@@ -61,10 +61,15 @@ buy, of the order of the squared gradient, is below the energy's own
 rounding, no line search can accept a step, and the point is as settled
 as the arithmetic allows. That floor is the part of the routine a
 Sollya-style error analysis justifies: bound the rounding of the energy
-and its gradient, and the stopping test falls out. The current code
-states the floor as =(eps (1 + |E|))^{1/2}= next to the test; a Sollya
-script that certifies the interval bound for the compiled evaluation
-order is the open item, tracked so the claim stays checkable.
+and its gradient, and the stopping test falls out. The interval half is
+done: =scripts/verify_fj.py= replays an anchored settle in
+outward-rounded intervals (=mpmath.iv=, the same rounding discipline
+Sollya certifies) and shows the float stop and the closed form both lie
+in an enclosure 5e-16 wide, so stopping at =tol= 1e-9 is far above the
+rounding floor. What remains open is the certificate for the compiled
+Rust evaluation order rather than the script's: a Sollya proof over the
+emitted floating-point operations. Until then the claim is the
+enclosure, not the certificate, and the page says so.
 
 * The Lean correspondence
 
