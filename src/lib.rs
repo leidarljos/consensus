@@ -966,6 +966,53 @@ pub fn settle_exact(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &
     outcome_of(setup, &x, Some(&p), 0, true, residual, "fj-exact")
 }
 
+/// Contraction factor of the Friedkin–Johnsen iteration in the sup norm.
+///
+/// One step is `x(t+1) = (I - S) x0 + S W x(t)` with row-stochastic `W`,
+/// so two trajectories contract by at most `max_i s_i` per round: the
+/// closed form is `x* = (I - S W)^{-1} (I - S) x0` (verified symbolically;
+/// see `docs/orgmode/derivation.org`), and the iteration is the
+/// fixed-point map for it. The bound is below one whenever every voter
+/// keeps some anchor, which is why an anchored settle always settles and
+/// a pure DeGroot one (`s_i = 1` everywhere) carries no such guarantee —
+/// there convergence is asymptotic under Berger's closed-group conditions,
+/// and the budget (`max_iter`) decides.
+#[must_use]
+pub fn fj_contraction_bound(
+    agents: &[String],
+    susceptibility: f64,
+    anchors: &std::collections::BTreeMap<String, f64>,
+) -> f64 {
+    agents
+        .iter()
+        .map(|a| {
+            anchors
+                .get(a)
+                .copied()
+                .unwrap_or(susceptibility)
+                .clamp(0.0, 1.0)
+        })
+        .fold(0.0_f64, f64::max)
+}
+
+/// Rounds after which the Friedkin–Johnsen iteration is within `tol` in
+/// the sup norm, from the contraction bound.
+///
+/// Successive differences shrink by the bound each round, and the first
+/// step moves no row by more than the bound (both `W x(0)` and `x(0)`
+/// are rows of distributions, so their sup distance is at most one):
+/// `err(t) <= bound^t`, hence `t >= ln(tol) / ln(bound)` suffices, plus
+/// the first step. Returns `None` when the bound is not a contraction
+/// (`>= 1`): then no round count is guaranteed and the caller must rely
+/// on the iteration budget. `tol` must be positive and below one.
+#[must_use]
+pub fn fj_rounds_to_tol(bound: f64, tol: f64) -> Option<usize> {
+    if !(0.0..1.0).contains(&bound) || !(0.0..1.0).contains(&tol) || bound <= 0.0 {
+        return None;
+    }
+    Some(1 + (tol.ln() / bound.ln()).ceil() as usize)
+}
+
 /// The Friedkin-Johnsen settle as the minimum of an energy, found by
 /// rgmin rather than by iteration. For symmetric influence the FJ
 /// equilibrium is the unique minimiser of
@@ -1490,6 +1537,39 @@ mod tests {
             "everyone met in the middle: {}",
             out.polarization
         );
+    }
+
+    /// The contraction bound is the largest susceptibility, and the round
+    /// count it predicts covers an anchored settle: the derivation page
+    /// carries the symbolic closed form this bound comes from.
+    #[test]
+    fn the_contraction_bound_covers_an_anchored_settle() {
+        let agents: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
+        let mut anchors = std::collections::BTreeMap::new();
+        anchors.insert("a".to_string(), 0.1);
+        let bound = fj_contraction_bound(&agents, 0.5, &anchors);
+        assert!((bound - 0.5).abs() < 1e-12, "{bound}");
+        let all_loose = fj_contraction_bound(&agents, 1.0, &std::collections::BTreeMap::new());
+        assert!((all_loose - 1.0).abs() < 1e-12, "{all_loose}");
+        assert_eq!(fj_rounds_to_tol(1.0, 1e-9), None);
+        assert_eq!(fj_rounds_to_tol(0.5, 1.0), None);
+        let ballots: Vec<Ballot> = [("a", "ship"), ("b", "ship"), ("c", "hold")]
+            .iter()
+            .map(|(agent, choice)| Ballot {
+                agent: agent.to_string(),
+                choice: choice.to_string(),
+            })
+            .collect();
+        let trust = vec![
+            ("a".into(), "b".into(), 1.0),
+            ("b".into(), "a".into(), 1.0),
+            ("c".into(), "a".into(), 1.0),
+        ];
+        let tol = 1e-9;
+        let predicted = fj_rounds_to_tol(bound, tol).unwrap();
+        let out = settle_anchored(&ballots, &trust, 0.5, 0.5, &anchors, 500, tol);
+        assert!(out.settled);
+        assert!(out.rounds <= predicted, "{} vs {predicted}", out.rounds);
     }
 
     /// A minority that knows the majority is wrong predicts that majority

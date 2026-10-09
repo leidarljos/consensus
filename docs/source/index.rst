@@ -55,4 +55,5 @@ The seat verb is ``ljos consensus``.
    howto
    reference
    explanation
+   derivation
    seat
