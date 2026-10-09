@@ -44,7 +44,8 @@ nothing: there is no round count to guarantee, convergence is asymptotic
 under Berger's closed-group conditions
 (doi:10.1080/01621459.1981.10477662), and the iteration budget
 (=max_iter=) decides. That =None= is the honest boundary between what is
-proved and what is budgeted.
+proved and what is budgeted. =ljos-consensus rounds= prints the bound
+and the count for a named panel, or the null count with its reason.
 
 * The floating-point budget
 
