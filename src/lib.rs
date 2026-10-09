@@ -1317,6 +1317,191 @@ pub fn settle_seldon(
     }
 }
 
+/// Nitzan and Paroush (doi:10.2307/2526438): the optimal weight of an
+/// independent binary voter is the log odds of its accuracy. `floor`
+/// keeps a voter off the certainties; the measured arms use `0.01`.
+/// Negative when the voter is worse than chance.
+#[must_use]
+pub fn log_odds(accuracy: f64, floor: f64) -> f64 {
+    let floor = floor.clamp(1e-12, 0.49);
+    let p = accuracy.clamp(floor, 1.0 - floor);
+    (p / (1.0 - p)).ln()
+}
+
+/// One premise in a discursive dilemma: the share that voted yes, and the
+/// majority of the yes/no ballots.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PremiseVote {
+    pub name: String,
+    pub yes: f64,
+    pub majority: String,
+}
+
+/// Premise-wise majority against the majority on the conclusion
+/// (Pettit, doi:10.1111/0029-4624.35.s1.11; List and Pettit, Economics
+/// and Philosophy 18, 2002). `premise_wise` is the conjunction: yes only
+/// when every premise's majority is yes, no when any is no. `paradox` is
+/// set when that conjunction and the conclusion are each a yes or a no
+/// and they differ. A tie is not a majority, and it is not a paradox.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Dilemma {
+    pub premises: Vec<PremiseVote>,
+    pub premise_wise: String,
+    pub conclusion: String,
+    pub conclusion_yes: f64,
+    pub paradox: bool,
+}
+
+fn yes_share(ballots: &[Ballot]) -> (f64, f64) {
+    let mut yes = 0.0;
+    let mut no = 0.0;
+    for b in ballots {
+        match b.choice.to_ascii_lowercase().as_str() {
+            "yes" => yes += 1.0,
+            "no" => no += 1.0,
+            _ => {}
+        }
+    }
+    let n = yes + no;
+    if n == 0.0 {
+        (0.0, 0.0)
+    } else {
+        (yes / n, no / n)
+    }
+}
+
+fn binary_majority(yes: f64, no: f64) -> &'static str {
+    if (yes - no).abs() <= 1e-12 {
+        "tie"
+    } else if yes > no {
+        "yes"
+    } else {
+        "no"
+    }
+}
+
+/// The doctrinal paradox on binary premises whose conclusion is their
+/// conjunction. Ballots that are neither `yes` nor `no` are ignored.
+#[must_use]
+pub fn discursive_dilemma(premises: &[(String, Vec<Ballot>)], conclusion: &[Ballot]) -> Dilemma {
+    let premises: Vec<PremiseVote> = premises
+        .iter()
+        .map(|(name, ballots)| {
+            let (yes, no) = yes_share(ballots);
+            PremiseVote {
+                name: name.clone(),
+                yes,
+                majority: binary_majority(yes, no).to_string(),
+            }
+        })
+        .collect();
+    let premise_wise = if premises.iter().any(|p| p.majority == "no") {
+        "no"
+    } else if premises.is_empty() || premises.iter().any(|p| p.majority == "tie") {
+        "tie"
+    } else {
+        "yes"
+    };
+    let (cyes, cno) = yes_share(conclusion);
+    let conclusion_m = binary_majority(cyes, cno);
+    let paradox = matches!((premise_wise, conclusion_m), ("yes", "no") | ("no", "yes"));
+    Dilemma {
+        premises,
+        premise_wise: premise_wise.to_string(),
+        conclusion: conclusion_m.to_string(),
+        conclusion_yes: cyes,
+        paradox,
+    }
+}
+
+/// Parse `{"premises":[{"name","ballots":[...]}], "conclusion":[...]}`
+/// and run [`discursive_dilemma`].
+///
+/// # Errors
+///
+/// The text is not that object, or a ballot list is not ballots.
+pub fn dilemma_from_json(raw: &str) -> Result<Dilemma, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(raw).map_err(|e| format!("dilemma json: {e}"))?;
+    let premises = v
+        .get("premises")
+        .and_then(|p| p.as_array())
+        .ok_or("dilemma json: expected premises")?;
+    let mut out = Vec::new();
+    for row in premises {
+        let name = row
+            .get("name")
+            .and_then(|n| n.as_str())
+            .ok_or("dilemma json: a premise without name")?
+            .to_string();
+        let ballots = row
+            .get("ballots")
+            .ok_or("dilemma json: a premise without ballots")?;
+        let ballots = ballots_from_json(&ballots.to_string())?;
+        out.push((name, ballots));
+    }
+    let conclusion = v
+        .get("conclusion")
+        .ok_or("dilemma json: expected conclusion")?;
+    let conclusion = ballots_from_json(&conclusion.to_string())?;
+    Ok(discursive_dilemma(&out, &conclusion))
+}
+
+/// A fixed panel over `herdr`, `erlang-plugin` and `go-rewrite`. Seven
+/// readings, each anchored, so a later change to the settle has to face
+/// the same outcome.
+#[must_use]
+pub fn runtime_vote() -> Outcome {
+    let ballots = [
+        ("measurement", "herdr"),
+        ("path", "herdr"),
+        ("single-writer", "herdr"),
+        ("harness", "herdr"),
+        ("supervisor", "erlang-plugin"),
+        ("panel", "erlang-plugin"),
+        ("scheduler", "go-rewrite"),
+    ]
+    .into_iter()
+    .map(|(agent, choice)| Ballot {
+        agent: agent.into(),
+        choice: choice.into(),
+    })
+    .collect::<Vec<_>>();
+    let trust = [
+        ("measurement", "single-writer", 1.0),
+        ("measurement", "path", 0.4),
+        ("measurement", "scheduler", 0.3),
+        ("single-writer", "measurement", 1.0),
+        ("path", "measurement", 0.8),
+        ("path", "harness", 0.5),
+        ("harness", "path", 0.6),
+        ("harness", "supervisor", 0.7),
+        ("harness", "scheduler", 0.2),
+        ("supervisor", "panel", 0.8),
+        ("supervisor", "harness", 0.6),
+        ("panel", "supervisor", 1.0),
+        ("panel", "harness", 0.5),
+        ("scheduler", "measurement", 0.9),
+        ("scheduler", "supervisor", 0.4),
+    ]
+    .into_iter()
+    .map(|(from, to, weight)| (from.to_string(), to.to_string(), weight))
+    .collect::<Vec<_>>();
+    let anchors = [
+        ("measurement", 0.2),
+        ("path", 0.35),
+        ("single-writer", 0.25),
+        ("harness", 0.45),
+        ("supervisor", 0.3),
+        ("panel", 0.4),
+        ("scheduler", 0.35),
+    ]
+    .into_iter()
+    .map(|(agent, s)| (agent.to_string(), s))
+    .collect();
+    settle_anchored(&ballots, &trust, 0.5, 1.0, &anchors, 200, 1e-12)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1986,5 +2171,71 @@ mod tests {
         assert!(rounds > 0);
         assert!((x[0] - 0.5).abs() < 1e-5);
         assert!((x[1] - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn log_odds_orders_accuracy_and_is_zero_at_chance() {
+        assert!((log_odds(0.5, 0.01)).abs() < 1e-12);
+        assert!(log_odds(0.9, 0.01) > log_odds(0.6, 0.01));
+        assert!(log_odds(0.2, 0.01) < 0.0);
+    }
+
+    /// Three judges, a contract: both premises pass and the conclusion fails.
+    #[test]
+    fn the_doctrinal_paradox_is_a_split_between_premises_and_conclusion() {
+        let raw = r#"{
+            "premises": [
+                {"name":"offer","ballots":[
+                    {"agent":"1","choice":"yes"},
+                    {"agent":"2","choice":"yes"},
+                    {"agent":"3","choice":"no"}]},
+                {"name":"acceptance","ballots":[
+                    {"agent":"1","choice":"yes"},
+                    {"agent":"2","choice":"no"},
+                    {"agent":"3","choice":"yes"}]}
+            ],
+            "conclusion": [
+                {"agent":"1","choice":"yes"},
+                {"agent":"2","choice":"no"},
+                {"agent":"3","choice":"no"}
+            ]
+        }"#;
+        let d = dilemma_from_json(raw).unwrap();
+        assert_eq!(d.premise_wise, "yes");
+        assert_eq!(d.conclusion, "no");
+        assert!(d.paradox, "{d:?}");
+        let tied = discursive_dilemma(
+            &[(
+                "p".into(),
+                vec![
+                    Ballot {
+                        agent: "1".into(),
+                        choice: "yes".into(),
+                    },
+                    Ballot {
+                        agent: "2".into(),
+                        choice: "no".into(),
+                    },
+                ],
+            )],
+            &[Ballot {
+                agent: "1".into(),
+                choice: "no".into(),
+            }],
+        );
+        assert!(!tied.paradox, "a tie is not a majority");
+    }
+
+    /// The runtime vote settles, names all three options, and keeps a
+    /// disagreement: the anchors do not let the minority vanish.
+    #[test]
+    fn the_runtime_vote_settles_with_the_minority_still_visible() {
+        let out = runtime_vote();
+        assert!(out.settled, "{out:?}");
+        assert_eq!(out.options, ["erlang-plugin", "go-rewrite", "herdr"]);
+        let share = |name: &str| out.shares[out.options.iter().position(|o| o == name).unwrap()];
+        assert!(share("herdr") > share("erlang-plugin"), "{out:?}");
+        assert!(share("erlang-plugin") > share("go-rewrite"), "{out:?}");
+        assert!(out.polarization > 0.0, "{}", out.polarization);
     }
 }
