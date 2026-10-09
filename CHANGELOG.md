@@ -14,7 +14,7 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   the result unsettled.
 - `settled` now means within `--tol` of the fixed point wherever the
   distance can be bounded. The iteration used to stop on a small step,
-  which left it far from the fixed point at a susceptibility near one. It
+  which left it far from the fixed point at a susceptibility near one; it
   now stops on Banach's bound, `q / (1 - q)` times the step, plus the
   binary64 floor `gamma(n + 2) / (1 - q)`. A panel where some voter
   listens fully stops on the distance to the closed form. A panel with
@@ -35,14 +35,14 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   does not discount independent voters by noise. Seven similar voters lose
   three points to the ungated discount at five named outcomes, and less
   than one to the gated one. A count of five clones of one judge and four
-  independent voters is right 0.701 of the time, and log odds 0.710. The
+  independent voters is right 0.701 of the time, and log odds 0.710; the
   discount brings the settle to 0.797, against 0.805 for the oracle with
   the clones merged. The clones look independent against the Dawid-Skene
   answer. The discount then falls on the independent voters and costs a
   little (0.706 against 0.710).
 - `examples/correlation_history.rs` scores the decision after one to a
   hundred named outcomes. Log odds of a short record lose to a count on
-  similar voters. Shrinking each record's accuracy toward the pooled
+  similar voters; shrinking each record's accuracy toward the pooled
   accuracy by empirical Bayes (Efron and Morris) closes most of that gap.
   Shrunk rows under the gated discount trail a count by 2.0 points at
   worst (0.820 against 0.840 at eight outcomes). Five clones beside four

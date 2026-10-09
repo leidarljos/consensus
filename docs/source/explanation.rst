@@ -23,10 +23,10 @@ it as ``influence``, beside ``effective_voters``, the inverse Herfindahl index
 ``1 / sum c_i^2``: the number of equal voices the settle is worth.
 
 A crowd is wise only while no voice keeps a fixed share of the result as
-it grows (Golub and Jackson, doi:10.1257/mic.2.1.112). DeGroot's averaging
-counts the well connected again each round (DeMarzo, Vayanos and Zwiebel,
-doi:10.1162/00335530360698469). A settle with ``effective_voters`` near one
-is one voter's opinion, however many ballots it read.
+it grows (Golub and Jackson, doi:10.1257/mic.2.1.112), and DeGroot's
+averaging counts the well connected again each round (DeMarzo, Vayanos and
+Zwiebel, doi:10.1162/00335530360698469). A settle with ``effective_voters``
+near one is one voter's opinion, however many ballots it read.
 
 ``--engine exact`` reads ``P`` off directly, solving ``(I - L W) P = I - L``
 where every closed group of the trust graph holds an anchored voter. A
@@ -40,7 +40,7 @@ Whose own voice counts
 A trust row says how much a voter listens to each of the others. What it
 weighs its own ballot is the diagonal. A row that does not say gets a
 fill; the tracker fills one constant for every voter. The rows ``learn`` and
-``calibrate`` write weigh voter j alike from everyone, as ``w_j``. A constant
+``calibrate`` write weigh voter j alike from everyone, as ``w_j``; a constant
 self-weight ``sw`` then weighs voter j by ``w_j (S + sw - w_j)``, with ``S`` the
 sum of the weights, not by ``w_j``. The best voter's lead shrinks: its own
 row sends the same constant home as the weakest voter's does.
@@ -48,19 +48,19 @@ row sends the same constant home as the weakest voter's does.
 ``--self-trust earned``, the default since 0.7.0, fills the diagonal with
 what the others give the voter: the mean of the weights that name it.
 Without a discount every row is then ``w / S``. The matrix is idempotent, so
-one round leaves every voter on the weighted vote ``sum_j w_j x0_j / S``.
-For log-odds rows from independent voters on a two-way choice, that vote
+one round leaves every voter on the weighted vote ``sum_j w_j x0_j / S``;
+for log-odds rows from independent voters on a two-way choice, that vote
 is the Nitzan and Paroush optimum. Every voter anchored at ``s`` gives the
 mixture ``(1 - s) count + s weighted vote``. The anchor reads as how far the
 group trusts its record over a show of hands. People who revise least
 toward the group are the more accurate ones (Becker, Brackbill and
-Centola, doi:10.1073/pnas.1615978114). Weighing them more improves the
+Centola, doi:10.1073/pnas.1615978114), and weighing them more improves the
 crowd's estimate (Madirolas and de Polavieja,
 doi:10.1371/journal.pcbi.1004594).
 
 ``examples/synthetic_voters.rs`` measures it where the truth is known, over
 twenty seeds of four hundred two-way questions. The two fills differ by a
-tenth of a point when accuracies are spread evenly. Nine voters drawn in
+tenth of a point when accuracies are spread evenly: nine voters drawn in
 [0.35, 0.95] score 0.934 for calibrate with a constant self-weight and
 0.933 with earned self-trust; fifteen score 0.974 and 0.975. The
 difference shows where a weak crowd can outvote its best voter. One voter
@@ -81,7 +81,7 @@ the split; this crate reports ``settled: false`` when the budget runs out.
 ``settled`` means within ``--tol`` of the fixed point wherever the distance
 can be bounded, not that the last step was small. The step is a
 ``q``-contraction in the largest-entry norm when every voter is anchored,
-with ``q`` the largest susceptibility. Banach's estimate then puts the fixed
+with ``q`` the largest susceptibility; Banach's estimate then puts the fixed
 point within ``q / (1 - q)`` times the last step's length. The iteration
 stops when that bound falls under the tolerance; ``residual`` is the bound.
 A small step alone said little: at ``q = 0.99`` the opinions could sit a
@@ -89,9 +89,9 @@ hundred times the step away. A voter that listens fully breaks the
 contraction. ``residual`` is then the distance to the closed-form point. A
 panel with neither a contraction nor a closed form still stops on the
 step, which bounds nothing. ``exact::fixed_point`` names a group that
-cycles, and ``--engine exact`` falls back to the iteration for it. It does
-the same for a system too near singular to solve, and in both cases
-reports ``settled: false``.
+cycles, and ``--engine exact`` falls back to the iteration for it and for a
+system too near singular to solve; in both cases it reports
+``settled: false``.
 
 Binary64 adds at most ``gamma(n + 2) / (1 - q)`` to the bound: Higham's
 gamma for the ``n``-term dot product, the product with ``s_i`` and the anchor
@@ -298,15 +298,15 @@ voters' records it learns from are both short. The correlation of two
 voters who err apart reads about ``N(0, 1/m)`` over ``m`` shared items, so
 counting every positive reading would discount independent voters by
 noise. ``correlation`` counts a pair only when ``sqrt(m) rho`` passes the
-one-sided test of independence at five percent, 1.645 (``--gate``).
+one-sided test of independence at five percent, 1.645 (``--gate``);
 ``m rho^2`` is Pearson's chi-square for the pair's two-by-two table of right
 and wrong, which ``derive/sympy/jury.py`` checks. Exact clones with both a
-hit and a miss among the shared items read one. They would pass the gate
+hit and a miss among the shared items read one, and would pass the gate
 from three shared items, though by default ``--min-shared`` skips any pair
 with fewer than five. Voters who err apart pass about one time in twenty.
 
 A voter's record is as short. The plug-in log odds of a record of five
-drop a good voter who started unlucky to the floor. They lose to a plain
+drop a good voter who started unlucky to the floor, and lose to a plain
 count on a panel of similar voters. Empirical Bayes shrinks each voter's
 accuracy toward the panel's pooled accuracy (Efron and Morris,
 doi:10.1080/01621459.1975.10479864); the prior weakens as the records
@@ -354,10 +354,10 @@ Independence before influence
 
 A settle is social influence run to its end. Influence can destroy the
 information a crowd holds. Ballots seen before one's own is cast start
-cascades (Bikhchandani, Hirshleifer and Welch, doi:10.1086/261849). A
-voter rationally follows the ones before it; its private evidence never
-reaches the count. Seeing what others guess narrows a crowd without making
-it more accurate (Lorenz, Rauhut, Schweitzer and Helbing,
+cascades (Bikhchandani, Hirshleifer and Welch, doi:10.1086/261849): a
+voter rationally follows the ones before it, and its private evidence
+never reaches the count. Seeing what others guess narrows a crowd without
+making it more accurate (Lorenz, Rauhut, Schweitzer and Helbing,
 doi:10.1073/pnas.1008636108). People give a wrong answer to agree with a
 room (Asch, doi:10.1037/h0093718); the Delphi method collects judgments
 apart for that reason (Dalkey and Helmer, doi:10.1287/mnsc.9.3.458).
