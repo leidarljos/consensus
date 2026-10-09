@@ -16,12 +16,12 @@ symmetric.
 
 The step is linear in the ballots, and so is where it ends: =x* = P x0=
 for a matrix =P= whose rows each sum to one. The shares are the mean row
-of =x*=. A settle is therefore a weighted vote. Voter i's ballot counts
-with weight =c_i = (1/n) sum_k P_ki=, its social power (Friedkin,
-doi:10.1086/229694; Proskurnikov and Tempo,
-doi:10.1016/j.arcontrol.2017.03.002). The iterate and exact engines print
-it as =influence=, beside =effective_voters=, the inverse Herfindahl index
-=1 / sum c_i^2=: the number of equal voices the settle is worth.
+of =x*=. A settle is a weighted vote. Voter i's ballot counts with weight
+=c_i = (1/n) sum_k P_ki=, its social power (Friedkin, doi:10.1086/229694;
+Proskurnikov and Tempo, doi:10.1016/j.arcontrol.2017.03.002). The iterate
+and exact engines print it as =influence=, beside =effective_voters=, the
+inverse Herfindahl index =1 / sum c_i^2=: the number of equal voices the
+settle is worth.
 
 A crowd is wise only while no voice keeps a fixed share of the result as
 it grows (Golub and Jackson, doi:10.1257/mic.2.1.112), and DeGroot's
@@ -301,10 +301,10 @@ count on a panel of similar voters. Empirical Bayes shrinks each voter's
 accuracy toward the panel's pooled accuracy (Efron and Morris,
 doi:10.1080/01621459.1975.10479864); the prior weakens as the records
 spread beyond sampling noise. That noise is the pooled variance times
-=N / (N - 1)=, with =N= the ballots the records hold, divided by each
-record's length and averaged. The spread between voters cannot be told
-from noise on a panel's first outcome. Every voter weighs the same. A long
-record keeps the differences it shows.
+=N / (N - 1)=, divided by each record's length and averaged, where =N=
+counts the ballots the records hold. The spread between voters cannot be
+told from noise on a panel's first outcome. Every voter weighs the same. A
+long record keeps the differences it shows.
 
 =examples/correlation_history.rs= measures the decision after =h= named
 outcomes, 4000 seeds a cell:
@@ -353,10 +353,10 @@ answers already has most of what debate gains, and debate alone leaves
 expected correctness where it was (Choi, Zhu and Li,
 doi:10.48550/arXiv.2508.17536).
 
-The ballots a settle reads should therefore be cast before any voter sees
-another's. The seat's panel hands each persona a brief that carries no
-ballot and records each vote before it prints the tally. The settle does
-the listening afterwards, where it can be weighed and reported.
+The ballots a settle reads should be cast before any voter sees another's.
+The seat's panel hands each persona a brief that carries no ballot and
+records each vote before it prints the tally. The settle does the listening
+afterwards, where it can be weighed and reported.
 
 * Derivations, proofs and certificates
 

@@ -52,12 +52,11 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 - `examples/synthetic_voters.rs` scores the record shrunk as `ljos learn`
   keeps it: 0.929 on nine voters and 0.971 on fifteen, against 0.934 and
   0.974 for `calibrate`.
-- `derive/` checks the math three ways. SymPy checks the identities, among
-  them the gate's `m rho^2` as the two-by-two chi-square. Lean 4 with
-  Mathlib proves the contraction, the stopping bound, the simplex, Nitzan
-  and Paroush's theorem and the self-trust weights. Sollya certifies the
-  binary64 floor, the round counts and the tie allowance for any number of
-  options.
+- SymPy checks the identities under `derive/`, among them the gate's
+  `m rho^2` as the two-by-two chi-square. Lean 4 with Mathlib proves the
+  contraction, the stopping bound, the simplex, Nitzan and Paroush's
+  theorem and the self-trust weights. Sollya certifies the binary64 floor,
+  the round counts and the tie allowance for any number of options.
 
 ## 0.6.0 (2026-09-19)
 
