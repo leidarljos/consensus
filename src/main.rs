@@ -324,6 +324,16 @@ fn main() -> Result<()> {
                 )?;
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             } else if engine == "energy" {
+                let any_anchor = ballots
+                    .iter()
+                    .any(|b| anchors.get(&b.agent).copied().unwrap_or(susceptibility) < 1.0);
+                if !any_anchor {
+                    bail!(
+                        "--engine energy needs a voter below susceptibility 1: with none the \
+                         energy is flat along every consensus and names no settle; use \
+                         --engine iterate or exact, or pass --susceptibility"
+                    );
+                }
                 let outcome = settle_energy(
                     &ballots,
                     &trust,

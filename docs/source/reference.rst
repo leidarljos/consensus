@@ -16,7 +16,7 @@ Flag                                Meaning
 ``--susceptibility-of JSON``        ``\{agent: s\}``, a persona's own anchor per voter
 ``--epsilon E [--epsilon-of JSON]`` bounded confidence instead of the trust graph: each voter averages only voters within L1 distance ``E`` of its own opinion
 ``--max-iter N``, ``--tol T``       the fixed-point budget; defaults 200 and 1e-9
-``--engine NAME``                   ``iterate`` (the default) steps to the fixed point and stops on a bound; ``exact`` reads it off in closed form; ``energy`` minimises the Friedkin-Johnsen energy under a constant ``--self-weight``, without ``--discount-of``
+``--engine NAME``                   ``iterate`` (the default) steps to the fixed point and stops on a bound; ``exact`` reads it off in closed form; ``energy`` minimises the Friedkin-Johnsen energy under a constant ``--self-weight``, without ``--discount-of``, and needs a voter below susceptibility 1
 ``--seldon [--out DIR]``            write Seldon inputs, run ``seldon``, read the result
 =================================== ==============================================================================================================================================================================================================================
 
