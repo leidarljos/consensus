@@ -4,6 +4,12 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- A tie is never settled. Two voters on opposite options converged in one
+  round to an even split, and `settle` reported `settled: true` beside
+  `tie: true`, so a reader of `settled` took a split for a decision.
+  `settled` now means converged with one option ahead. The new
+  `converged` field keeps the old reading, within `--tol` of the fixed
+  point. The energy and Seldon engines report `margin` and `tie` too.
 - One ballot per voter: a vote dump naming a voter with two choices, or
   with a blank name or choice, is refused, and names are trimmed. A
   library caller that passes two ballots for one voter splits that voter's

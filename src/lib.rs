@@ -18,7 +18,14 @@ pub struct Outcome {
     pub options: Vec<String>,
     pub shares: Vec<f64>,
     pub rounds: usize,
+    /// The settle reached a position to act on: the engine converged and
+    /// one option leads. A tie is never settled, however still the
+    /// opinions are.
     pub settled: bool,
+    /// The engine stopped at its fixed point within `--tol`, whether or not
+    /// an option leads. `settled` is this and not `tie`.
+    #[serde(default)]
+    pub converged: bool,
     /// How far from settled the engine stopped: for the energy engine the
     /// largest component of the energy's gradient at the point returned.
     /// Zero when an engine does not measure it.
@@ -167,7 +174,7 @@ fn opening(agents: &[String], options: &[String], ballots: &[Ballot]) -> Vec<Vec
 }
 
 /// The leading share less the next, and whether that gap is within `open`.
-fn margin_of(shares: &[f64], open: f64) -> (f64, bool) {
+pub(crate) fn margin_of(shares: &[f64], open: f64) -> (f64, bool) {
     let mut ranked = shares.to_vec();
     ranked.sort_by(|a, b| b.total_cmp(a));
     let margin = if ranked.len() >= 2 {
@@ -232,6 +239,7 @@ pub fn settle_bounded(
             shares: vec![],
             rounds: 0,
             settled: true,
+            converged: true,
             residual: 0.0,
             engine: "empty".into(),
             polarization: 0.0,
@@ -305,7 +313,8 @@ pub fn settle_bounded(
         options,
         shares,
         rounds,
-        settled,
+        settled: settled && !tie,
+        converged: settled,
         residual: 0.0,
         engine: "bounded-confidence".into(),
         polarization,
@@ -845,6 +854,7 @@ fn empty(options: Vec<String>) -> Outcome {
     Outcome {
         options,
         settled: true,
+        converged: true,
         engine: "empty".into(),
         ..Outcome::default()
     }
@@ -910,7 +920,8 @@ fn outcome_of(
         options: setup.options,
         shares,
         rounds,
-        settled,
+        settled: settled && !tie,
+        converged: settled,
         residual,
         engine: engine.into(),
         polarization,
@@ -1019,6 +1030,7 @@ pub fn settle_exact(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &
     let Ok(p) = exact::fixed_point(&setup.w, &setup.pull) else {
         let mut out = settle_with(ballots, trust, opts);
         out.settled = false;
+        out.converged = false;
         return out;
     };
     let x = apply(&p, &setup.x0);
@@ -1128,6 +1140,7 @@ pub fn settle_energy(
             shares: vec![],
             rounds: 0,
             settled: true,
+            converged: true,
             residual: 0.0,
             engine: "empty".into(),
             polarization: 0.0,
@@ -1157,6 +1170,7 @@ pub fn settle_energy(
                 *share += cell / n as f64;
             }
         }
+        let (margin, tie) = margin_of(&shares, 4.0 * n as f64 * f64::EPSILON);
         return Outcome {
             options,
             shares,
@@ -1164,6 +1178,8 @@ pub fn settle_energy(
             settled: false,
             residual: f64::NAN,
             engine: "fj-energy".into(),
+            margin,
+            tie,
             ..Outcome::default()
         };
     }
@@ -1370,15 +1386,21 @@ pub fn settle_energy(
         }
     }
     let (polarization, disagreement) = spread(&x, &w);
+    // The gradient bounds no distance to the minimum, so only rounding
+    // separates two shares here.
+    let (margin, tie) = margin_of(&shares, 4.0 * n as f64 * f64::EPSILON);
     Outcome {
         options,
         shares,
         rounds,
-        settled,
+        settled: settled && !tie,
+        converged: settled,
         residual,
         engine: "fj-energy".into(),
         polarization,
         disagreement,
+        margin,
+        tie,
         ..Outcome::default()
     }
 }
@@ -1729,7 +1751,7 @@ mod tests {
         let iterated = settle_anchored(&ballots, &rows, 0.5, 0.7, &anchors, 500, 1e-10);
         let energy = settle_energy(&ballots, &rows, 0.5, 0.7, &anchors, 500, 1e-8);
         assert_eq!(energy.engine, "fj-energy");
-        assert!(energy.settled, "{energy:?}");
+        assert!(energy.converged, "{energy:?}");
         for (a, b) in iterated.shares.iter().zip(&energy.shares) {
             assert!((a - b).abs() < 1e-5, "{iterated:?} vs {energy:?}");
         }
@@ -1848,7 +1870,7 @@ mod tests {
         ];
         let trust = vec![("a".into(), "b".into(), 1.0), ("b".into(), "a".into(), 1.0)];
         let out = settle(&ballots, &trust, 0.5, 1.0, 200, 1e-9);
-        assert!(out.settled);
+        assert!(out.converged);
         assert_eq!(out.engine, "degroot-fj");
         assert!((out.shares[0] - 0.5).abs() < 1e-6);
         assert!((out.shares[1] - 0.5).abs() < 1e-6);
@@ -1868,7 +1890,7 @@ mod tests {
         ];
         let trust = vec![("a".into(), "b".into(), 1.0), ("b".into(), "a".into(), 1.0)];
         let out = settle(&ballots, &trust, 0.5, 0.0, 200, 1e-9);
-        assert!(out.settled);
+        assert!(out.converged);
         assert_eq!(out.engine, "degroot-fj");
         assert_eq!(out.rounds, 1);
         assert!((out.shares[0] - 0.5).abs() < 1e-12);
@@ -1956,7 +1978,7 @@ mod tests {
             })
             .collect();
         let out = settle(&ballots, &[], 0.5, 1.0, 200, 1e-9);
-        assert!(out.settled);
+        assert!(out.converged);
         // A count is everyone listening to itself alone: nobody moves.
         let own: Vec<(String, String, f64)> = ["a", "b", "c"]
             .iter()
@@ -2001,7 +2023,7 @@ mod tests {
         let tol = 1e-9;
         let predicted = fj_rounds_to_tol(bound, tol).unwrap();
         let out = settle_anchored(&ballots, &trust, 0.5, 0.5, &anchors, 500, tol);
-        assert!(out.settled);
+        assert!(out.converged);
         assert!(out.rounds <= predicted, "{} vs {predicted}", out.rounds);
     }
 
@@ -2077,7 +2099,7 @@ mod tests {
         assert!(narrow.polarization > 0.9, "{}", narrow.polarization);
         let wide = settle_bounded(&ballots, 2.0, &std::collections::BTreeMap::new(), 100, 1e-9);
         assert!(wide.polarization < 1e-6, "{}", wide.polarization);
-        assert!(wide.settled);
+        assert!(wide.converged);
     }
 
     /// The voter that agrees with the hidden majority on every item is
@@ -2198,7 +2220,7 @@ mod tests {
                     ..opts.clone()
                 },
             );
-            assert!(iterated.settled, "{name}: {iterated:?}");
+            assert!(iterated.converged, "{name}: {iterated:?}");
             for (a, b) in iterated.shares.iter().zip(&out.shares) {
                 assert!((a - b).abs() <= 2e-9, "{name}: {a} vs {b}");
             }
@@ -2291,7 +2313,7 @@ mod tests {
             };
             let it = settle_with(&ballots, &rows, &opts);
             let ex = settle_exact(&ballots, &rows, &opts);
-            assert!(it.settled && it.residual < tol, "{it:?}");
+            assert!(it.converged && it.residual < tol, "{it:?}");
             let true_gap = it
                 .shares
                 .iter()
@@ -2331,7 +2353,7 @@ mod tests {
         };
         let it = settle_with(&ballots, &rows, &opts);
         assert_eq!(it.rounds, 36, "{it:?}");
-        assert!(it.settled && it.residual < 1e-9, "{it:?}");
+        assert!(it.converged && it.residual < 1e-9, "{it:?}");
         let ex = settle_exact(&ballots, &rows, &opts);
         for (a, b) in it.shares.iter().zip(&ex.shares) {
             assert!((a - b).abs() < 1e-9);
@@ -2360,6 +2382,46 @@ mod tests {
             .collect();
         let out = settle_with(&clear, &[], &Opts::default());
         assert!(!out.tie && (out.margin - 0.5).abs() < 1e-9, "{out:?}");
+    }
+
+    /// A 1-1 tie between opposite options converges in one round to an even
+    /// split. That is a tie, and no engine reports it as settled; the same
+    /// pair with one more voter for one side is.
+    #[test]
+    fn a_tie_is_never_settled() {
+        let ballots = |pairs: &[(&str, &str)]| -> Vec<Ballot> {
+            pairs
+                .iter()
+                .map(|(a, c)| Ballot {
+                    agent: a.to_string(),
+                    choice: c.to_string(),
+                })
+                .collect()
+        };
+        let tied = ballots(&[("eessi", "keep"), ("inky", "drop")]);
+        let none = std::collections::BTreeMap::new();
+        let opts = Opts::default();
+        for out in [
+            settle_with(&tied, &[], &opts),
+            settle_exact(&tied, &[], &opts),
+            settle_bounded(&tied, 2.0, &none, 200, 1e-9),
+            settle_energy(&tied, &[], 0.5, 0.5, &none, 200, 1e-9),
+        ] {
+            assert!(out.tie, "{out:?}");
+            assert!(out.converged, "{out:?}");
+            assert!(!out.settled, "a tie came out settled: {out:?}");
+        }
+        // With no anchor the energy names no settle at all, and the even
+        // split it reports is still a tie.
+        let flat = settle_energy(&tied, &[], 0.5, 1.0, &none, 200, 1e-9);
+        assert!(flat.tie && !flat.converged && !flat.settled, "{flat:?}");
+        let led = ballots(&[("eessi", "keep"), ("inky", "drop"), ("ljos-bot", "keep")]);
+        for out in [
+            settle_with(&led, &[], &opts),
+            settle_exact(&led, &[], &opts),
+        ] {
+            assert!(!out.tie && out.settled, "{out:?}");
+        }
     }
 
     /// Three clones of one judge outvote two independent voters on a count.
@@ -2479,7 +2541,7 @@ mod tests {
     #[test]
     fn the_runtime_vote_settles_with_the_minority_still_visible() {
         let out = runtime_vote();
-        assert!(out.settled, "{out:?}");
+        assert!(out.converged, "{out:?}");
         assert_eq!(out.options, ["erlang-plugin", "go-rewrite", "herdr"]);
         let share = |name: &str| out.shares[out.options.iter().position(|o| o == name).unwrap()];
         assert!(share("herdr") > share("erlang-plugin"), "{out:?}");
