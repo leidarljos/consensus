@@ -4,6 +4,20 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- One ballot per voter: a vote dump naming a voter with two choices, or
+  with a blank name or choice, is refused, and names are trimmed. A
+  library caller that passes two ballots for one voter splits that voter's
+  unit rather than counting it twice.
+- A negative or infinite trust weight is refused on parse and ignored by
+  `influence_matrix_with`, as is a negative self-weight. Such a weight
+  pushed shares outside `[0, 1]`.
+- `settle` refuses an empty ballot list and out-of-range `--self-weight`,
+  `--susceptibility`, `--epsilon` and `--tol` instead of clamping them.
+  `--epsilon-of` takes bounds up to 2, the L1 distance between opposite
+  ballots.
+- Bounded confidence reports `margin` and `tie`.
+- The first-minute example shows the output `settle` prints.
+
 - `fj_contraction_bound` and `fj_rounds_to_tol`, and
   `ljos-consensus rounds --agents ...`: the contraction bound over the
   voters and the round count it guarantees, or the null count with its
@@ -15,7 +29,7 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   voter. `discursive_dilemma` is the premise-wise majority against the
   conclusion. `runtime_vote` is the anchored panel over herdr,
   erlang-plugin and go-rewrite.
-- `cargo binstall ljos-consensus` takes only the release tarball, and
+- `cargo binstall --locked ljos-consensus` takes only the release tarball, and
   the release builds `x86_64-apple-darwin` and `aarch64-unknown-linux-gnu`
   tarballs too.
 

@@ -5,7 +5,7 @@ Three voters, two options, and a trust graph that changes the answer.
 
 .. code:: console
 
-   $ cargo binstall ljos-consensus
+   $ cargo binstall --locked ljos-consensus
    $ ljos-consensus --help
 
 The crate is on crates.io as ``ljos-consensus``. The name ``consensus`` is

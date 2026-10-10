@@ -6,7 +6,7 @@ Three voters, two options, and a trust graph that changes the answer.
 * 0. Install
 
 #+begin_src console
-$ cargo binstall ljos-consensus
+$ cargo binstall --locked ljos-consensus
 $ ljos-consensus --help
 #+end_src
 
