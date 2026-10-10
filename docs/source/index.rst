@@ -31,7 +31,7 @@ Install
 
 .. code:: console
 
-   $ cargo binstall ljos-consensus
+   $ cargo binstall --locked ljos-consensus
    $ ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
 
 First minute
@@ -39,9 +39,9 @@ First minute
 
 .. code:: console
 
-   $ cargo binstall ljos-consensus
-   $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"hold"}]'
-   {"options":["hold","ship"],"shares":[0.5,0.5],"rounds":2,"settled":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0}
+   $ cargo binstall --locked ljos-consensus
+   $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"hold"}]' | jq -c
+   {"options":["hold","ship"],"shares":[0.5,0.5],"rounds":1,"settled":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0,"agents":["alice","bob"],"influence":[0.5,0.5],"effective_voters":2.0,"margin":0.0,"tie":true}
 
 The :doc:`tutorial <getting-started>` adds trust, then an anchor.
 The seat verb is ``ljos consensus``.

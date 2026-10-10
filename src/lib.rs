@@ -111,7 +111,71 @@ pub fn ballots_from_json(raw: &str) -> Result<Vec<Ballot>, String> {
             .to_string();
         out.push(Ballot { agent, choice });
     }
+    one_ballot_each(out)
+}
+
+/// The ballots with names trimmed, one per voter. A voter named twice with
+/// the same choice counts once; a voter named with two choices, or a blank
+/// name or choice, is an error. vissue keeps one ballot per identity and a
+/// recast replaces it, so a dump that breaks this was edited by hand.
+pub fn one_ballot_each(ballots: Vec<Ballot>) -> Result<Vec<Ballot>, String> {
+    let mut seen: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    let mut out = Vec::new();
+    for b in ballots {
+        let agent = b.agent.trim().to_string();
+        let choice = b.choice.trim().to_string();
+        if agent.is_empty() {
+            return Err("vote json: a ballot has a blank agent".into());
+        }
+        if choice.is_empty() {
+            return Err(format!("vote json: {agent} has a blank choice"));
+        }
+        match seen.get(&agent) {
+            Some(prior) if *prior == choice => continue,
+            Some(prior) => {
+                return Err(format!(
+                    "vote json: {agent} voted twice, for {prior:?} and {choice:?}; one ballot per voter"
+                ));
+            }
+            None => {}
+        }
+        seen.insert(agent.clone(), choice.clone());
+        out.push(Ballot { agent, choice });
+    }
     Ok(out)
+}
+
+/// Each voter's opening opinion: its ballot as one unit of mass. A voter
+/// with several ballots splits that unit across them rather than casting
+/// one unit per ballot, so naming a voter twice adds no weight.
+fn opening(agents: &[String], options: &[String], ballots: &[Ballot]) -> Vec<Vec<f64>> {
+    let mut x0 = vec![vec![0.0; options.len()]; agents.len()];
+    for b in ballots {
+        let i = agents.iter().position(|a| *a == b.agent).unwrap();
+        let k = options.iter().position(|o| *o == b.choice).unwrap();
+        x0[i][k] = 1.0;
+    }
+    for row in &mut x0 {
+        let s: f64 = row.iter().sum();
+        if s > 1.0 {
+            for x in row.iter_mut() {
+                *x /= s;
+            }
+        }
+    }
+    x0
+}
+
+/// The leading share less the next, and whether that gap is within `open`.
+fn margin_of(shares: &[f64], open: f64) -> (f64, bool) {
+    let mut ranked = shares.to_vec();
+    ranked.sort_by(|a, b| b.total_cmp(a));
+    let margin = if ranked.len() >= 2 {
+        ranked[0] - ranked[1]
+    } else {
+        ranked.first().copied().unwrap_or(0.0)
+    };
+    (margin, ranked.len() >= 2 && margin <= open)
 }
 
 /// Polarization and disagreement of a final opinion profile over the trust
@@ -179,15 +243,11 @@ pub fn settle_bounded(
         .iter()
         .map(|a| epsilons.get(a).copied().unwrap_or(epsilon).max(0.0))
         .collect();
-    let mut x = vec![vec![0.0; m]; n];
-    for b in ballots {
-        let i = agents.iter().position(|a| *a == b.agent).unwrap();
-        let k = options.iter().position(|o| *o == b.choice).unwrap();
-        x[i][k] = 1.0;
-    }
+    let mut x = opening(&agents, &options, ballots);
     let mut rounds = 0;
     let mut settled = false;
     let mut last_w = vec![vec![0.0; n]; n];
+    let mut last_step = f64::INFINITY;
     for r in 1..=max_iter {
         let mut nxt = vec![vec![0.0; m]; n];
         let mut w = vec![vec![0.0; n]; n];
@@ -218,6 +278,7 @@ pub fn settle_bounded(
             .fold(0.0_f64, f64::max);
         x = nxt;
         last_w = w;
+        last_step = err;
         rounds = r;
         if err < tol {
             settled = true;
@@ -237,6 +298,9 @@ pub fn settle_bounded(
         }
     }
     let (polarization, disagreement) = spread(&x, &last_w);
+    // The last step moved each opinion by at most `last_step`, which is what
+    // the shares are known to; no step at all orders nothing.
+    let (margin, tie) = margin_of(&shares, 2.0 * last_step + 4.0 * n as f64 * f64::EPSILON);
     Outcome {
         options,
         shares,
@@ -246,6 +310,8 @@ pub fn settle_bounded(
         engine: "bounded-confidence".into(),
         polarization,
         disagreement,
+        margin,
+        tie,
         ..Outcome::default()
     }
 }
@@ -543,7 +609,7 @@ pub fn trust_from_json(raw: &str) -> Result<Vec<(String, String, f64)>, String> 
             let weight = row[2]
                 .as_f64()
                 .ok_or("trust json: weight must be a number")?;
-            out.push((from, to, weight));
+            out.push((from, to, usable_weight(weight)?));
             continue;
         }
         let from = item
@@ -560,9 +626,22 @@ pub fn trust_from_json(raw: &str) -> Result<Vec<(String, String, f64)>, String> 
             .get("weight")
             .and_then(|x| x.as_f64())
             .ok_or("trust json: missing weight")?;
-        out.push((from, to, weight));
+        out.push((from, to, usable_weight(weight)?));
     }
     Ok(out)
+}
+
+/// A trust weight is how much one voter listens to another: finite and not
+/// negative. A negative weight would push opinions outside `[0, 1]` and
+/// shares below zero.
+fn usable_weight(w: f64) -> Result<f64, String> {
+    if w.is_finite() && w >= 0.0 {
+        Ok(w)
+    } else {
+        Err(format!(
+            "trust json: a weight must be finite and not negative, got {w}"
+        ))
+    }
 }
 
 /// Row-stochastic trust. Missing self-weight is filled with `self_weight`.
@@ -655,7 +734,10 @@ pub fn influence_matrix_with(
         ) else {
             continue;
         };
-        w[i][j] += *wt;
+        // A weight that is negative or not finite listens to nobody.
+        if wt.is_finite() && *wt > 0.0 {
+            w[i][j] += *wt;
+        }
     }
     let inbound: Vec<Option<f64>> = (0..n)
         .map(|j| {
@@ -676,10 +758,11 @@ pub fn influence_matrix_with(
             row.clone_from(&d);
         } else {
             if row[i] == 0.0 {
-                row[i] = match self_trust {
+                let own = match self_trust {
                     SelfTrust::Constant(sw) => sw,
                     SelfTrust::Earned(fallback) => inbound[i].unwrap_or(fallback),
                 };
+                row[i] = if own.is_finite() { own.max(0.0) } else { 0.0 };
             }
             for (x, dj) in row.iter_mut().zip(&d) {
                 *x *= dj;
@@ -748,12 +831,7 @@ fn setup(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Op
                 .clamp(0.0, 1.0)
         })
         .collect();
-    let mut x0 = vec![vec![0.0; options.len()]; agents.len()];
-    for b in ballots {
-        let i = agents.iter().position(|a| *a == b.agent).unwrap();
-        let k = options.iter().position(|o| *o == b.choice).unwrap();
-        x0[i][k] = 1.0;
-    }
+    let x0 = opening(&agents, &options, ballots);
     Some(Setup {
         agents,
         options,
@@ -820,19 +898,13 @@ fn outcome_of(
     }
     let (polarization, disagreement) = spread(x, &setup.w);
     let influence = p.map(exact::social_power).unwrap_or_default();
-    let mut ranked = shares.clone();
-    ranked.sort_by(|a, b| b.total_cmp(a));
-    let margin = if ranked.len() >= 2 {
-        ranked[0] - ranked[1]
-    } else {
-        ranked.first().copied().unwrap_or(0.0)
-    };
     // Where `residual` bounds the distance to the fixed point, every opinion
     // is within it, so every share is too, and the gap between two shares is
     // off by at most twice `residual`. `residual` bounds nothing on the
     // last-step fallback; on the exact path it is one step's defect.
     // Rounding adds a few ulps per voter.
     let open = 2.0 * residual + 4.0 * setup.agents.len() as f64 * f64::EPSILON;
+    let (margin, tie) = margin_of(&shares, open);
     Outcome {
         effective_voters: exact::effective_voters(&influence),
         options: setup.options,
@@ -846,7 +918,7 @@ fn outcome_of(
         agents: setup.agents,
         influence,
         margin,
-        tie: ranked.len() >= 2 && margin <= open,
+        tie,
     }
 }
 
@@ -1068,12 +1140,7 @@ pub fn settle_energy(
                 .clamp(0.0, 1.0)
         })
         .collect();
-    let mut x0 = vec![vec![0.0; m]; n];
-    for b in ballots {
-        let i = agents.iter().position(|a| *a == b.agent).unwrap();
-        let k = options.iter().position(|o| *o == b.choice).unwrap();
-        x0[i][k] = 1.0;
-    }
+    let x0 = opening(&agents, &options, ballots);
     // Pair weights, symmetrised; the diagonal is not a pair.
     let mut pair = vec![vec![0.0; n]; n];
     for i in 0..n {
@@ -1504,6 +1571,87 @@ pub fn runtime_vote() -> Outcome {
 
 #[cfg(test)]
 mod tests {
+    fn ballot(agent: &str, choice: &str) -> Ballot {
+        Ballot {
+            agent: agent.into(),
+            choice: choice.into(),
+        }
+    }
+
+    /// One voter, one unit of mass: a dump that names a voter with two
+    /// choices is refused, and a caller that hands the library two ballots
+    /// for one voter splits that voter's unit instead of doubling it.
+    #[test]
+    fn a_second_ballot_adds_no_weight() {
+        let err = ballots_from_json(
+            r#"[{"agent":"a","choice":"x"},{"agent":"a","choice":"y"},{"agent":"b","choice":"y"}]"#,
+        )
+        .unwrap_err();
+        assert!(err.contains("a voted twice"), "{err}");
+        let same = ballots_from_json(
+            r#"[{"agent":" a ","choice":"x "},{"agent":"a","choice":"x"},{"agent":"b","choice":"y"}]"#,
+        )
+        .unwrap();
+        assert_eq!(same.len(), 2);
+        assert!(ballots_from_json(r#"[{"agent":" ","choice":"x"}]"#).is_err());
+        assert!(ballots_from_json(r#"[{"agent":"a","choice":""}]"#).is_err());
+
+        let stuffed = [ballot("a", "x"), ballot("a", "y"), ballot("b", "y")];
+        let out = settle_with(&stuffed, &[], &Opts::default());
+        let y = out.options.iter().position(|o| o == "y").unwrap();
+        assert!((out.shares[y] - 0.75).abs() < 1e-9, "{:?}", out.shares);
+        let bounded = settle_bounded(&stuffed, 2.0, &BTreeMap::new(), 200, 1e-9);
+        assert!(
+            (bounded.shares[y] - 0.75).abs() < 1e-9,
+            "{:?}",
+            bounded.shares
+        );
+    }
+
+    /// A negative or infinite weight is refused on parse and listens to
+    /// nobody in the library, so every row stays stochastic and every share
+    /// stays in [0, 1].
+    #[test]
+    fn a_negative_weight_cannot_push_a_share_outside_the_simplex() {
+        assert!(trust_from_json(r#"[{"from":"a","to":"b","weight":-0.2}]"#).is_err());
+        assert!(trust_from_json(r#"[["a","b",-1]]"#).is_err());
+        let ballots = [ballot("a", "x"), ballot("b", "y"), ballot("c", "y")];
+        let rows = vec![("a".to_string(), "b".to_string(), 1.0)];
+        let opts = Opts {
+            self_trust: SelfTrust::Constant(-0.9),
+            ..Opts::default()
+        };
+        let out = settle_with(&ballots, &rows, &opts);
+        assert!(
+            out.shares.iter().all(|s| (0.0..=1.0).contains(s)),
+            "{:?}",
+            out.shares
+        );
+        let neg = vec![("a".to_string(), "b".to_string(), -0.2)];
+        let out = settle_with(&ballots, &neg, &Opts::default());
+        assert!(
+            out.shares.iter().all(|s| (0.0..=1.0).contains(s)),
+            "{:?}",
+            out.shares
+        );
+        for row in influence_matrix(&["a".into(), "b".into()], &neg, -3.0) {
+            assert!(row.iter().all(|w| *w >= 0.0), "{row:?}");
+            assert!((row.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        }
+    }
+
+    /// Bounded confidence reports the margin and the tie as the other
+    /// engines do: an even split is a tie, not a lead of zero.
+    #[test]
+    fn bounded_confidence_reports_a_tie() {
+        let even = [ballot("a", "x"), ballot("b", "y")];
+        let out = settle_bounded(&even, 0.5, &BTreeMap::new(), 200, 1e-9);
+        assert!(out.tie && out.margin.abs() < 1e-12, "{out:?}");
+        let lead = [ballot("a", "x"), ballot("b", "x"), ballot("c", "y")];
+        let out = settle_bounded(&lead, 0.5, &BTreeMap::new(), 200, 1e-9);
+        assert!(!out.tie && out.margin > 0.3, "{out:?}");
+    }
+
     #[test]
     fn the_energy_settle_agrees_with_the_iteration_on_symmetric_rows() {
         let ballots = vec![
