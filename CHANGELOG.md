@@ -15,6 +15,9 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   voter. `discursive_dilemma` is the premise-wise majority against the
   conclusion. `runtime_vote` is the anchored panel over herdr,
   erlang-plugin and go-rewrite.
+- `cargo binstall ljos-consensus` takes only the release tarball, and
+  the release builds `x86_64-apple-darwin` and `aarch64-unknown-linux-gnu`
+  tarballs too.
 
 ## 0.7.0 (2026-10-08)
 

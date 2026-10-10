@@ -11,6 +11,9 @@ description = "DeGroot / Friedkin–Johnsen over a trust graph; Seldon ODE when 
 pkg-url = "{ repo }/releases/download/v{ version }/consensus-v{ version }-{ target }.tar.gz"
 bin-dir = "consensus-v{ version }-{ target }/{ bin }{ binary-ext }"
 pkg-fmt = "tgz"
+# The release tarball or nothing. A target without one fails here, and
+# `cargo install` builds it from source.
+disabled-strategies = ["quick-install", "compile"]
 
 [[bin]]
 name = "ljos-consensus"
