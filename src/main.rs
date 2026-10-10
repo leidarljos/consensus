@@ -286,6 +286,10 @@ fn main() -> Result<()> {
             engine,
         } => {
             let ballots = load_ballots(issue.as_deref(), ballots.as_deref())?;
+            if ballots.is_empty() {
+                bail!("settle: no ballots, so nothing to settle");
+            }
+            check_settle_args(self_weight, susceptibility, epsilon, tol)?;
             let anchors = match susceptibility_of.as_deref() {
                 Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
                 None => std::collections::BTreeMap::new(),
@@ -296,7 +300,7 @@ fn main() -> Result<()> {
             };
             if let Some(eps) = epsilon {
                 let bounds = match epsilon_of.as_deref() {
-                    Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                    Some(raw) => bounds_from_json(raw)?,
                     None => std::collections::BTreeMap::new(),
                 };
                 let outcome = ljos_consensus::settle_bounded(&ballots, eps, &bounds, max_iter, tol);
@@ -358,6 +362,42 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// The settle's numbers, refused when out of range rather than clamped
+/// where the reader cannot see it.
+fn check_settle_args(
+    self_weight: f64,
+    susceptibility: f64,
+    epsilon: Option<f64>,
+    tol: f64,
+) -> Result<()> {
+    if !(self_weight.is_finite() && self_weight >= 0.0) {
+        bail!("--self-weight must be finite and not negative, got {self_weight}");
+    }
+    if !(0.0..=1.0).contains(&susceptibility) {
+        bail!("--susceptibility must be in [0, 1], got {susceptibility}");
+    }
+    if let Some(eps) = epsilon {
+        if !(0.0..=2.0).contains(&eps) {
+            bail!("--epsilon is an L1 distance between opinions, in [0, 2], got {eps}");
+        }
+    }
+    if !(tol.is_finite() && tol > 0.0) {
+        bail!("--tol must be positive, got {tol}");
+    }
+    Ok(())
+}
+
+/// A confidence bound per agent, each an L1 distance in `[0, 2]`: two
+/// opposite ballots are 2 apart.
+fn bounds_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>> {
+    let map: std::collections::BTreeMap<String, f64> =
+        serde_json::from_str(raw).context("--epsilon-of: a JSON object of agent to bound")?;
+    if let Some((a, e)) = map.iter().find(|(_, e)| !(0.0..=2.0).contains(*e)) {
+        bail!("--epsilon-of: {a} must be in [0, 2], got {e}");
+    }
+    Ok(map)
 }
 
 /// A discount per agent, each a share in `[0, 1]`.
