@@ -1086,21 +1086,27 @@ pub fn fj_rounds_to_tol(bound: f64, tol: f64) -> Option<usize> {
 }
 
 /// The Friedkin-Johnsen settle as the minimum of an energy, found by
-/// rgmin rather than by iteration. For symmetric influence the FJ
-/// equilibrium is the unique minimiser of
-/// `sum_i (1 - s_i) |x_i - x0_i|^2 + (1/2) sum_ij M_ij |x_i - x_j|^2` with
-/// `M_ij = s_i W_ij + s_j W_ji` (Bindel, Kleinberg and Oren,
-/// doi:10.1016/j.geb.2014.06.004): the anchor terms hold each voter near
-/// its ballot by how little it listens, the pair terms pull listeners
-/// together by how much. Opinions live on the simplex through a softmax
-/// of free logits, and L-BFGS descends the energy. For asymmetric rows
-/// this is the settle of the symmetrised influence, which the iteration
-/// is not; the two agree when the rows are symmetric, and a test holds
-/// them to it. What the energy form buys: the settle is a stationary
-/// point of a stated function, so a constraint is a term, a stubborn
-/// voter is an anchor at one, and two settled states of a polarised
-/// group are two minima with a saddle between them that a minimum-mode
-/// search can find.
+/// rgmin rather than by iteration. Dividing voter i's step
+/// `x_i = s_i (W x)_i + (1 - s_i) x0_i` by `s_i` makes the fixed point the
+/// stationary point of
+/// `(1/2) sum_i ((1 - s_i) / s_i) |x_i - x0_i|^2 + (1/4) sum_ij W_ij |x_i - x_j|^2`
+/// when `W` is symmetric (Bindel, Kleinberg and Oren,
+/// doi:10.1016/j.geb.2014.06.004, write the same game with an innate
+/// weight per voter, which here is `(1 - s_i) / s_i`). The anchor terms
+/// hold each voter near its ballot by how little it listens, the pair
+/// terms pull voters together. A voter at `s_i = 0` keeps its ballot and
+/// is held there, not minimised over. Opinions live on the simplex
+/// through a softmax of free logits, and L-BFGS descends the energy. For
+/// asymmetric rows this settles the symmetrised influence
+/// `(W_ij + W_ji) / 2`, which the iteration does not; the two agree when
+/// the rows are symmetric, and a test holds them to it with unequal
+/// anchors. With every voter at `s_i = 1` there is no anchor term, every
+/// consensus is a minimum, and the point returned would depend on where
+/// the descent started; that case comes back unsettled with the plain
+/// tally's shares, and the CLI refuses it. What the energy form buys: the
+/// settle is a stationary point of a stated function, so a constraint is
+/// a term, and two settled states of a polarised group are two minima
+/// with a saddle between them that a minimum-mode search can find.
 pub fn settle_energy(
     ballots: &[Ballot],
     trust: &[(String, String, f64)],
@@ -1141,15 +1147,40 @@ pub fn settle_energy(
         })
         .collect();
     let x0 = opening(&agents, &options, ballots);
-    // Pair weights, symmetrised; the diagonal is not a pair.
+    if pull.iter().all(|s| *s >= 1.0) {
+        // No anchor term: the energy is flat along every consensus, so
+        // its minimum names no settle. Say so rather than return wherever
+        // the descent stopped.
+        let mut shares = vec![0.0; m];
+        for row in &x0 {
+            for (share, cell) in shares.iter_mut().zip(row) {
+                *share += cell / n as f64;
+            }
+        }
+        return Outcome {
+            options,
+            shares,
+            rounds: 0,
+            settled: false,
+            residual: f64::NAN,
+            engine: "fj-energy".into(),
+            ..Outcome::default()
+        };
+    }
+    // Pair weights, symmetrised; the diagonal is not a pair. Each
+    // unordered pair enters once as `pair / 2 * |x_i - x_j|^2`, so the
+    // gradient on `x_i` is `sum_j pair_ij (x_i - x_j)`: the step divided
+    // by `s_i` when the rows are symmetric.
     let mut pair = vec![vec![0.0; n]; n];
     for i in 0..n {
         for j in 0..n {
             if i != j {
-                pair[i][j] = pull[i] * w[i][j] + pull[j] * w[j][i];
+                pair[i][j] = 0.5 * (w[i][j] + w[j][i]);
             }
         }
     }
+    // A voter that does not listen keeps its ballot: held, not descended.
+    let pinned: Vec<bool> = pull.iter().map(|s| *s <= 0.0).collect();
 
     /// Weight of the gauge term on each row's summed logits.
     const GAUGE: f64 = 1e-2;
@@ -1160,12 +1191,16 @@ pub fn settle_energy(
         x0: Vec<Vec<f64>>,
         anchor: Vec<f64>,
         pair: Vec<Vec<f64>>,
+        pinned: Vec<bool>,
         bounds: Bounds<f64>,
     }
     impl Energy {
         fn opinions(&self, z: ArrayView1<f64>) -> Vec<Vec<f64>> {
             (0..self.n)
                 .map(|i| {
+                    if self.pinned[i] {
+                        return self.x0[i].clone();
+                    }
                     let row = &z.as_slice().unwrap()[i * self.m..(i + 1) * self.m];
                     let top = row.iter().copied().fold(f64::NEG_INFINITY, f64::max);
                     let e: Vec<f64> = row.iter().map(|v| (v - top).exp()).collect();
@@ -1205,6 +1240,9 @@ pub fn settle_energy(
             let mut gz = Array1::<f64>::zeros(self.n * self.m);
             let zs = z.as_slice().unwrap();
             for i in 0..self.n {
+                if self.pinned[i] {
+                    continue;
+                }
                 let dot: f64 = (0..self.m).map(|k| gx[i][k] * x[i][k]).sum();
                 // The softmax is shift-invariant along each row, so the
                 // energy is flat there and the Hessian singular; a penalty on
@@ -1249,8 +1287,15 @@ pub fn settle_energy(
         n,
         m,
         x0: x0.clone(),
-        anchor: pull.iter().map(|s| 1.0 - s).collect(),
+        // Half of (1 - s) / s: the code's anchor term is `a d^2`, whose
+        // gradient `2 a d` is then `((1 - s) / s) d`. A pinned voter's term
+        // is constant and left at zero.
+        anchor: pull
+            .iter()
+            .map(|s| if *s <= 0.0 { 0.0 } else { 0.5 * (1.0 - s) / s })
+            .collect(),
         pair,
+        pinned,
         bounds: Bounds::new(
             Array1::from_elem(dim, -20.0),
             Array1::from_elem(dim, 20.0),
@@ -1686,7 +1731,33 @@ mod tests {
         assert_eq!(energy.engine, "fj-energy");
         assert!(energy.settled, "{energy:?}");
         for (a, b) in iterated.shares.iter().zip(&energy.shares) {
-            assert!((a - b).abs() < 0.02, "{iterated:?} vs {energy:?}");
+            assert!((a - b).abs() < 1e-5, "{iterated:?} vs {energy:?}");
+        }
+        // Unequal anchors, the case a persona on the ballot makes: the
+        // energy's minimum is the closed-form fixed point, not near it.
+        for held in [
+            [0.5, 0.5, 0.2],
+            [0.9, 0.3, 0.6],
+            [1.0, 0.5, 0.1],
+            [0.5, 1.0, 0.0],
+        ] {
+            let anchors: std::collections::BTreeMap<String, f64> = ["a", "b", "c"]
+                .iter()
+                .zip(held)
+                .map(|(a, s)| ((*a).to_string(), s))
+                .collect();
+            let opts = Opts {
+                self_trust: SelfTrust::Constant(0.5),
+                susceptibility: 1.0,
+                anchors: anchors.clone(),
+                ..Opts::default()
+            };
+            let exact = settle_exact(&ballots, &rows, &opts);
+            let energy = settle_energy(&ballots, &rows, 0.5, 1.0, &anchors, 500, 1e-10);
+            assert!(energy.settled, "{held:?}: {energy:?}");
+            for (a, b) in exact.shares.iter().zip(&energy.shares) {
+                assert!((a - b).abs() < 1e-5, "{held:?}: {exact:?} vs {energy:?}");
+            }
         }
         // A voter anchored at zero does not move: the energy holds it.
         let mut stubborn = std::collections::BTreeMap::new();
@@ -1694,6 +1765,35 @@ mod tests {
         let held = settle_energy(&ballots, &rows, 0.5, 1.0, &stubborn, 500, 1e-8);
         let hold = held.options.iter().position(|o| o == "hold").unwrap();
         assert!(held.shares[hold] > 0.3, "{held:?}");
+    }
+
+    /// With nobody anchored the energy has no anchor term and every
+    /// consensus is a minimum. It used to return wherever L-BFGS stopped:
+    /// 0.639 for an option two of four voters chose. It now says it did
+    /// not settle and gives the plain tally.
+    #[test]
+    fn the_energy_with_no_anchor_does_not_claim_a_settle() {
+        let ballots: Vec<Ballot> = [("a", "x"), ("b", "x"), ("c", "y"), ("d", "z")]
+            .iter()
+            .map(|(a, c)| Ballot {
+                agent: (*a).into(),
+                choice: (*c).into(),
+            })
+            .collect();
+        let out = settle_energy(
+            &ballots,
+            &[],
+            0.5,
+            1.0,
+            &std::collections::BTreeMap::new(),
+            500,
+            1e-8,
+        );
+        assert!(!out.settled, "{out:?}");
+        assert_eq!(out.options, ["x", "y", "z"]);
+        for (a, b) in out.shares.iter().zip([0.5, 0.25, 0.25]) {
+            assert!((a - b).abs() < 1e-12, "{out:?}");
+        }
     }
 
     use super::*;

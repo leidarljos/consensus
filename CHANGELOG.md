@@ -17,6 +17,14 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   ballots.
 - Bounded confidence reports `margin` and `tie`.
 - The first-minute example shows the output `settle` prints.
+- `--engine energy` now lands on the Friedkin-Johnsen fixed point when
+  voters hold different anchors. Its anchor term weighed a voter by
+  `1 - s` where the fixed point needs `(1 - s) / s`, so a voter at 0.2
+  beside three at 0.5 settled 0.478 where `exact` gives 0.435. A voter at
+  0 is held on its ballot. With no voter below 1 the energy is flat and
+  names no settle: the CLI refuses it and the library reports it
+  unsettled with the plain tally, where it returned 0.639 for an option
+  two of four voters chose.
 
 - `fj_contraction_bound` and `fj_rounds_to_tol`, and
   `ljos-consensus rounds --agents ...`: the contraction bound over the
