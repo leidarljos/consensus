@@ -21,7 +21,7 @@ The seat that settles through this crate is documented at https://leidarljos.git
 
 ```console
 $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"hold"}]' | jq -c
-{"options":["hold","ship"],"shares":[0.5,0.5],"rounds":1,"settled":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0,"agents":["alice","bob"],"influence":[0.5,0.5],"effective_voters":2.0,"margin":0.0,"tie":true}
+{"options":["hold","ship"],"shares":[0.5,0.5],"rounds":1,"settled":false,"converged":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0,"agents":["alice","bob"],"influence":[0.5,0.5],"effective_voters":2.0,"margin":0.0,"tie":true}
 ```
 
 The [tutorial](https://leidarljos.github.io/consensus/getting-started.html) adds trust, then an anchor.

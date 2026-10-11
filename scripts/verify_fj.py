@@ -211,7 +211,8 @@ def main() -> int:
         agree = all(abs(got[o] - want[o]) < 1e-6 for o in got)
         agree = agree and all(want[o] < 1e-9 for o in options if o not in got)
         check(f"binary agrees with closed form [{tag}]",
-              agree and outcome["settled"], f"shares={outcome['shares']}")
+              agree and outcome.get("converged", outcome["settled"]),
+              f"shares={outcome['shares']}")
 
     interval_case(check)
 

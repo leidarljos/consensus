@@ -77,7 +77,7 @@ never converge, and that is a fact about the team worth reporting rather
 than a number worth averaging. The tracker's own =consensus= verb reports
 the split; this crate reports =settled: false= when the budget runs out.
 
-=settled= means within =--tol= of the fixed point wherever the distance
+=converged= means within =--tol= of the fixed point wherever the distance
 can be bounded, not that the last step was small. The step is a
 =q=-contraction in the largest-entry norm when every voter is anchored,
 with =q= the largest susceptibility; Banach's estimate then puts the fixed
@@ -90,7 +90,9 @@ panel with neither a contraction nor a closed form still stops on the
 step, which bounds nothing. =exact::fixed_point= names a group that
 cycles, and =--engine exact= falls back to the iteration for it and for a
 system too near singular to solve; in both cases it reports
-=settled: false=.
+=settled: false=. =settled= is =converged= with one option ahead: two
+voters on opposite options converge in one round to an even split, and
+that is a tie, not a settle.
 
 Binary64 adds at most =gamma(n + 2) / (1 - q)= to the bound: Higham's
 gamma for the =n=-term dot product, the product with =s_i= and the anchor

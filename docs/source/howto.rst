@@ -41,7 +41,7 @@ Read the answer in a script
 
    $ ljos-consensus settle --issue proj-1a2b | jq -r '.options[.shares | index(max)]'
 
-``settled`` is false when the budget ran out; ``engine`` says which model
+``settled`` is false when the budget ran out or the settle is a tie; ``engine`` says which model
 answered.
 
 Cross-check with Seldon

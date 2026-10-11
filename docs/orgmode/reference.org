@@ -27,7 +27,8 @@ Output:
 | =options= | the options, sorted |
 | =shares= | each option's share, in that order |
 | =rounds= | the steps taken |
-| =settled= | within =--tol= of the fixed point |
+| =settled= | converged, and one option leads; a tie is never settled |
+| =converged= | within =--tol= of the fixed point |
 | =residual= | the bound or distance that says so |
 | =engine= | =degroot-fj=, =fj-exact=, =fj-energy=, =bounded-confidence=, =seldon= or =empty= |
 | =polarization= | the sum over voters of the squared distance from the mean final opinion |
