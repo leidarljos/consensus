@@ -76,7 +76,7 @@ html_context = {
 
 html_theme_options = {
     "accent_color": "gold",
-    "color_mode": "dark",
+    "color_mode": "auto",
     "dark_code": True,
     "github_url": "https://github.com/leidarljos/consensus",
     "nav_links": [
