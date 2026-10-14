@@ -18,7 +18,14 @@ pub struct Outcome {
     pub options: Vec<String>,
     pub shares: Vec<f64>,
     pub rounds: usize,
+    /// The settle names one option: the engine converged and the leading
+    /// two shares are not a tie. A tie converges and decides nothing, so it
+    /// is never settled. `converged` keeps the engine's own state.
     pub settled: bool,
+    /// The engine stopped on its bound rather than its round cap, whether or
+    /// not one option leads.
+    #[serde(default)]
+    pub converged: bool,
     /// How far from settled the engine stopped: for the energy engine the
     /// largest component of the energy's gradient at the point returned.
     /// Zero when an engine does not measure it.
@@ -52,6 +59,30 @@ pub struct Outcome {
     /// options the settle cannot order.
     #[serde(default)]
     pub tie: bool,
+}
+
+impl Outcome {
+    /// Read the decision off the shares: `converged` keeps what the engine
+    /// reported in `settled`, `margin` and `tie` come from the leading two
+    /// shares (a tie when they are no farther apart than twice `residual`
+    /// plus a rounding allowance), and `settled` holds only when the engine
+    /// converged on an option that leads.
+    #[must_use]
+    pub fn sealed(mut self) -> Self {
+        self.converged = self.settled;
+        let mut ranked = self.shares.clone();
+        ranked.sort_by(|a, b| b.total_cmp(a));
+        if ranked.len() >= 2 {
+            let n = self.agents.len().max(self.shares.len()).max(1);
+            let open = 2.0 * self.residual + 4.0 * n as f64 * f64::EPSILON;
+            self.margin = ranked[0] - ranked[1];
+            self.tie = self.tie || self.margin <= open;
+        } else {
+            self.margin = ranked.first().copied().unwrap_or(0.0);
+        }
+        self.settled = self.converged && !self.tie && !self.shares.is_empty();
+        self
+    }
 }
 
 /// Distinct agents and choices, each sorted.
@@ -248,6 +279,7 @@ pub fn settle_bounded(
         disagreement,
         ..Outcome::default()
     }
+    .sealed()
 }
 
 /// Dawid and Skene's one-coin estimate of each voter's reliability from
@@ -847,7 +879,9 @@ fn outcome_of(
         influence,
         margin,
         tie: ranked.len() >= 2 && margin <= open,
+        ..Outcome::default()
     }
+    .sealed()
 }
 
 /// The settle by iteration, stopped on a bound rather than a step: `settled`
@@ -947,6 +981,7 @@ pub fn settle_exact(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &
     let Ok(p) = exact::fixed_point(&setup.w, &setup.pull) else {
         let mut out = settle_with(ballots, trust, opts);
         out.settled = false;
+        out.converged = false;
         return out;
     };
     let x = apply(&p, &setup.x0);
@@ -1269,6 +1304,7 @@ pub fn settle_energy(
         disagreement,
         ..Outcome::default()
     }
+    .sealed()
 }
 
 /// Same DeGroot iteration as `Seldon::DeGrootModel`, via the C API.
@@ -1600,7 +1636,10 @@ mod tests {
         ];
         let trust = vec![("a".into(), "b".into(), 1.0), ("b".into(), "a".into(), 1.0)];
         let out = settle(&ballots, &trust, 0.5, 1.0, 200, 1e-9);
-        assert!(out.settled);
+        assert!(
+            out.converged && out.tie && !out.settled,
+            "a 1-1 split converges and decides nothing: {out:?}"
+        );
         assert_eq!(out.engine, "degroot-fj");
         assert!((out.shares[0] - 0.5).abs() < 1e-6);
         assert!((out.shares[1] - 0.5).abs() < 1e-6);
@@ -1620,7 +1659,7 @@ mod tests {
         ];
         let trust = vec![("a".into(), "b".into(), 1.0), ("b".into(), "a".into(), 1.0)];
         let out = settle(&ballots, &trust, 0.5, 0.0, 200, 1e-9);
-        assert!(out.settled);
+        assert!(out.converged && out.tie && !out.settled, "{out:?}");
         assert_eq!(out.engine, "degroot-fj");
         assert_eq!(out.rounds, 1);
         assert!((out.shares[0] - 0.5).abs() < 1e-12);
@@ -1829,7 +1868,7 @@ mod tests {
         assert!(narrow.polarization > 0.9, "{}", narrow.polarization);
         let wide = settle_bounded(&ballots, 2.0, &std::collections::BTreeMap::new(), 100, 1e-9);
         assert!(wide.polarization < 1e-6, "{}", wide.polarization);
-        assert!(wide.settled);
+        assert!(wide.converged && wide.tie && !wide.settled, "{wide:?}");
     }
 
     /// The voter that agrees with the hidden majority on every item is
@@ -2237,5 +2276,38 @@ mod tests {
         assert!(share("herdr") > share("erlang-plugin"), "{out:?}");
         assert!(share("erlang-plugin") > share("go-rewrite"), "{out:?}");
         assert!(out.polarization > 0.0, "{}", out.polarization);
+    }
+}
+
+#[cfg(test)]
+mod tie_regression {
+    use super::*;
+
+    fn b(agent: &str, choice: &str) -> Ballot {
+        Ballot {
+            agent: agent.into(),
+            choice: choice.into(),
+        }
+    }
+
+    /// A 1-1 split used to come back `settled: true`, and a reader of the
+    /// JSON took a tie for a decision. It converges and settles nothing.
+    #[test]
+    fn a_tie_is_never_settled() {
+        let ballots = vec![b("alice", "yes"), b("bob", "no")];
+        let out = settle_exact(&ballots, &[], &Opts::default());
+        assert!(out.tie, "{out:?}");
+        assert!(out.converged, "{out:?}");
+        assert!(!out.settled, "a tie reported as settled: {out:?}");
+        let json = serde_json::to_value(&out).unwrap();
+        assert_eq!(json["settled"], false);
+        assert_eq!(json["converged"], true);
+    }
+
+    #[test]
+    fn a_majority_still_settles() {
+        let ballots = vec![b("a", "ship"), b("b", "ship"), b("c", "hold")];
+        let out = settle_exact(&ballots, &[], &Opts::default());
+        assert!(out.settled && !out.tie && out.converged, "{out:?}");
     }
 }
