@@ -198,7 +198,7 @@ pub fn settle_bounded(
             options,
             shares: vec![],
             rounds: 0,
-            settled: true,
+            settled: false,
             residual: 0.0,
             engine: "empty".into(),
             polarization: 0.0,
@@ -798,7 +798,7 @@ fn setup(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Op
 fn empty(options: Vec<String>) -> Outcome {
     Outcome {
         options,
-        settled: true,
+        settled: false,
         engine: "empty".into(),
         ..Outcome::default()
     }
@@ -1084,7 +1084,7 @@ pub fn settle_energy(
             options,
             shares: vec![],
             rounds: 0,
-            settled: true,
+            settled: false,
             residual: 0.0,
             engine: "empty".into(),
             polarization: 0.0,
@@ -2309,5 +2309,20 @@ mod tie_regression {
         let ballots = vec![b("a", "ship"), b("b", "ship"), b("c", "hold")];
         let out = settle_exact(&ballots, &[], &Opts::default());
         assert!(out.settled && !out.tie && out.converged, "{out:?}");
+    }
+}
+
+#[cfg(test)]
+mod empty_regression {
+    use super::*;
+
+    /// No ballots used to come back `settled: true` with no options, which a
+    /// caller read as agreement. Nothing was voted, so nothing settled.
+    #[test]
+    fn no_ballots_settle_nothing() {
+        let out = settle_exact(&[], &[], &Opts::default());
+        assert!(!out.settled, "{out:?}");
+        let out = settle(&[], &[], 0.5, 1.0, 200, 1e-9);
+        assert!(!out.settled, "{out:?}");
     }
 }
