@@ -1,5 +1,34 @@
 <meta name="theme-color" content="#0B0B0A" />
 <meta name="color-scheme" content="dark light" />
+{%- set description = '' -%}
+{%- if page_descriptions is defined -%}
+  {%- set description = page_descriptions.get(pagename) or page_descriptions.get('index', '') -%}
+{%- endif -%}
+{%- if pagename == root_doc or not docstitle -%}
+  {%- set full_title = docstitle or title -%}
+{%- else -%}
+  {%- set full_title = title ~ ' - ' ~ docstitle -%}
+{%- endif -%}
+{%- if description %}
+<meta name="description" content="{{ description|e }}" />
+{%- endif %}
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="{{ project|e }}" />
+{%- if pageurl %}
+<meta property="og:url" content="{{ pageurl|e }}" />
+{%- endif %}
+<meta property="og:title" content="{{ full_title|striptags|e }}" />
+{%- if description %}
+<meta property="og:description" content="{{ description|e }}" />
+<meta name="twitter:description" content="{{ description|e }}" />
+{%- endif %}
+<meta property="og:image" content="{{ og_image|e }}" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:type" content="image/png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{{ full_title|striptags|e }}" />
+<meta name="twitter:image" content="{{ og_image|e }}" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Antics analytics -->

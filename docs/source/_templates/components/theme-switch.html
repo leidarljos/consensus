@@ -1,0 +1,13 @@
+{%- if theme_color_mode == 'light' -%}
+  {%- set theme_label = _('Switch to dark color mode') -%}
+{%- elif theme_color_mode == 'auto' -%}
+  {%- set theme_label = _('Switch to light color mode') -%}
+{%- else -%}
+  {%- set theme_label = _('Switch to auto color mode') -%}
+{%- endif -%}
+<button class="js-theme theme-switch flex items-center" aria-label="{{ theme_label }}"
+data-aria-auto="{{ _('Switch to light color mode') }}"
+data-aria-light="{{ _('Switch to dark color mode') }}"
+data-aria-dark="{{ _('Switch to auto color mode') }}">
+<i class="i-lucide theme-icon"></i>
+</button>

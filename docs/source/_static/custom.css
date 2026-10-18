@@ -346,3 +346,47 @@ table.docutils {
     scroll-behavior: auto;
   }
 }
+
+/* A name for the search field, and the page's single h1, without a new box. */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Sections keep the size they had when every top-level heading was an h1.
+   The theme pads those headings, from 64rem up, so the copy-page control
+   does not cover them. */
+@media (min-width: 64rem) {
+  .copy-page-wrapper + .yue > section > h2:first-of-type {
+    padding-right: 180px;
+  }
+}
+.sy-page .yue > section > h2 {
+  margin-top: 0;
+  margin-bottom: 0.888889em;
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.08;
+}
+.sy-page .yue > section > h2 strong {
+  font-weight: 900;
+}
+.sy-page .yue > section > h2 + p {
+  margin-top: 1rem;
+}
+.sy-page .yue > section > section > h3 {
+  margin-top: 2em;
+  margin-bottom: 1em;
+  font-size: clamp(1.45rem, 2.6vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
