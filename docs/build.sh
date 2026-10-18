@@ -24,8 +24,8 @@ source "$VENV/bin/activate"
 python -m pip install -q --upgrade pip
 python -m pip install -q -r "$REQ"
 
-echo "==> 3/4 open graph image from the logo"
-python "$ROOT/docs/scripts/og_image.py"
+echo "==> 3/4 open graph image"
+bash "$ROOT/docs/scripts/render-og-png.sh"
 
 echo "==> 4/4 sphinx-build (Shibuya) → $BUILD"
 rm -rf "$BUILD"
