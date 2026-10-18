@@ -12,9 +12,9 @@
 | =--trust JSON= | =[[from, to, weight], ...]= or =[{from, to, weight}, ...]= |
 | =--self-trust MODE= | how a voter weighs its own ballot when its row does not say: =earned= (the default) as the others weigh it, or =constant= at =--self-weight= for every voter |
 | =--self-weight W= | the self-weight under =constant=, and the fallback under =earned= for a voter nobody names; default 0.5 |
-| =--discount-of JSON= | =\{agent: d\}=, the share of its inbound weight each voter keeps; =correlation= prints it |
+| =--discount-of JSON= | ={agent: d}=, the share of its inbound weight each voter keeps; =correlation= prints it |
 | =--susceptibility S= | 1 is DeGroot; below 1 anchors each voter to its ballot; default 1 |
-| =--susceptibility-of JSON= | =\{agent: s\}=, a persona's own anchor per voter |
+| =--susceptibility-of JSON= | ={agent: s}=, a persona's own anchor per voter |
 | =--epsilon E [--epsilon-of JSON]= | bounded confidence instead of the trust graph: each voter averages only voters within L1 distance =E= of its own opinion |
 | =--max-iter N=, =--tol T= | the fixed-point budget; defaults 200 and 1e-9 |
 | =--engine NAME= | =iterate= (the default) steps to the fixed point and stops on a bound; =exact= reads it off in closed form; =energy= minimises the Friedkin-Johnsen energy under a constant =--self-weight=, without =--discount-of= |
