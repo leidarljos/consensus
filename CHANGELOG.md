@@ -4,6 +4,7 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- Each release archive gets a GitHub build attestation from the release workflow, so `gh attestation verify` and the ljos installer can check that this repository built it. Releases before this one have none, and the installer counts them as not published.
 - A tie is never settled. Two voters on opposite options converged in one
   round to an even split, and `settle` reported `settled: true` beside
   `tie: true`, so a reader of `settled` took a split for a decision.
