@@ -4,6 +4,11 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- `measurements/correlation_history-0-7-4000.txt` records the stdout of
+  `cargo run --release --example correlation_history -- 0 7 4000`. The
+  explanation page cites those seven-voter rates, and the example
+  reproduces them, but the run was not in the tree.
+
 - Each release archive gets a GitHub build attestation from the release workflow, so `gh attestation verify` and the ljos installer can check that this repository built it. Releases before this one have none, and the installer counts them as not published.
 - A tie is never settled. Two voters on opposite options converged in one
   round to an even split, and `settle` reported `settled: true` beside
