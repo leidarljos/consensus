@@ -4,6 +4,12 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- `record::history_from_json` reads a panel file: ballots in the order
+  they were cast, and an outcome entry per question that has one. A
+  voter named twice with two choices, two different outcomes for one
+  question, a confidence outside `(0, 1]`, or an outcome for a question
+  nobody voted on, is refused.
+
 - `measurements/correlation_history-0-7-4000.txt` records the stdout of
   `cargo run --release --example correlation_history -- 0 7 4000`. The
   explanation page cites those seven-voter rates, and the example

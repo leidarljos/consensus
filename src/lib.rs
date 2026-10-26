@@ -3,6 +3,7 @@
 
 pub mod correlation;
 pub mod exact;
+pub mod record;
 pub mod seldon;
 
 use serde::{Deserialize, Serialize};
