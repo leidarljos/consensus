@@ -349,6 +349,19 @@ trail a count by 2.0 points at worst where a count is best (0.820 against
 0.840 at eight outcomes), and on the first outcome they are the count.
 ``ljos learn`` shrinks for that reason.
 
+The geometric median of the ballots
+===================================
+
+Each ballot is a point of the simplex. The geometric median minimises
+the sum of Euclidean distances to those points (Vardi and Zhang,
+doi:10.1073/pnas.97.4.1423). Weiszfeld's iteration finds it. A point
+shared by more than half the ballots is that median, so a minority
+voting the other way does not move it. The mean does. Minsker
+(doi:10.3150/14-BEJ645) gives the breakdown point as one half.
+``settle_geometric_median`` reports the median as the shares. The panel
+is read as having adopted that one position, so polarization and
+disagreement are zero.
+
 A stated confidence
 ===================
 
