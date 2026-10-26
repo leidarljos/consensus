@@ -5,6 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::log_odds;
+
+/// The least weight [`calibration_weights`] gives a voter at or below
+/// chance. The seat writes the same floor on a trust row.
+pub const TRUST_FLOOR: f64 = 0.01;
+
 /// One ballot in a panel file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RecordedBallot {
@@ -302,6 +308,73 @@ pub fn history_lineage(history: &History) -> BTreeMap<String, f64> {
     lineage_weights(&rows)
 }
 
+/// Each voter's accuracy from its `(hits, misses)`, shrunk toward the
+/// panel's pooled accuracy.
+///
+/// Empirical Bayes, as Efron and Morris read a set of binomial rates
+/// (doi:10.1080/01621459.1975.10479864). The prior weakens as the records
+/// spread beyond binomial noise: the pooled variance times `N / (N - 1)`,
+/// divided by each record's length and averaged, where `N` counts the
+/// ballots the records hold. When the records differ by no more than that
+/// noise, as they do after one outcome, every voter gets the pooled
+/// accuracy. A voter with no ballot gets the pooled accuracy too. An empty
+/// record is `0.5`. The output keeps the input order.
+#[must_use]
+pub fn shrunk_accuracy(records: &[(String, (f64, f64))]) -> Vec<(String, f64)> {
+    let (hits, seen) = records.iter().fold((0.0, 0.0), |(h, n), (_, (hit, miss))| {
+        (h + hit, n + hit + miss)
+    });
+    let pooled = if seen > 0.0 { hits / seen } else { 0.5 };
+    let read: Vec<(f64, f64)> = records
+        .iter()
+        .filter(|(_, (h, m))| h + m > 0.0)
+        .map(|(_, (h, m))| (h / (h + m), h + m))
+        .collect();
+    let strength = if read.len() >= 2 && seen > 1.0 {
+        let k = read.len() as f64;
+        let mean = read.iter().map(|r| r.0).sum::<f64>() / k;
+        let spread = read.iter().map(|r| (r.0 - mean).powi(2)).sum::<f64>() / (k - 1.0);
+        let pq = pooled * (1.0 - pooled) * seen / (seen - 1.0);
+        let noise = pq * read.iter().map(|r| 1.0 / r.1).sum::<f64>() / k;
+        let between = spread - noise;
+        (between > 1e-12).then(|| (pq / between - 1.0).max(0.0))
+    } else {
+        None
+    };
+    records
+        .iter()
+        .map(|(who, (h, m))| {
+            let p = match strength {
+                Some(s) if h + m + s > 0.0 => (h + s * pooled) / (h + m + s),
+                _ => pooled,
+            };
+            (who.clone(), p)
+        })
+        .collect()
+}
+
+/// Log-odds weights from accuracies, scaled so the best voter is one.
+///
+/// The weight is `ln(p / (1 - p))` with `p` held in `[0.01, 0.99]`, the
+/// Nitzan and Paroush weight of an independent binary voter
+/// (doi:10.2307/2526438). A non-positive log odds, a voter at or below
+/// chance, is cut off and the weight is then [`TRUST_FLOOR`]. The ratios
+/// are the rule. The output keeps the input order.
+#[must_use]
+pub fn calibration_weights(accuracy: &[(String, f64)]) -> Vec<(String, f64)> {
+    let raw: Vec<(String, f64)> = accuracy
+        .iter()
+        .map(|(who, p)| (who.clone(), log_odds(*p, TRUST_FLOOR).max(0.0)))
+        .collect();
+    let top = raw.iter().map(|(_, w)| *w).fold(0.0_f64, f64::max);
+    raw.into_iter()
+        .map(|(who, w)| {
+            let scaled = if top > 0.0 { w / top } else { 0.0 };
+            (who, scaled.clamp(TRUST_FLOOR, 1.0))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,5 +465,51 @@ mod tests {
         .values()
         .sum();
         assert!((sum - 2.0).abs() < 1e-12, "two components");
+    }
+
+    #[test]
+    fn shrinking_weighs_a_first_outcome_alike_and_keeps_a_record_apart() {
+        let first = shrunk_accuracy(&[
+            ("a".into(), (1.0, 0.0)),
+            ("b".into(), (1.0, 0.0)),
+            ("c".into(), (0.0, 1.0)),
+        ]);
+        assert!(
+            first.iter().all(|(_, p)| (p - 2.0 / 3.0).abs() < 1e-12),
+            "{first:?}"
+        );
+        let ten = shrunk_accuracy(&[
+            ("a".into(), (8.0, 2.0)),
+            ("b".into(), (5.0, 5.0)),
+            ("c".into(), (6.0, 4.0)),
+            ("d".into(), (9.0, 1.0)),
+        ]);
+        let exact = [4619.0, 3929.0, 4159.0, 4849.0].map(|n| n / 6270.0);
+        for ((who, p), want) in ten.iter().zip(exact) {
+            assert!((p - want).abs() < 1e-12, "{who}: {p} against {want}");
+        }
+        let long = shrunk_accuracy(&[("a".into(), (90.0, 10.0)), ("b".into(), (60.0, 40.0))]);
+        assert!(long[0].1 > 0.85 && long[1].1 < 0.65, "{long:?}");
+        let none = shrunk_accuracy(&[("a".into(), (0.0, 0.0)), ("b".into(), (0.0, 0.0))]);
+        assert!(
+            none.iter().all(|(_, p)| (p - 0.5).abs() < 1e-12),
+            "{none:?}"
+        );
+    }
+
+    #[test]
+    fn calibration_weights_are_log_odds_with_the_best_at_one() {
+        let w = calibration_weights(&[
+            ("a".into(), 0.9),
+            ("b".into(), 0.6),
+            ("c".into(), 0.5),
+            ("d".into(), 1.0),
+        ]);
+        let of = |who: &str| w.iter().find(|(n, _)| n == who).unwrap().1;
+        assert!((of("d") - 1.0).abs() < 1e-12);
+        assert!((of("a") - 0.478).abs() < 0.01, "{}", of("a"));
+        assert!((of("b") - 0.088).abs() < 0.01, "{}", of("b"));
+        assert!(of("a") / of("b") > 5.0, "{}", of("a") / of("b"));
+        assert!((of("c") - TRUST_FLOOR).abs() < 1e-12);
     }
 }

@@ -4,6 +4,13 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## 0.8.0 (2026-10-26)
 
+- `record::shrunk_accuracy` shrinks each voter's hit rate toward the
+  panel's pooled accuracy (Efron and Morris,
+  doi:10.1080/01621459.1975.10479864). `record::calibration_weights`
+  turns that accuracy into log odds scaled so the best voter is one
+  (Nitzan and Paroush, doi:10.2307/2526438). A voter at or below chance
+  keeps the floor `0.01`, the weight `ljos learn` writes.
+
 - `record::lineage_weights` joins voters who share a model family or a
   key and gives each member of a component of size `k` the weight `1/k`,
   so the component counts once. Kim, Garg, Peng and Garg
