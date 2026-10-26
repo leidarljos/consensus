@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use crate::{influence_matrix, roster, Ballot, Outcome};
+use crate::{influence_matrix, margin_of, roster, Ballot, Outcome};
 
 /// Files written so `seldon config.toml -o dir -n network.txt -a opinions.txt` runs.
 #[derive(Debug, Clone)]
@@ -70,22 +70,28 @@ pub fn parse_opinions_dir(
     let (rounds, path) = latest_opinions(dir)?;
     let values = parse_opinions_file(&path)?;
     let shares = shares_from_scalars(&values, options.len());
-    let settled = match previous_opinions(dir, rounds) {
+    let converged = match previous_opinions(dir, rounds) {
         Some(prev_path) => {
             let prev = parse_opinions_file(&prev_path)?;
             max_abs_diff(&values, &prev) < tol
         }
         None => rounds < max_iter,
     };
+    // Seldon's opinions come back as text, so two shares within `tol` are a
+    // tie, and a tie is never settled.
+    let (margin, tie) = margin_of(&shares, tol);
     Ok(Outcome {
         options: options.to_vec(),
         shares,
         rounds,
-        settled,
+        settled: converged && !tie,
+        converged,
         residual: 0.0,
         engine: "seldon".into(),
         polarization: 0.0,
         disagreement: 0.0,
+        margin,
+        tie,
         ..Outcome::default()
     })
 }
@@ -364,7 +370,8 @@ mod tests {
         let out = parse_opinions_dir(&dir, &["hold".into(), "ship".into()], 200, 1e-3).unwrap();
         assert_eq!(out.engine, "seldon");
         assert_eq!(out.rounds, 7);
-        assert!(out.settled);
+        // Even shares from a converged run are a tie, and a tie is not settled.
+        assert!(out.converged && out.tie && !out.settled, "{out:?}");
         assert!((out.shares[0] - 0.5).abs() < 1e-12);
         assert!((out.shares[1] - 0.5).abs() < 1e-12);
         let _ = fs::remove_dir_all(&dir);
