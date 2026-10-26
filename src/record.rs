@@ -5,11 +5,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::log_odds;
+use crate::{log_odds, settle_exact, Ballot, Opts};
 
 /// The least weight [`calibration_weights`] gives a voter at or below
 /// chance. The seat writes the same floor on a trust row.
 pub const TRUST_FLOOR: f64 = 0.01;
+
+/// The four forecasts [`replay`] scores, in the order the summary prints.
+pub const METHODS: [&str; 4] = ["count", "degroot", "calibrated", "calibrated-lineage"];
 
 /// One ballot in a panel file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -375,9 +378,282 @@ pub fn calibration_weights(accuracy: &[(String, f64)]) -> Vec<(String, f64)> {
         .collect()
 }
 
+/// Quadratic score of a distribution against a named outcome.
+///
+/// The sum over options of `(p - y)^2`, with `y` one on the outcome and
+/// zero elsewhere (Brier 1950; Gneiting and Raftery,
+/// doi:10.1198/016214506000001437). An outcome the distribution does not
+/// name counts as probability zero. Lower is better.
+#[must_use]
+pub fn quadratic_score(shares: &[(String, f64)], outcome: &str) -> f64 {
+    let mut sum = 0.0;
+    let mut seen = false;
+    for (option, p) in shares {
+        let y = if option == outcome { 1.0 } else { 0.0 };
+        if option == outcome {
+            seen = true;
+        }
+        let d = p - y;
+        sum += d * d;
+    }
+    if !seen {
+        sum += 1.0;
+    }
+    sum
+}
+
+/// Logarithmic score of the probability put on the outcome.
+///
+/// Good 1952, doi:10.1111/j.2517-6161.1952.tb00104.x. `None` when that
+/// probability is zero: the score is unbounded there, and a stand-in
+/// number would be a choice this function does not make.
+#[must_use]
+pub fn log_score(shares: &[(String, f64)], outcome: &str) -> Option<f64> {
+    let p = shares
+        .iter()
+        .find(|(option, _)| option == outcome)
+        .map(|(_, p)| *p)
+        .unwrap_or(0.0);
+    if p > 0.0 {
+        Some(-p.ln())
+    } else {
+        None
+    }
+}
+
+/// One scored forecast.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Scored {
+    pub question: String,
+    pub method: String,
+    pub brier: f64,
+    pub log_score: Option<f64>,
+    /// Probability the forecast put on the named outcome.
+    pub probability: f64,
+}
+
+/// The mean scores of one method. `log_score` is the mean over the
+/// forecasts whose log score was finite. `log_unbounded` counts the rest.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MethodScore {
+    pub method: String,
+    pub scored: usize,
+    pub brier: f64,
+    pub log_score: Option<f64>,
+    pub log_unbounded: usize,
+}
+
+/// Per-question scores and the four means.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Replay {
+    pub scored: Vec<Scored>,
+    pub summary: Vec<MethodScore>,
+}
+
+fn probability_of(shares: &[(String, f64)], outcome: &str) -> f64 {
+    shares
+        .iter()
+        .find(|(option, _)| option == outcome)
+        .map(|(_, p)| *p)
+        .unwrap_or(0.0)
+}
+
+fn weighted_shares(
+    ballots: &[Cast],
+    weights: &BTreeMap<String, f64>,
+    outcome: &str,
+) -> Vec<(String, f64)> {
+    let mut options: Vec<String> = ballots.iter().map(|b| b.choice.clone()).collect();
+    if !options.iter().any(|o| o == outcome) {
+        options.push(outcome.to_string());
+    }
+    options.sort();
+    options.dedup();
+    let mass_of = |use_weights: bool| -> (Vec<f64>, f64) {
+        let mut mass = vec![0.0; options.len()];
+        let mut total = 0.0;
+        for b in ballots {
+            let w = if use_weights {
+                weights.get(&b.agent).copied().unwrap_or(0.0)
+            } else {
+                1.0
+            };
+            let w = if w.is_finite() && w > 0.0 { w } else { 0.0 };
+            total += w;
+            if let Some(k) = options.iter().position(|o| o == &b.choice) {
+                mass[k] += w;
+            }
+        }
+        (mass, total)
+    };
+    let (mut mass, total) = mass_of(true);
+    let total = if total > 0.0 {
+        total
+    } else {
+        let (equal, n) = mass_of(false);
+        mass = equal;
+        n
+    };
+    if total > 0.0 {
+        for m in &mut mass {
+            *m /= total;
+        }
+    }
+    options.into_iter().zip(mass).collect()
+}
+
+fn equal_weights(ballots: &[Cast]) -> BTreeMap<String, f64> {
+    ballots.iter().map(|b| (b.agent.clone(), 1.0)).collect()
+}
+
+fn learned_weights(history: &History, end: usize, current: &[Cast]) -> BTreeMap<String, f64> {
+    let mut rec: BTreeMap<String, (f64, f64)> = BTreeMap::new();
+    for q in &history.questions[..end] {
+        let Some(outcome) = q.outcome.as_deref() else {
+            continue;
+        };
+        for b in &q.ballots {
+            let slot = rec.entry(b.agent.clone()).or_insert((0.0, 0.0));
+            if b.choice == outcome {
+                slot.0 += 1.0;
+            } else {
+                slot.1 += 1.0;
+            }
+        }
+    }
+    for b in current {
+        rec.entry(b.agent.clone()).or_insert((0.0, 0.0));
+    }
+    let records: Vec<(String, (f64, f64))> = rec.into_iter().collect();
+    calibration_weights(&shrunk_accuracy(&records))
+        .into_iter()
+        .collect()
+}
+
+fn with_lineage(
+    weights: &BTreeMap<String, f64>,
+    lineage: &BTreeMap<String, f64>,
+) -> BTreeMap<String, f64> {
+    weights
+        .iter()
+        .map(|(agent, w)| {
+            let d = lineage.get(agent).copied().unwrap_or(1.0);
+            (agent.clone(), w * d)
+        })
+        .collect()
+}
+
+fn degroot_shares(
+    q: &Question,
+    trust: &[(String, String, f64)],
+    outcome: &str,
+) -> Vec<(String, f64)> {
+    let ballots: Vec<Ballot> = q
+        .ballots
+        .iter()
+        .map(|c| Ballot {
+            agent: c.agent.clone(),
+            choice: c.choice.clone(),
+        })
+        .collect();
+    let out = settle_exact(&ballots, trust, &Opts::default());
+    let mut shares: Vec<(String, f64)> = out.options.into_iter().zip(out.shares).collect();
+    if !shares.iter().any(|(option, _)| option == outcome) {
+        shares.push((outcome.to_string(), 0.0));
+    }
+    shares
+}
+
+fn score_one(question: &str, method: &str, shares: &[(String, f64)], outcome: &str) -> Scored {
+    Scored {
+        question: question.to_string(),
+        method: method.to_string(),
+        brier: quadratic_score(shares, outcome),
+        log_score: log_score(shares, outcome),
+        probability: probability_of(shares, outcome),
+    }
+}
+
+/// Score four forecasts on each question that has a named outcome, using
+/// only outcomes named on earlier questions.
+///
+/// This is Dawid's prequential check (doi:10.2307/2981683). The forecasts
+/// are a plain count, the DeGroot forecast on the history's trust rows
+/// ([`settle_exact`] with earned self weight), the calibrated weights, and
+/// those weights times the lineage weights. With no trust rows the DeGroot
+/// forecast is the count, because every voter then listens equally and the
+/// mean is the count. A question with no outcome is not scored and teaches
+/// nothing.
+///
+/// The means are the quadratic score and the log score. The log mean skips
+/// a forecast that put no probability on the outcome and counts it in
+/// `log_unbounded`.
+#[must_use]
+pub fn replay(history: &History) -> Replay {
+    let lineage = history_lineage(history);
+    let mut scored = Vec::new();
+    for (t, q) in history.questions.iter().enumerate() {
+        let Some(outcome) = q.outcome.as_deref() else {
+            continue;
+        };
+        let count = weighted_shares(&q.ballots, &equal_weights(&q.ballots), outcome);
+        let degroot = degroot_shares(q, &history.trust, outcome);
+        let learned = learned_weights(history, t, &q.ballots);
+        let calibrated = weighted_shares(&q.ballots, &learned, outcome);
+        let grouped = weighted_shares(&q.ballots, &with_lineage(&learned, &lineage), outcome);
+        for (method, shares) in [
+            (METHODS[0], &count),
+            (METHODS[1], &degroot),
+            (METHODS[2], &calibrated),
+            (METHODS[3], &grouped),
+        ] {
+            scored.push(score_one(&q.id, method, shares, outcome));
+        }
+    }
+    let summary = METHODS
+        .iter()
+        .map(|method| {
+            let rows: Vec<&Scored> = scored.iter().filter(|s| s.method == *method).collect();
+            let n = rows.len();
+            let brier = if n == 0 {
+                0.0
+            } else {
+                rows.iter().map(|s| s.brier).sum::<f64>() / n as f64
+            };
+            let finite: Vec<f64> = rows.iter().filter_map(|s| s.log_score).collect();
+            MethodScore {
+                method: (*method).to_string(),
+                scored: n,
+                brier,
+                log_score: (!finite.is_empty())
+                    .then(|| finite.iter().sum::<f64>() / finite.len() as f64),
+                log_unbounded: n - finite.len(),
+            }
+        })
+        .collect();
+    Replay { scored, summary }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn ballot(
+        question: &str,
+        agent: &str,
+        choice: &str,
+        family: Option<&str>,
+        key: Option<&str>,
+    ) -> RecordedBallot {
+        RecordedBallot {
+            question: question.into(),
+            agent: agent.into(),
+            choice: choice.into(),
+            confidence: None,
+            family: family.map(str::to_string),
+            key: key.map(str::to_string),
+        }
+    }
 
     #[test]
     fn a_panel_file_keeps_cast_order_and_refuses_a_broken_one() {
@@ -511,5 +787,182 @@ mod tests {
         assert!((of("b") - 0.088).abs() < 0.01, "{}", of("b"));
         assert!(of("a") / of("b") > 5.0, "{}", of("a") / of("b"));
         assert!((of("c") - TRUST_FLOOR).abs() < 1e-12);
+    }
+
+    fn panel(rows: Vec<RecordedBallot>, outcomes: Vec<(&str, &str)>) -> History {
+        let raw = serde_json::json!({
+            "ballots": rows,
+            "outcomes": outcomes
+                .iter()
+                .map(|(q, o)| serde_json::json!({"question": q, "outcome": o}))
+                .collect::<Vec<_>>()
+        });
+        history_from_json(&raw.to_string()).unwrap()
+    }
+
+    #[test]
+    fn the_quadratic_and_log_scores_match_their_formulas() {
+        let shares = [("no".into(), 0.25), ("yes".into(), 0.75)];
+        let brier = quadratic_score(&shares, "yes");
+        let expect = (0.25_f64 - 0.0).powi(2) + (0.75_f64 - 1.0).powi(2);
+        assert!((brier - expect).abs() < 1e-12);
+        let log = log_score(&shares, "yes").unwrap();
+        assert!((log - (-0.75_f64.ln())).abs() < 1e-12);
+        assert!(log_score(&[("no".into(), 1.0)], "yes").is_none());
+        assert!((quadratic_score(&[("no".into(), 1.0)], "yes") - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_first_question_has_no_record_and_lineage_still_counts_a_family_once() {
+        let rows = vec![
+            ballot("q", "c1", "no", Some("model:alpha"), None),
+            ballot("q", "c2", "no", Some("model:alpha"), None),
+            ballot("q", "c3", "no", Some("model:alpha"), None),
+            ballot("q", "d", "yes", Some("model:beta"), None),
+            ballot("q", "e", "yes", Some("model:gamma"), None),
+        ];
+        let h = panel(rows, vec![("q", "yes")]);
+        let report = replay(&h);
+        let p = |method: &str| {
+            report
+                .scored
+                .iter()
+                .find(|s| s.method == method)
+                .unwrap()
+                .probability
+        };
+        assert!((p("count") - 0.4).abs() < 1e-12, "{}", p("count"));
+        assert!((p("degroot") - p("count")).abs() < 1e-12);
+        assert!((p("calibrated") - p("count")).abs() < 1e-12);
+        assert!(
+            (p("calibrated-lineage") - 2.0 / 3.0).abs() < 1e-12,
+            "{}",
+            p("calibrated-lineage")
+        );
+        let lineage = report
+            .summary
+            .iter()
+            .find(|s| s.method == "calibrated-lineage")
+            .unwrap();
+        let count = report.summary.iter().find(|s| s.method == "count").unwrap();
+        assert!(lineage.brier < count.brier, "{lineage:?} {count:?}");
+        assert!(lineage.log_score.unwrap() < count.log_score.unwrap());
+    }
+
+    #[test]
+    fn learned_weights_follow_a_voter_who_was_right_and_floor_one_who_was_not() {
+        let mut rows = Vec::new();
+        for t in 0..10 {
+            let outcome = if t % 2 == 0 { "yes" } else { "no" };
+            rows.push(ballot(&format!("q{t}"), "a", outcome, None, None));
+            rows.push(ballot(
+                &format!("q{t}"),
+                "b",
+                if outcome == "yes" { "no" } else { "yes" },
+                None,
+                None,
+            ));
+        }
+        rows.push(ballot("q10", "a", "yes", None, None));
+        rows.push(ballot("q10", "b", "no", None, None));
+        let outcomes: Vec<(String, String)> = (0..10)
+            .map(|t| {
+                (
+                    format!("q{t}"),
+                    if t % 2 == 0 { "yes" } else { "no" }.to_string(),
+                )
+            })
+            .chain(std::iter::once(("q10".into(), "yes".into())))
+            .collect();
+        let raw = serde_json::json!({
+            "ballots": rows,
+            "outcomes": outcomes.iter().map(|(q, o)| serde_json::json!({"question": q, "outcome": o})).collect::<Vec<_>>()
+        });
+        let h = history_from_json(&raw.to_string()).unwrap();
+        let report = replay(&h);
+        let last = |method: &str| {
+            report
+                .scored
+                .iter()
+                .filter(|s| s.question == "q10" && s.method == method)
+                .map(|s| s.probability)
+                .next()
+                .unwrap()
+        };
+        let acc = shrunk_accuracy(&[("a".into(), (10.0, 0.0)), ("b".into(), (0.0, 10.0))]);
+        let w = calibration_weights(&acc);
+        let wa = w.iter().find(|(n, _)| n == "a").unwrap().1;
+        let wb = w.iter().find(|(n, _)| n == "b").unwrap().1;
+        assert!((wa - 1.0).abs() < 1e-9, "{acc:?} {w:?}");
+        assert!((wb - TRUST_FLOOR).abs() < 1e-12, "{w:?}");
+        assert!((last("calibrated") - wa / (wa + wb)).abs() < 1e-12);
+        assert!((last("count") - 0.5).abs() < 1e-12);
+        assert!(last("calibrated") > last("count"));
+    }
+
+    #[test]
+    fn degroot_on_the_file_trust_matches_the_exact_settle() {
+        let rows = vec![
+            ballot("q", "a", "yes", None, None),
+            ballot("q", "b", "no", None, None),
+            ballot("q", "c", "no", None, None),
+        ];
+        let raw = serde_json::json!({
+            "ballots": rows,
+            "outcomes": [{"question": "q", "outcome": "yes"}],
+            "trust": [
+                {"from": "b", "to": "a", "weight": 1.0},
+                {"from": "c", "to": "a", "weight": 1.0},
+                {"from": "a", "to": "b", "weight": 0.1}
+            ]
+        });
+        let h = history_from_json(&raw.to_string()).unwrap();
+        let report = replay(&h);
+        let ballots = [
+            Ballot {
+                agent: "a".into(),
+                choice: "yes".into(),
+            },
+            Ballot {
+                agent: "b".into(),
+                choice: "no".into(),
+            },
+            Ballot {
+                agent: "c".into(),
+                choice: "no".into(),
+            },
+        ];
+        let out = settle_exact(&ballots, &h.trust, &Opts::default());
+        let yes = out.shares[out.options.iter().position(|o| o == "yes").unwrap()];
+        let got = report
+            .scored
+            .iter()
+            .find(|s| s.method == "degroot")
+            .unwrap()
+            .probability;
+        assert!((got - yes).abs() < 1e-12, "{got} vs {yes}");
+        let count = report
+            .scored
+            .iter()
+            .find(|s| s.method == "count")
+            .unwrap()
+            .probability;
+        assert!((count - 1.0 / 3.0).abs() < 1e-12);
+        assert!(
+            (got - count).abs() > 1e-6,
+            "this trust graph is not a count: {got}"
+        );
+    }
+
+    #[test]
+    fn an_empty_history_scores_nothing() {
+        let h = history_from_json(r#"{"ballots":[],"outcomes":[]}"#).unwrap();
+        let report = replay(&h);
+        assert!(report.scored.is_empty());
+        assert_eq!(report.summary.len(), 4);
+        assert!(report
+            .summary
+            .iter()
+            .all(|s| s.scored == 0 && s.log_score.is_none()));
     }
 }
