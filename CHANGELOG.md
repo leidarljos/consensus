@@ -4,6 +4,11 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## 0.8.0 (2026-10-26)
 
+- `examples/replay_history.rs --write-independent` writes
+  `measurements/replay_panel_independent.json`. Six voters draw apart
+  at 0.55, 0.62, 0.68, 0.74, 0.82 and 0.90, each with its own family
+  and key. Forty eight questions, seed 7, no trust rows.
+
 - `measurements/replay_history.txt` records the stdout of
   `cargo run --release --example replay_history -- measurements/replay_panel.json`
   at `4388350`. The explanation page cites those four scores.
