@@ -634,6 +634,71 @@ pub fn replay(history: &History) -> Replay {
     Replay { scored, summary }
 }
 
+/// Stated confidences, binned at the thousandth, each with how many times
+/// it was stated and how many of those choices matched the outcome.
+///
+/// The bins are the confidences actually stated, not a grid. Murphy's
+/// partition reads a record in the same bins (1973,
+/// doi:10.1175/1520-0450(1973)012<0595:ANVPOT>2.0.CO;2).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ConfidenceBins {
+    pub bins: BTreeMap<u16, (u32, u32)>,
+}
+
+fn thousandth(stated: f64) -> u16 {
+    (stated.clamp(0.0, 1.0) * 1000.0).round() as u16
+}
+
+/// Add one stated confidence. `correct` is whether the choice matched the
+/// outcome.
+#[must_use]
+pub fn observe_confidence(bins: &ConfidenceBins, stated: f64, correct: bool) -> ConfidenceBins {
+    let mut next = bins.clone();
+    let slot = next.bins.entry(thousandth(stated)).or_insert((0, 0));
+    slot.0 += 1;
+    if correct {
+        slot.1 += 1;
+    }
+    next
+}
+
+/// The hit rate of the thousandth `stated` fell in.
+///
+/// Zadrozny and Elkan replace a score by the empirical rate of its bin
+/// (doi:10.1145/775047.775151). A thousandth with no earlier statement
+/// comes back as `stated` itself: there is nothing to replace it with.
+#[must_use]
+pub fn calibrated_confidence(bins: &ConfidenceBins, stated: f64) -> f64 {
+    match bins.bins.get(&thousandth(stated)) {
+        Some((n, hits)) if *n > 0 => f64::from(*hits) / f64::from(*n),
+        _ => stated.clamp(0.0, 1.0),
+    }
+}
+
+/// Drop ballots whose calibrated confidence is under `threshold`.
+///
+/// Chow's reject option (doi:10.1109/TIT.1970.1054406): a ballot that
+/// states a confidence and whose calibrated value is below the threshold
+/// is left out. A ballot with no confidence is kept. It was not a forecast.
+#[must_use]
+pub fn abstain_below(
+    ballots: &[RecordedBallot],
+    bins: &ConfidenceBins,
+    threshold: f64,
+) -> Vec<Ballot> {
+    ballots
+        .iter()
+        .filter(|b| match b.confidence {
+            Some(p) => calibrated_confidence(bins, p) >= threshold,
+            None => true,
+        })
+        .map(|b| Ballot {
+            agent: b.agent.clone(),
+            choice: b.choice.clone(),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -964,5 +1029,46 @@ mod tests {
             .summary
             .iter()
             .all(|s| s.scored == 0 && s.log_score.is_none()));
+    }
+
+    #[test]
+    fn a_miscalibrated_confidence_is_replaced_and_a_low_one_is_dropped() {
+        let mut bins = ConfidenceBins::default();
+        for _ in 0..10 {
+            bins = observe_confidence(&bins, 0.9, false);
+            bins = observe_confidence(&bins, 0.2, true);
+        }
+        assert!((calibrated_confidence(&bins, 0.9) - 0.0).abs() < 1e-12);
+        assert!((calibrated_confidence(&bins, 0.2) - 1.0).abs() < 1e-12);
+        assert!((calibrated_confidence(&bins, 0.5) - 0.5).abs() < 1e-12);
+        let ballots = vec![
+            RecordedBallot {
+                question: "q".into(),
+                agent: "sure".into(),
+                choice: "no".into(),
+                confidence: Some(0.9),
+                family: None,
+                key: None,
+            },
+            RecordedBallot {
+                question: "q".into(),
+                agent: "quiet".into(),
+                choice: "yes".into(),
+                confidence: Some(0.2),
+                family: None,
+                key: None,
+            },
+            RecordedBallot {
+                question: "q".into(),
+                agent: "plain".into(),
+                choice: "yes".into(),
+                confidence: None,
+                family: None,
+                key: None,
+            },
+        ];
+        let kept = abstain_below(&ballots, &bins, 0.5);
+        let names: Vec<&str> = kept.iter().map(|b| b.agent.as_str()).collect();
+        assert_eq!(names, ["quiet", "plain"]);
     }
 }
