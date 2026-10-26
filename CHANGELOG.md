@@ -4,6 +4,11 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- `measurements/replay_independent.txt` records the stdout of
+  `cargo run --release --example replay_history -- measurements/replay_panel_independent.json`
+  at `a58266c`. The explanation page cites those four scores. The
+  calibrated row and the calibrated-lineage row are the same numbers.
+
 - `examples/replay_history.rs --write-independent` writes
   `measurements/replay_panel_independent.json`. Six voters draw apart
   at 0.55, 0.62, 0.68, 0.74, 0.82 and 0.90, each with its own family
