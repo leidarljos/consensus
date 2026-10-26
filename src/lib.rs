@@ -3,6 +3,7 @@
 
 pub mod correlation;
 pub mod exact;
+pub mod median;
 pub mod record;
 pub mod seldon;
 

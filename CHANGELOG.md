@@ -4,6 +4,12 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- `settle_geometric_median` reports the geometric median of the ballots
+  as the shares (Vardi and Zhang, doi:10.1073/pnas.97.4.1423). A point
+  more than half the ballots share is that median, so a minority voting
+  the other way does not move it. Minsker (doi:10.3150/14-BEJ645) gives
+  the breakdown point as one half.
+
 - `record::calibrated_confidence` replaces a stated confidence with the
   hit rate of the same thousandth on earlier questions (Zadrozny and
   Elkan, doi:10.1145/775047.775151). `record::abstain_below` drops a
