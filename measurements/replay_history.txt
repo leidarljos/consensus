@@ -1,0 +1,10 @@
+4388350a1a82bccd57b8c8f45b6450e0e0aab01d cargo run --release --example replay_history -- measurements/replay_panel.json
+
+The panel is three clones of model:alpha, right 0.60 of the time and always in agreement, beside three independent voters at 0.72, 0.68 and 0.66. It has forty eight two-way questions, seed 7, and no trust rows.
+
+| method | scored | brier | log | unbounded |
+|---|---|---|---|---|
+| count | 48 | 0.359954 | 0.458164 | 1 |
+| degroot | 48 | 0.359954 | 0.458164 | 1 |
+| calibrated | 48 | 0.360070 | 0.458283 | 1 |
+| calibrated-lineage | 48 | 0.299523 | 0.395456 | 1 |

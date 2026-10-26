@@ -4,6 +4,10 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- `measurements/replay_history.txt` records the stdout of
+  `cargo run --release --example replay_history -- measurements/replay_panel.json`
+  at `4388350`. The explanation page cites those four scores.
+
 - `examples/replay_history.rs` writes and reads a panel file and prints
   the four `record::replay` scores. `measurements/replay_panel.json` is
   the seeded panel: three clones of `model:alpha` right 0.60 of the

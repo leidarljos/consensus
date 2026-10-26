@@ -399,6 +399,27 @@ doi:10.1111/j.2517-6161.1952.tb00104.x). A forecast that put nothing on
 the outcome has no finite log score, and the mean is over the rest.
 Both means are lower when the forecast is better.
 
+``measurements/replay_history.txt`` is the stdout of
+``cargo run --release --example replay_history -- measurements/replay_panel.json``
+at ``4388350a1a82bccd57b8c8f45b6450e0e0aab01d``. The panel is three clones of
+``model:alpha``, right 0.60 of the time and always in agreement, beside
+three independent voters at 0.72, 0.68 and 0.66. It has forty eight
+two-way questions, seed 7, and no trust rows. Each method scored all 48
+questions. One forecast of each method put no probability on the
+outcome, so the log mean is over the other 47.
+
+================== ====== ======== ======== =========
+Method             Scored Brier    Log      Unbounded
+================== ====== ======== ======== =========
+count              48     0.359954 0.458164 1        
+degroot            48     0.359954 0.458164 1        
+calibrated         48     0.360070 0.458283 1        
+calibrated-lineage 48     0.299523 0.395456 1        
+================== ====== ======== ======== =========
+
+The count and the DeGroot forecast printed the same scores. The file
+names no trust row.
+
 Weights learned from outcomes
 =============================
 
