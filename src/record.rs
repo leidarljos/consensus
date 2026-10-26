@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{log_odds, settle_exact, Ballot, Opts};
+use crate::{log_odds, settle_exact, Ballot, Opts, SelfTrust};
 
 /// The least weight [`calibration_weights`] gives a voter at or below
 /// chance. The seat writes the same floor on a trust row.
@@ -66,6 +66,7 @@ pub struct History {
 #[derive(Deserialize)]
 struct RawFile {
     ballots: Vec<RecordedBallot>,
+    #[serde(default)]
     outcomes: Vec<OutcomeEntry>,
     #[serde(default)]
     trust: serde_json::Value,
@@ -158,8 +159,14 @@ pub fn history_from_json(raw: &str) -> Result<History, String> {
             Some(i) if list[i].choice == choice => {
                 list[i].family.clone_from(&family);
                 list[i].key.clone_from(&key);
-                if list[i].confidence.is_none() {
-                    list[i].confidence = row.confidence;
+                match (list[i].confidence, row.confidence) {
+                    (None, stated) => list[i].confidence = stated,
+                    (Some(kept), Some(stated)) if (kept - stated).abs() > f64::EPSILON => {
+                        return Err(format!(
+                            "record json: {agent} stated two confidences on {question}, {kept} and {stated}"
+                        ));
+                    }
+                    _ => {}
                 }
                 continue;
             }
@@ -438,7 +445,8 @@ pub struct Scored {
 pub struct MethodScore {
     pub method: String,
     pub scored: usize,
-    pub brier: f64,
+    /// `None` when the method scored no question.
+    pub brier: Option<f64>,
     pub log_score: Option<f64>,
     pub log_unbounded: usize,
 }
@@ -556,12 +564,23 @@ fn degroot_shares(
             choice: c.choice.clone(),
         })
         .collect();
-    let out = settle_exact(&ballots, trust, &Opts::default());
+    let out = settle_exact(&ballots, trust, &degroot_opts());
     let mut shares: Vec<(String, f64)> = out.options.into_iter().zip(out.shares).collect();
     if !shares.iter().any(|(option, _)| option == outcome) {
         shares.push((outcome.to_string(), 0.0));
     }
     shares
+}
+
+/// The settle the DeGroot forecast runs: earned self weight, so trust rows
+/// `learn` writes give the weighted vote in one round, as the CLI default
+/// does. A constant self weight would weigh voter `j` by `w_j (S + sw - w_j)`
+/// instead and the row would not be the Nitzan-Paroush vote it names.
+fn degroot_opts() -> Opts {
+    Opts {
+        self_trust: SelfTrust::Earned(0.5),
+        ..Opts::default()
+    }
 }
 
 fn score_one(question: &str, method: &str, shares: &[(String, f64)], outcome: &str) -> Scored {
@@ -574,16 +593,16 @@ fn score_one(question: &str, method: &str, shares: &[(String, f64)], outcome: &s
     }
 }
 
-/// Score four forecasts on each question that has a named outcome, using
-/// only outcomes named on earlier questions.
-///
-/// This is Dawid's prequential check (doi:10.2307/2981683). The forecasts
-/// are a plain count, the DeGroot forecast on the history's trust rows
-/// ([`settle_exact`] with earned self weight), the calibrated weights, and
-/// those weights times the lineage weights. With no trust rows the DeGroot
-/// forecast is the count, because every voter then listens equally and the
-/// mean is the count. A question with no outcome is not scored and teaches
-/// nothing.
+/// Score four forecasts on each question that has a named outcome. The
+/// count, the calibrated weights and the lineage weights use only outcomes
+/// named on earlier questions: Dawid's prequential check
+/// (doi:10.2307/2981683). The DeGroot forecast runs [`settle_exact`] with
+/// earned self weight on the file's trust rows as given; those rows carry
+/// no time, so a file whose rows `learn` wrote from the whole outcome list
+/// lets later outcomes into that one forecast, and it is not prequential.
+/// With no trust rows the DeGroot forecast is the count, because every
+/// voter then listens equally and the mean is the count. A question with
+/// no outcome is not scored and teaches nothing.
 ///
 /// The means are the quadratic score and the log score. The log mean skips
 /// a forecast that put no probability on the outcome and counts it in
@@ -615,11 +634,7 @@ pub fn replay(history: &History) -> Replay {
         .map(|method| {
             let rows: Vec<&Scored> = scored.iter().filter(|s| s.method == *method).collect();
             let n = rows.len();
-            let brier = if n == 0 {
-                0.0
-            } else {
-                rows.iter().map(|s| s.brier).sum::<f64>() / n as f64
-            };
+            let brier = (n > 0).then(|| rows.iter().map(|s| s.brier).sum::<f64>() / n as f64);
             let finite: Vec<f64> = rows.iter().filter_map(|s| s.log_score).collect();
             MethodScore {
                 method: (*method).to_string(),
@@ -997,7 +1012,7 @@ mod tests {
                 choice: "no".into(),
             },
         ];
-        let out = settle_exact(&ballots, &h.trust, &Opts::default());
+        let out = settle_exact(&ballots, &h.trust, &degroot_opts());
         let yes = out.shares[out.options.iter().position(|o| o == "yes").unwrap()];
         let got = report
             .scored

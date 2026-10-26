@@ -175,13 +175,18 @@ fn main() -> ExitCode {
             println!("| method | scored | brier | log | unbounded |");
             println!("|---|---|---|---|---|");
             for row in &report.summary {
-                let log = row
-                    .log_score
-                    .map(|value| format!("{value:.6}"))
-                    .unwrap_or_else(|| "none".to_string());
+                let show = |value: Option<f64>| {
+                    value
+                        .map(|value| format!("{value:.6}"))
+                        .unwrap_or_else(|| "none".to_string())
+                };
                 println!(
-                    "| {} | {} | {:.6} | {log} | {} |",
-                    row.method, row.scored, row.brier, row.log_unbounded
+                    "| {} | {} | {} | {} | {} |",
+                    row.method,
+                    row.scored,
+                    show(row.brier),
+                    show(row.log_score),
+                    row.log_unbounded
                 );
             }
             ExitCode::SUCCESS

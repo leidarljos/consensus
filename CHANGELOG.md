@@ -4,9 +4,18 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## 0.8.0 (2026-10-26)
 
+- The DeGroot forecast in `record::replay` runs with earned self weight,
+  as the CLI default does, so trust rows `learn` wrote give the weighted
+  vote they name; it ran with a constant 0.5. A method that scored no
+  question reports `brier: None`, not a perfect 0. A panel file may omit
+  `outcomes`. A voter who states two confidences on one question is
+  refused, as two choices are. `geometric_median` reports the iterations
+  it ran when the budget is exhausted, and the last step a nudge made.
+
 - `measurements/replay_independent.txt` records the stdout of
   `cargo run --release --example replay_history -- measurements/replay_panel_independent.json`
-  at `a58266c`. The explanation page cites those four scores. The
+  on the develop commit that first carried the independent panel, since
+  rebased into main. The explanation page cites those four scores. The
   calibrated row and the calibrated-lineage row are the same numbers.
 
 - `examples/replay_history.rs --write-independent` writes
@@ -16,7 +25,8 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 - `measurements/replay_history.txt` records the stdout of
   `cargo run --release --example replay_history -- measurements/replay_panel.json`
-  at `4388350`. The explanation page cites those four scores.
+  on the develop commit that first carried the example, since rebased
+  into main. The explanation page cites those four scores.
 
 - `examples/replay_history.rs` writes and reads a panel file and prints
   the four `record::replay` scores. `measurements/replay_panel.json` is

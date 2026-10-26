@@ -122,7 +122,9 @@ pub fn geometric_median(
     };
     let mut y = mean(points);
     let mut last = f64::INFINITY;
+    let mut used = 0;
     for r in 1..=max_iter.max(1) {
+        used = r;
         if let Some((i, _)) = points
             .iter()
             .enumerate()
@@ -133,7 +135,9 @@ pub fn geometric_median(
                 if is_minimizer(points, i) {
                     return (points[i].clone(), r, 0.0, true);
                 }
-                y = nudge(points, i);
+                let nudged = nudge(points, i);
+                last = dist(&nudged, &y);
+                y = nudged;
                 continue;
             }
         }
@@ -158,7 +162,7 @@ pub fn geometric_median(
             return (y, r, last, true);
         }
     }
-    (y, max_iter, last, false)
+    (y, used, last, false)
 }
 
 fn one_hots(agents: &[String], options: &[String], ballots: &[Ballot]) -> Vec<Vec<f64>> {

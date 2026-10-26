@@ -381,8 +381,11 @@ Scoring a record on what came before
 
 ``replay`` walks the questions in cast order. A question with no named
 outcome is skipped. For each of the others it builds four forecasts
-from earlier outcomes only, Dawid's prequential check
-(doi:10.2307/2981683), and scores them on that question.
+and scores them on that question. The count, the calibrated weights and
+the lineage weights read earlier outcomes only, Dawid's prequential
+check (doi:10.2307/2981683). The DeGroot forecast reads the file's trust
+rows as given, which carry no time, so rows learned from the whole
+outcome list let later outcomes into that one forecast.
 
 The four are a plain count, the DeGroot forecast on the file's trust
 rows, the calibrated weights, and those weights times the lineage
@@ -399,7 +402,8 @@ Both means are lower when the forecast is better.
 
 ``measurements/replay_history.txt`` is the stdout of
 ``cargo run --release --example replay_history -- measurements/replay_panel.json``
-at ``4388350a1a82bccd57b8c8f45b6450e0e0aab01d``. The panel is three clones of
+on the develop commit that first carried the example, since rebased into
+main; the example reproduces the numbers. The panel is three clones of
 ``model:alpha``, right 0.60 of the time and always in agreement, beside
 three independent voters at 0.72, 0.68 and 0.66. It has forty eight
 two-way questions, seed 7, and no trust rows. Each method scored all 48
@@ -421,7 +425,8 @@ grouping is expected to help there.
 
 ``measurements/replay_independent.txt`` is the stdout of
 ``cargo run --release --example replay_history -- measurements/replay_panel_independent.json``
-at ``a58266ce25333b6d51d82d8a78129ae82f791321``. The panel has no clones.
+on the develop commit that first carried the independent panel, since
+rebased into main; the example reproduces the numbers. The panel has no clones.
 Six voters draw apart, at 0.55, 0.62, 0.68, 0.74, 0.82 and 0.90, each
 with its own family and key. It has forty eight two-way questions,
 seed 7, and no trust rows. Each method scored all 48 questions, and
