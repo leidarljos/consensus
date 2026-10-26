@@ -399,7 +399,27 @@ outcome, so the log mean is over the other 47.
 | calibrated-lineage |     48 | 0.299523 | 0.395456 |         1 |
 
 The count and the DeGroot forecast printed the same scores. The file
-names no trust row.
+names no trust row. The file was built with clones, so lineage
+grouping is expected to help there.
+
+=measurements/replay_independent.txt= is the stdout of
+=cargo run --release --example replay_history -- measurements/replay_panel_independent.json=
+at =a58266ce25333b6d51d82d8a78129ae82f791321=. The panel has no clones.
+Six voters draw apart, at 0.55, 0.62, 0.68, 0.74, 0.82 and 0.90, each
+with its own family and key. It has forty eight two-way questions,
+seed 7, and no trust rows. Each method scored all 48 questions, and
+every log score was finite.
+
+| Method             | Scored | Brier    | Log      | Unbounded |
+|--------------------+--------+----------+----------+-----------|
+| count              |     48 | 0.218750 | 0.352321 |         0 |
+| degroot            |     48 | 0.218750 | 0.352321 |         0 |
+| calibrated         |     48 | 0.201969 | 0.327355 |         0 |
+| calibrated-lineage |     48 | 0.201969 | 0.327355 |         0 |
+
+The count and the DeGroot forecast printed the same scores. The
+calibrated row and the calibrated-lineage row printed the same scores.
+The file names no trust row.
 
 * Weights learned from outcomes
 
