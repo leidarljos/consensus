@@ -4,6 +4,15 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## Unreleased
 
+- `record::replay` scores a plain count, the DeGroot forecast, calibrated
+  log-odds weights, and those weights times the lineage weights. Each
+  forecast for a question uses only outcomes named on earlier questions
+  (Dawid, doi:10.2307/2981683). The scores are the quadratic score
+  (Brier 1950; Gneiting and Raftery, doi:10.1198/016214506000001437)
+  and the log score (Good, doi:10.1111/j.2517-6161.1952.tb00104.x). A
+  forecast that put no probability on the outcome is left out of the
+  log mean and counted apart.
+
 - `record::shrunk_accuracy` shrinks each voter's hit rate toward the
   panel's pooled accuracy (Efron and Morris,
   doi:10.1080/01621459.1975.10479864). `record::calibration_weights`

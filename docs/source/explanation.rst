@@ -351,6 +351,27 @@ trail a count by 2.0 points at worst where a count is best (0.820 against
 0.840 at eight outcomes), and on the first outcome they are the count.
 ``ljos learn`` shrinks for that reason.
 
+Scoring a record on what came before
+====================================
+
+``replay`` walks the questions in cast order. A question with no named
+outcome is skipped. For each of the others it builds four forecasts
+from earlier outcomes only, Dawid's prequential check
+(doi:10.2307/2981683), and scores them on that question.
+
+The four are a plain count, the DeGroot forecast on the file's trust
+rows, the calibrated weights, and those weights times the lineage
+weights. With no trust rows the DeGroot forecast is the count, because
+every voter listens equally and the mean of the ballots is the count.
+
+The quadratic score is the sum over options of ``(p - y)^2``, with ``y``
+one on the named outcome and zero elsewhere (Brier 1950; Gneiting and
+Raftery, doi:10.1198/016214506000001437). The log score is ``-ln`` of the
+probability put on the outcome (Good,
+doi:10.1111/j.2517-6161.1952.tb00104.x). A forecast that put nothing on
+the outcome has no finite log score, and the mean is over the rest.
+Both means are lower when the forecast is better.
+
 Weights learned from outcomes
 =============================
 
