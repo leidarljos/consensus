@@ -4,6 +4,13 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## 0.8.0 (2026-10-26)
 
+- `record::calibrated_confidence` replaces a stated confidence with the
+  hit rate of the same thousandth on earlier questions (Zadrozny and
+  Elkan, doi:10.1145/775047.775151). `record::abstain_below` drops a
+  ballot whose calibrated confidence is under a threshold (Chow,
+  doi:10.1109/TIT.1970.1054406). A ballot that stated no confidence is
+  kept.
+
 - `record::replay` scores a plain count, the DeGroot forecast, calibrated
   log-odds weights, and those weights times the lineage weights. Each
   forecast for a question uses only outcomes named on earlier questions

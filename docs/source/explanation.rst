@@ -349,6 +349,20 @@ trail a count by 2.0 points at worst where a count is best (0.820 against
 0.840 at eight outcomes), and on the first outcome they are the count.
 ``ljos learn`` shrinks for that reason.
 
+A stated confidence
+===================
+
+A ballot may carry a confidence in ``(0, 1]``, the probability the voter
+gives that its choice is the outcome. ``calibrated_confidence`` replaces a
+stated value with the hit rate among earlier statements of the same
+confidence, to the nearest thousandth (Zadrozny and Elkan,
+doi:10.1145/775047.775151). Murphy reads a record in those same bins
+(1973, doi:10.1175/1520-0450(1973)012<0595:ANVPOT>2.0.CO;2). A
+confidence with no earlier twin is left as stated. ``abstain_below`` drops
+a ballot whose calibrated confidence is under a threshold, Chow's reject
+option (doi:10.1109/TIT.1970.1054406). A ballot with no confidence is
+kept.
+
 Scoring a record on what came before
 ====================================
 
