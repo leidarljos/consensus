@@ -4,6 +4,12 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## 0.8.0 (2026-10-26)
 
+- `examples/replay_history.rs` writes and reads a panel file and prints
+  the four `record::replay` scores. `measurements/replay_panel.json` is
+  the seeded panel: three clones of `model:alpha` right 0.60 of the
+  time, three independent voters at 0.72, 0.68 and 0.66, forty eight
+  questions, seed 7, no trust rows.
+
 - `settle_geometric_median` reports the geometric median of the ballots
   as the shares (Vardi and Zhang, doi:10.1073/pnas.97.4.1423). A point
   more than half the ballots share is that median, so a minority voting
