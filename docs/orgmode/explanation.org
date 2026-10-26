@@ -339,6 +339,18 @@ trail a count by 2.0 points at worst where a count is best (0.820 against
 0.840 at eight outcomes), and on the first outcome they are the count.
 =ljos learn= shrinks for that reason.
 
+* Weights learned from outcomes
+
+=shrunk_accuracy= reads each voter's hits and misses on questions with a
+named outcome and shrinks the rate toward the panel's pooled accuracy
+(Efron and Morris, doi:10.1080/01621459.1975.10479864). When the records
+differ by no more than binomial noise, as they do after one outcome,
+every voter gets the pooled accuracy. =calibration_weights= turns that
+accuracy into log odds, held inside =[0.01, 0.99]=, and scales the
+positive part so the best voter is one (Nitzan and Paroush,
+doi:10.2307/2526438). A voter at or below chance keeps the floor
+=0.01=. These are the weights =ljos learn= writes.
+
 * One voice per family or key
 
 A family name or a key is a common cause a short history cannot measure
