@@ -2,7 +2,7 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
-## 0.8.0 (2026-10-26)
+## 0.9.0 (2026-10-27)
 
 - The DeGroot forecast in `record::replay` runs with earned self weight,
   as the CLI default does, so trust rows `learn` wrote give the weighted
@@ -74,6 +74,8 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
   voter named twice with two choices, two different outcomes for one
   question, a confidence outside `(0, 1]`, or an outcome for a question
   nobody voted on, is refused.
+
+## 0.8.0 (2026-10-26)
 
 - `measurements/correlation_history-0-7-4000.txt` records the stdout of
   `cargo run --release --example correlation_history -- 0 7 4000`. The
