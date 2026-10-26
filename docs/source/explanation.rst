@@ -349,6 +349,23 @@ trail a count by 2.0 points at worst where a count is best (0.820 against
 0.840 at eight outcomes), and on the first outcome they are the count.
 ``ljos learn`` shrinks for that reason.
 
+One voice per family or key
+===========================
+
+A family name or a key is a common cause a short history cannot measure
+yet. Voters who share a model share its mistakes (Kim, Garg, Peng and
+Garg, doi:10.48550/arXiv.2506.07962). Voters who share a key speak for
+one operator. A shared cause is one voice (Dietrich and Spiekermann,
+doi:10.1093/mind/fzt074). The weights for dependent sources give that
+group one source's weight as the dependence goes to one (Winkler,
+doi:10.1287/mnsc.27.4.479), the same limit the cluster discount reaches
+for exact clones.
+
+``lineage_weights`` joins voters who share a family or a key, transitively,
+and gives each member of a component of size ``k`` the weight ``1/k``. A
+voter with neither is a component alone. Spelling is kept, so
+``model:alpha`` and ``Model:Alpha`` are two families.
+
 Independence before influence
 =============================
 

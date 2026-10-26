@@ -4,6 +4,12 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 ## 0.8.0 (2026-10-26)
 
+- `record::lineage_weights` joins voters who share a model family or a
+  key and gives each member of a component of size `k` the weight `1/k`,
+  so the component counts once. Kim, Garg, Peng and Garg
+  (doi:10.48550/arXiv.2506.07962) on shared model mistakes; Winkler
+  (doi:10.1287/mnsc.27.4.479) on the weight of dependent sources.
+
 - `record::history_from_json` reads a panel file: ballots in the order
   they were cast, and an outcome entry per question that has one. A
   voter named twice with two choices, two different outcomes for one

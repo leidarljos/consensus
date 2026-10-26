@@ -1,7 +1,7 @@
 //! A panel history: ballots in the order they were cast, and the outcome
 //! named for a question when one was named.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -212,6 +212,96 @@ pub fn history_from_json(raw: &str) -> Result<History, String> {
     Ok(History { questions, trust })
 }
 
+/// Voters who share a model family or a key, transitively, keep one voice
+/// between them.
+///
+/// Personas on one model share its mistakes (Kim, Garg, Peng and Garg,
+/// doi:10.48550/arXiv.2506.07962). Ballots under one key speak for one
+/// operator. A shared cause is one voice (Dietrich and Spiekermann,
+/// doi:10.1093/mind/fzt074), and the weights for dependent sources give
+/// the group one source's weight as the dependence goes to one (Winkler,
+/// doi:10.1287/mnsc.27.4.479). That is the limit the cluster discount
+/// reaches for exact clones.
+///
+/// Each member of a component of size `k` gets weight `1/k`. A voter with
+/// neither family nor key is a component alone. The first row for an agent
+/// wins; a later row is ignored. Spelling is kept, so `model:alpha` and
+/// `Model:Alpha` are two families. The weights sum to the number of
+/// components.
+#[must_use]
+pub fn lineage_weights(
+    voters: &[(String, Option<String>, Option<String>)],
+) -> BTreeMap<String, f64> {
+    let mut agents: Vec<String> = Vec::new();
+    let mut family: Vec<Option<String>> = Vec::new();
+    let mut key: Vec<Option<String>> = Vec::new();
+    for (agent, fam, k) in voters {
+        let agent = agent.trim();
+        if agent.is_empty() || agents.iter().any(|a| a == agent) {
+            continue;
+        }
+        agents.push(agent.to_string());
+        family.push(blank_to_none(fam.clone()));
+        key.push(blank_to_none(k.clone()));
+    }
+    let n = agents.len();
+    let mut parent: Vec<usize> = (0..n).collect();
+    fn find(parent: &mut [usize], mut x: usize) -> usize {
+        while parent[x] != x {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        x
+    }
+    fn unite(parent: &mut [usize], a: usize, b: usize) {
+        let a = find(parent, a);
+        let b = find(parent, b);
+        if a != b {
+            parent[b] = a;
+        }
+    }
+    let mut join = |label: &[Option<String>]| {
+        let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+        for (i, item) in label.iter().enumerate() {
+            let Some(name) = item.as_deref() else {
+                continue;
+            };
+            if let Some(first) = seen.get(name).copied() {
+                unite(&mut parent, first, i);
+            } else {
+                seen.insert(name, i);
+            }
+        }
+    };
+    join(&family);
+    join(&key);
+    let root: Vec<usize> = (0..n).map(|i| find(&mut parent, i)).collect();
+    let mut size = vec![0.0; n];
+    for r in &root {
+        size[*r] += 1.0;
+    }
+    agents
+        .into_iter()
+        .enumerate()
+        .map(|(i, a)| (a, 1.0 / size[root[i]]))
+        .collect()
+}
+
+/// The lineage of every voter in a history, in agent order.
+#[must_use]
+pub fn history_lineage(history: &History) -> BTreeMap<String, f64> {
+    let mut rows = Vec::new();
+    let mut seen = BTreeSet::new();
+    for q in &history.questions {
+        for b in &q.ballots {
+            if seen.insert(b.agent.clone()) {
+                rows.push((b.agent.clone(), b.family.clone(), b.key.clone()));
+            }
+        }
+    }
+    lineage_weights(&rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,5 +359,38 @@ mod tests {
         assert!(
             history_from_json(r#"{"ballots":[],"outcomes":[],"trust":[["a","b",-1]]}"#).is_err()
         );
+    }
+
+    #[test]
+    fn a_shared_family_or_key_is_one_voice() {
+        let w = lineage_weights(&[
+            ("a".into(), Some("model:alpha".into()), None),
+            ("b".into(), Some("model:alpha".into()), None),
+            ("c".into(), Some("model:beta".into()), None),
+        ]);
+        assert!((w["a"] - 0.5).abs() < 1e-12 && (w["b"] - 0.5).abs() < 1e-12);
+        assert!((w["c"] - 1.0).abs() < 1e-12);
+        let w = lineage_weights(&[
+            ("a".into(), Some("model:alpha".into()), Some("k".into())),
+            ("b".into(), Some("model:beta".into()), Some("k".into())),
+        ]);
+        assert!((w["a"] - 0.5).abs() < 1e-12 && (w["b"] - 0.5).abs() < 1e-12);
+        // a shares a family with b, and b shares a key with c, so all three are one voice.
+        let w = lineage_weights(&[
+            ("a".into(), Some("model:alpha".into()), None),
+            ("b".into(), Some("model:alpha".into()), Some("k".into())),
+            ("c".into(), Some("model:beta".into()), Some("k".into())),
+        ]);
+        assert!(w.values().all(|x| (*x - 1.0 / 3.0).abs() < 1e-12), "{w:?}");
+        let w = lineage_weights(&[("solo".into(), None, Some("  ".into()))]);
+        assert!((w["solo"] - 1.0).abs() < 1e-12);
+        let sum: f64 = lineage_weights(&[
+            ("a".into(), Some("model:alpha".into()), None),
+            ("b".into(), Some("model:alpha".into()), None),
+            ("c".into(), None, None),
+        ])
+        .values()
+        .sum();
+        assert!((sum - 2.0).abs() < 1e-12, "two components");
     }
 }
