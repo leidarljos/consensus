@@ -2,7 +2,7 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
-## Unreleased
+## 0.8.0 (2026-10-26)
 
 - `measurements/correlation_history-0-7-4000.txt` records the stdout of
   `cargo run --release --example correlation_history -- 0 7 4000`. The
