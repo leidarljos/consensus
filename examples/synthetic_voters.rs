@@ -1,0 +1,336 @@
+//! Agreement that learns, measured where the truth is known: voters of set
+//! accuracies answer two-way questions, and the group decides under each
+//! of the seat's rules. The question each rule answers is how often the
+//! group is right, against the best any weighting could do.
+//!
+//! Arms, on the same ballots:
+//! - `majority`: one voter one vote.
+//! - `oracle log-odds`: weights `ln(p/(1-p))` from the true accuracies, the
+//!   Nitzan-Paroush optimum for independent voters (doi:10.2307/2526438);
+//!   the ceiling.
+//! - `calibrate linear`: Dawid-Skene accuracy estimated from the ballots
+//!   alone (doi:10.2307/2346806), written as the weight every voter gives
+//!   the other, then the DeGroot settle: the rule `calibrate` used before
+//!   log odds.
+//! - `calibrate log-odds`: the same estimates as log odds scaled to the
+//!   best at one; the rule `calibrate` writes now.
+//! - `learn hedge`: no estimate; trust rows start equal, and after each
+//!   question the voters the outcome refuted shrink by half in every
+//!   other voter's row (Hedge, doi:10.1006/jcss.1997.1504), the rule
+//!   `finish --outcome` applies; the settle before each question uses
+//!   the rows so far.
+//! - `learn hedge, share 0.1`: the same, and after each step every row
+//!   recovers a tenth of its gap to one (fixed share, Herbster and
+//!   Warmuth, doi:10.1023/A:1007424614876), the rule `learn --share`
+//!   applies, so a voter is weighed by its recent record rather than by
+//!   every miss it ever made.
+//! - `learn log-odds online`: no estimate and no shrink; each voter's
+//!   record of hits and misses so far, smoothed by one of each, gives its
+//!   accuracy, and the rows are the log odds of that scaled to the best at
+//!   one, before each question. The online form of `calibrate`.
+//! - `learn log-odds online, shrunk`: the same record, but shrunk toward the
+//!   pooled accuracy as `ljos learn` now reads it.
+//! - `..., earned self-trust`: the same rows as `calibrate log-odds` and
+//!   `learn log-odds online`, with each voter weighing its own ballot as the
+//!   others weigh it, not at a constant 0.5. Under that fill the settle is
+//!   the weighted vote the rows describe (derive/sympy/fj.py).
+//!
+//! ```console
+//! $ cargo run --release --example synthetic_voters -- 9 400 20
+//! $ cargo run --release --example synthetic_voters -- 9 400 20 expert
+//! ```
+//! voters, questions, seeds, and `expert` for the second profile.
+//! Accuracies are drawn uniformly in [0.35, 0.95] per seed, so some voters
+//! are worse than chance, which is what a weighting has to survive.
+//! `expert` instead seats one voter at 0.92 among voters drawn in
+//! [0.52, 0.62]: the case where a weak crowd can outvote its best voter.
+
+use std::collections::BTreeMap;
+
+use ljos_consensus::{dawid_skene, settle_anchored, settle_with, Ballot, Opts, SelfTrust};
+
+/// A small deterministic generator, so a seed is a run.
+struct Lcg(u64);
+
+impl Lcg {
+    fn next_f64(&mut self) -> f64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        ((self.0 >> 11) as f64) / ((1u64 << 53) as f64)
+    }
+}
+
+const FLOOR: f64 = 0.01;
+const BETA: f64 = 0.5;
+
+fn logit(p: f64) -> f64 {
+    let p = p.clamp(0.01, 0.99);
+    (p / (1.0 - p)).ln()
+}
+
+/// Log-odds weights scaled so the best voter stands at one, as `calibrate` writes them.
+fn log_odds_rows(acc: &BTreeMap<String, f64>) -> Vec<(String, String, f64)> {
+    let top = acc.values().map(|p| logit(*p).max(0.0)).fold(0.0, f64::max);
+    let mut rows = Vec::new();
+    for from in acc.keys() {
+        for (to, p) in acc {
+            if from == to {
+                continue;
+            }
+            let w = if top > 0.0 {
+                logit(*p).max(0.0) / top
+            } else {
+                0.0
+            };
+            rows.push((from.clone(), to.clone(), w.clamp(FLOOR, 1.0)));
+        }
+    }
+    rows
+}
+
+/// Each voter's accuracy from its record, shrunk toward the pooled accuracy
+/// by empirical Bayes as ljos `shrunk_accuracy` reads it. `record` starts at
+/// one hit and one miss, which this takes back off.
+fn shrunk_acc(record: &BTreeMap<String, (f64, f64)>) -> BTreeMap<String, f64> {
+    let raw: Vec<(&String, f64, f64)> = record
+        .iter()
+        .map(|(n, (h, m))| (n, h - 1.0, h + m - 2.0))
+        .collect();
+    let (hits, seen) = raw.iter().fold((0.0, 0.0), |a, r| (a.0 + r.1, a.1 + r.2));
+    let pooled = if seen > 0.0 { hits / seen } else { 0.5 };
+    let read: Vec<(f64, f64)> = raw
+        .iter()
+        .filter(|r| r.2 > 0.0)
+        .map(|r| (r.1 / r.2, r.2))
+        .collect();
+    let strength = if read.len() >= 2 && seen > 1.0 {
+        let k = read.len() as f64;
+        let mean = read.iter().map(|r| r.0).sum::<f64>() / k;
+        let spread = read.iter().map(|r| (r.0 - mean).powi(2)).sum::<f64>() / (k - 1.0);
+        let pq = pooled * (1.0 - pooled) * seen / (seen - 1.0);
+        let noise = pq * read.iter().map(|r| 1.0 / r.1).sum::<f64>() / k;
+        let between = spread - noise;
+        (between > 1e-12).then(|| (pq / between - 1.0).max(0.0))
+    } else {
+        None
+    };
+    raw.iter()
+        .map(|(n, h, seen_i)| {
+            let p = match strength {
+                Some(k) if seen_i + k > 0.0 => (h + k * pooled) / (seen_i + k),
+                _ => pooled,
+            };
+            ((*n).clone(), p)
+        })
+        .collect()
+}
+
+fn linear_rows(acc: &BTreeMap<String, f64>) -> Vec<(String, String, f64)> {
+    let mut rows = Vec::new();
+    for from in acc.keys() {
+        for (to, p) in acc {
+            if from != to {
+                rows.push((from.clone(), to.clone(), p.clamp(FLOOR, 1.0)));
+            }
+        }
+    }
+    rows
+}
+
+/// The option the settle gives the larger share.
+fn decide(ballots: &[Ballot], rows: &[(String, String, f64)]) -> String {
+    let out = settle_anchored(ballots, rows, 0.5, 1.0, &BTreeMap::new(), 200, 1e-9);
+    let mut best = (String::new(), f64::NEG_INFINITY);
+    for (o, s) in out.options.iter().zip(&out.shares) {
+        if *s > best.1 {
+            best = (o.clone(), *s);
+        }
+    }
+    best.0
+}
+
+/// [`decide`] with earned self-trust.
+fn decide_earned(ballots: &[Ballot], rows: &[(String, String, f64)]) -> String {
+    let opts = Opts {
+        self_trust: SelfTrust::Earned(0.5),
+        ..Opts::default()
+    };
+    let out = settle_with(ballots, rows, &opts);
+    let mut best = (String::new(), f64::NEG_INFINITY);
+    for (o, s) in out.options.iter().zip(&out.shares) {
+        if *s > best.1 {
+            best = (o.clone(), *s);
+        }
+    }
+    best.0
+}
+
+fn weighted_majority(ballots: &[Ballot], weight: &BTreeMap<String, f64>) -> String {
+    let mut tally: BTreeMap<&str, f64> = BTreeMap::new();
+    for b in ballots {
+        *tally.entry(b.choice.as_str()).or_insert(0.0) +=
+            weight.get(&b.agent).copied().unwrap_or(1.0);
+    }
+    tally
+        .into_iter()
+        .max_by(|a, b| {
+            a.1.partial_cmp(&b.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.0.cmp(a.0))
+        })
+        .map(|(o, _)| o.to_string())
+        .unwrap_or_default()
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let voters: usize = args.get(1).and_then(|a| a.parse().ok()).unwrap_or(9);
+    let questions: usize = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(400);
+    let seeds: u64 = args.get(3).and_then(|a| a.parse().ok()).unwrap_or(20);
+    let expert = args.get(4).is_some_and(|a| a == "expert");
+    let names: Vec<String> = (0..voters).map(|i| format!("v{i}")).collect();
+    let arms = [
+        "majority",
+        "oracle log-odds",
+        "calibrate linear",
+        "calibrate log-odds",
+        "learn hedge",
+        "learn hedge, share 0.1",
+        "learn log-odds online",
+        "learn log-odds online, shrunk",
+        "calibrate log-odds, earned self-trust",
+        "learn log-odds online, earned self-trust",
+    ];
+    const SHARE: f64 = 0.1;
+    let mut right = vec![0usize; arms.len()];
+    let mut asked = 0usize;
+    for seed in 0..seeds {
+        let mut rng = Lcg(seed.wrapping_mul(7919).wrapping_add(17));
+        let acc: BTreeMap<String, f64> = names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| {
+                let p = if !expert {
+                    0.35 + 0.60 * rng.next_f64()
+                } else if i == 0 {
+                    0.92
+                } else {
+                    0.52 + 0.10 * rng.next_f64()
+                };
+                (n.clone(), p)
+            })
+            .collect();
+        // Every question: a truth in {a, b} and each voter's ballot.
+        let mut items: Vec<(String, Vec<Ballot>)> = Vec::with_capacity(questions);
+        for _ in 0..questions {
+            let truth = if rng.next_f64() < 0.5 { "a" } else { "b" };
+            let ballots = names
+                .iter()
+                .map(|n| {
+                    let ok = rng.next_f64() < acc[n];
+                    let choice = if ok == (truth == "a") { "a" } else { "b" };
+                    Ballot {
+                        agent: n.clone(),
+                        choice: choice.to_string(),
+                    }
+                })
+                .collect();
+            items.push((truth.to_string(), ballots));
+        }
+        // Dawid-Skene over the whole set, as `calibrate -p PROJECT` reads a board.
+        let ds_items: Vec<Vec<(String, String)>> = items
+            .iter()
+            .map(|(_, bs)| {
+                bs.iter()
+                    .map(|b| (b.agent.clone(), b.choice.clone()))
+                    .collect()
+            })
+            .collect();
+        let estimated = dawid_skene(&ds_items, 20);
+        let oracle_w: BTreeMap<String, f64> =
+            acc.iter().map(|(n, p)| (n.clone(), logit(*p))).collect();
+        let linear = linear_rows(&estimated);
+        let logodds = log_odds_rows(&estimated);
+        // Hedge rows, one row per (from, to), starting at one.
+        let mut hedge: BTreeMap<(String, String), f64> = BTreeMap::new();
+        for from in &names {
+            for to in &names {
+                if from != to {
+                    hedge.insert((from.clone(), to.clone()), 1.0);
+                }
+            }
+        }
+        let mut shared = hedge.clone();
+        // Hits and misses so far, one of each to start.
+        let mut record: BTreeMap<String, (f64, f64)> =
+            names.iter().map(|n| (n.clone(), (1.0, 1.0))).collect();
+        for (truth, ballots) in &items {
+            asked += 1;
+            let rows_of = |m: &BTreeMap<(String, String), f64>| -> Vec<(String, String, f64)> {
+                m.iter()
+                    .map(|((f, t), w)| (f.clone(), t.clone(), *w))
+                    .collect()
+            };
+            let online_acc: BTreeMap<String, f64> = record
+                .iter()
+                .map(|(n, (h, m))| (n.clone(), h / (h + m)))
+                .collect();
+            let online = log_odds_rows(&online_acc);
+            let shrunk = log_odds_rows(&shrunk_acc(&record));
+            let decisions = [
+                weighted_majority(ballots, &BTreeMap::new()),
+                weighted_majority(ballots, &oracle_w),
+                decide(ballots, &linear),
+                decide(ballots, &logodds),
+                decide(ballots, &rows_of(&hedge)),
+                decide(ballots, &rows_of(&shared)),
+                decide(ballots, &online),
+                decide(ballots, &shrunk),
+                decide_earned(ballots, &logodds),
+                decide_earned(ballots, &online),
+            ];
+            for (k, d) in decisions.iter().enumerate() {
+                if d == truth {
+                    right[k] += 1;
+                }
+            }
+            // The outcome refutes the voters who chose otherwise.
+            for b in ballots {
+                let r = record.get_mut(&b.agent).unwrap();
+                if b.choice == *truth {
+                    r.0 += 1.0;
+                } else {
+                    r.1 += 1.0;
+                }
+                if b.choice != *truth {
+                    for from in &names {
+                        if from != &b.agent {
+                            let w = hedge.get_mut(&(from.clone(), b.agent.clone())).unwrap();
+                            *w = (*w * BETA).max(FLOOR);
+                            let v = shared.get_mut(&(from.clone(), b.agent.clone())).unwrap();
+                            *v = (*v * BETA).max(FLOOR);
+                        }
+                    }
+                }
+            }
+            // Fixed share: every row recovers a share of its gap to one.
+            for v in shared.values_mut() {
+                *v += SHARE * (1.0 - *v);
+            }
+        }
+    }
+    let profile = if expert {
+        "one at 0.92, the rest uniform in [0.52, 0.62]"
+    } else {
+        "accuracies uniform in [0.35, 0.95]"
+    };
+    println!(
+        "{voters} voters, {profile}, {questions} two-way questions, {seeds} seeds ({asked} decisions)\n"
+    );
+    println!("| rule | group accuracy |\n|---|---|");
+    for (k, arm) in arms.iter().enumerate() {
+        println!("| {arm} | {:.3} |", right[k] as f64 / asked as f64);
+    }
+}

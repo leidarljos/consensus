@@ -1,0 +1,524 @@
+Why weigh at all
+================
+
+Counting is right when every voter is worth the same. A maintainer who has
+read the code for years, a reviewer who was wrong twice, and a first-time
+contributor each cast one ballot. A plurality reports them as three equal
+opinions. DeGroot's model (doi:10.1080/01621459.1974.10480137) is the
+standard answer and is one line: each voter replaces its opinion with the
+weighted average of the voters it trusts, ``x(t+1) = W x(t)``. Where that
+settles is the group's position, and it is the mean only when trust is
+symmetric.
+
+What a settle computes
+======================
+
+The step is linear in the ballots, and so is where it ends: ``x* = P x0``
+for a matrix ``P`` whose rows each sum to one. The shares are the mean row
+of ``x*``. A settle is a weighted vote. Voter i's ballot counts with weight
+``c_i = (1/n) sum_k P_ki``, its social power (Friedkin, doi:10.1086/229694;
+Proskurnikov and Tempo, doi:10.1016/j.arcontrol.2017.03.002). The iterate
+and exact engines print it as ``influence``, beside ``effective_voters``, the
+inverse Herfindahl index ``1 / sum c_i^2``: the number of equal voices the
+settle is worth.
+
+A crowd is wise only while no voice keeps a fixed share of the result as
+it grows (Golub and Jackson, doi:10.1257/mic.2.1.112), and DeGroot's
+averaging counts the well connected again each round (DeMarzo, Vayanos and
+Zwiebel, doi:10.1162/00335530360698469). A settle with ``effective_voters``
+near one is one voter's opinion, however many ballots it read.
+
+``--engine exact`` reads ``P`` off directly, solving ``(I - L W) P = I - L``
+where every closed group of the trust graph holds an anchored voter. A
+closed group that listens fully gets its stationary distribution; the
+voters outside it solve against that. The iteration stays the default and
+lands on the same point.
+
+Whose own voice counts
+======================
+
+A trust row says how much a voter listens to each of the others. What it
+weighs its own ballot is the diagonal. A row that does not say gets a
+fill; the tracker fills one constant for every voter. The rows ``learn`` and
+``calibrate`` write weigh voter j alike from everyone, as ``w_j``; a constant
+self-weight ``sw`` then weighs voter j by ``w_j (S + sw - w_j)``, with ``S`` the
+sum of the weights, not by ``w_j``. The best voter's lead shrinks: its own
+row sends the same constant home as the weakest voter's does.
+
+``--self-trust earned``, the default since 0.7.0, fills the diagonal with
+what the others give the voter: the mean of the weights that name it.
+Without a discount every row is then ``w / S``. The matrix is idempotent, so
+one round leaves every voter on the weighted vote ``sum_j w_j x0_j / S``;
+for log-odds rows from independent voters on a two-way choice, that vote
+is the Nitzan and Paroush optimum. Every voter anchored at ``s`` gives the
+mixture ``(1 - s) count + s weighted vote``. The anchor reads as how far the
+group trusts its record over a show of hands. People who revise least
+toward the group are the more accurate ones (Becker, Brackbill and
+Centola, doi:10.1073/pnas.1615978114), and weighing them more improves the
+crowd's estimate (Madirolas and de Polavieja,
+doi:10.1371/journal.pcbi.1004594).
+
+``examples/synthetic_voters.rs`` measures it where the truth is known, over
+twenty seeds of four hundred two-way questions. The two fills differ by a
+tenth of a point when accuracies are spread evenly: nine voters drawn in
+[0.35, 0.95] score 0.934 for calibrate with a constant self-weight and
+0.933 with earned self-trust; fifteen score 0.974 and 0.975. The
+difference shows where a weak crowd can outvote its best voter. One voter
+at 0.92 among eight in [0.52, 0.62] takes calibrate from 0.887 to 0.907,
+and the smoothed running record from 0.901 to 0.913, against the 0.919 the
+true weights reach. ``--self-trust constant`` keeps the old fill.
+
+When it settles
+===============
+
+The iteration converges to agreement exactly when the trust graph has one
+closed group every voter reaches, and that group is aperiodic (Berger,
+doi:10.1080/01621459.1981.10477662). Two teams that cite only each other
+never converge, and that is a fact about the team worth reporting rather
+than a number worth averaging. The tracker's own ``consensus`` verb reports
+the split; this crate reports ``settled: false`` when the budget runs out.
+
+``settled`` means within ``--tol`` of the fixed point wherever the distance
+can be bounded, not that the last step was small. The step is a
+``q``-contraction in the largest-entry norm when every voter is anchored,
+with ``q`` the largest susceptibility; Banach's estimate then puts the fixed
+point within ``q / (1 - q)`` times the last step's length. The iteration
+stops when that bound falls under the tolerance; ``residual`` is the bound.
+A small step alone said little: at ``q = 0.99`` the opinions could sit a
+hundred times the step away. A voter that listens fully breaks the
+contraction. ``residual`` is then the distance to the closed-form point. A
+panel with neither a contraction nor a closed form still stops on the
+step, which bounds nothing. ``exact::fixed_point`` names a group that
+cycles, and ``--engine exact`` falls back to the iteration for it and for a
+system too near singular to solve; in both cases it reports
+``settled: false``.
+
+Binary64 adds at most ``gamma(n + 2) / (1 - q)`` to the bound: Higham's
+gamma for the ``n``-term dot product, the product with ``s_i`` and the anchor
+term. That floor is 1.1e-12 for a hundred voters at ``q = 0.99``, far below
+the default tolerance of 1e-9. In the worst case the bound needs more
+than the default two hundred rounds once ``q`` passes about 0.892; when it
+would, the settle measures the distance to the closed-form point instead.
+
+``tie`` says the two leading shares lie within twice the residual plus
+rounding of each other: the settle cannot order them.
+
+Anchoring
+=========
+
+Friedkin and Johnsen (doi:10.1080/0022250X.1990.9990069) keep each voter
+partly anchored to its own starting opinion. The step is a contraction for
+any anchor, so it always settles, and what settles is a profile of
+persistent disagreement rather than one shared position. That is the
+setting to use when reviewers are not expected to abandon their reading.
+
+Bounded confidence
+==================
+
+Hegselmann and Krause, and Deffuant and colleagues
+(doi:10.1142/S0219525900000078), let each voter listen only to voters
+whose opinion lies within a bound of its own. Two blocs further apart than
+the bound never meet: the model produces clusters where the trust graph
+alone would produce one position. ``--epsilon`` runs that step, and
+``--epsilon-of`` gives each voter its own bound, which is the shape a persona
+with a narrow audience takes. Castellano, Fortunato and Loreto review the
+family (doi:10.1103/RevModPhys.81.591).
+
+Reading a settle
+================
+
+Two numbers come with every outcome. Polarization is how far the final
+opinions sit from their mean, summed over voters; disagreement is how far
+neighbours sit from each other, weighted by the trust between them, summed
+over edges. Musco, Musco and Tsourakakis (doi:10.1145/3178876.3186103)
+show the two move against each other under the Friedkin-Johnsen step, so a
+network can be tuned to lower their sum. A settle that reports high
+polarization and low disagreement has agreed within blocs that do not hear
+each other; the shares alone would not show it.
+
+Panels of agents
+================
+
+Running several model calls and settling their answers is now a product
+feature. Self-consistency samples one model many times and takes the
+majority (Wang et al., doi:10.48550/arXiv.2203.11171). Multi-agent debate
+lets several instances read each other's answers over rounds before a
+final vote (Du et al., doi:10.48550/arXiv.2305.14325; Liang et al.,
+doi:10.48550/arXiv.2305.19118), and a jury of debating evaluators grades
+text the same way (ChatEval, doi:10.48550/arXiv.2308.07201). Mixture of
+agents feeds the answers of several models to an aggregator model that
+writes the final one (Wang et al., doi:10.48550/arXiv.2406.04692). One
+model can also play several personas and have them collaborate (Wang et
+al., doi:10.48550/arXiv.2307.05300), and the roster can be chosen per task
+(Liu et al., doi:10.48550/arXiv.2310.02170). Debate between more
+persuasive models makes a weaker judge more truthful (Khan et al.,
+doi:10.48550/arXiv.2402.06782). A commercial system runs several agents in
+parallel on "multiple hypotheses at once" and settles before answering
+(the Grok 4 announcement, https://x.ai/news/grok-4); reports describe a
+captain agent deciding when the others do not agree, which this crate has
+not verified against a primary source.
+
+Two things these share, and this crate does differently. First, the
+aggregation is a count or an aggregator model's judgement, with every
+voice weighed the same; Chen et al. (doi:10.48550/arXiv.2403.02419) show
+that adding calls to such a count is not even monotone in accuracy, since
+it helps on easy items and hurts on hard ones. Here the aggregation is a
+weighted settle whose weights are memory: rows a person set, rows
+``learn`` moved when an outcome refuted a voter, rows ``calibrate`` wrote
+from the voters' history, each scoped to the topics they were earned on.
+Second, the roles are prompts that vanish with the session; here a persona
+is an atom in the pack with an anchor the settle honours, and a captain
+who decides when the panel splits is one persona with an anchor of zero,
+not a special case. The settle also says how the panel split, in
+polarization and disagreement, where a count says only who won.
+
+When the majority is wrong
+==========================
+
+A settle over ballots cannot see a majority that is wrong, only a majority.
+Prelec, Seung and McCoy (doi:10.1038/nature21054) ask each voter one more
+thing: what share of the others will pick each option. A minority that
+knows better predicts the majority and votes against it, so the option
+whose actual share most exceeds its predicted share is the informed one;
+on questions where most people are confidently wrong, that rule recovers
+the truth where a majority and a confidence-weighted vote both fail. It is
+the second verb a panel runs when the question is hard: ``surprising`` reads
+the ballots and the forecasts and names the answer, or says that fewer than
+two voters forecast and it has nothing to add. Prediction polls of this
+shape score about as well as prediction markets on the same questions
+(Atanasov et al., doi:10.1287/mnsc.2015.2374).
+
+Standing from the rows
+======================
+
+Pairwise rows say who listens to whom; they do not say who stands high in
+the group. EigenTrust (Kamvar, Schlosser and Garcia-Molina,
+doi:10.1145/775152.775242) reads that off the same rows: normalise them,
+take the principal eigenvector, and pull toward a uniform pre-trust so
+nobody falls to zero and the iteration settles. A voter weighed by voters
+who are themselves weighed stands high; a row from a voter nobody weighs
+counts for little. ``reputation`` prints the standing; the seat shows it
+beside a settle so a reader sees not only where the group landed but
+whose word carried it.
+
+Where the rows come from
+========================
+
+In the tracker, rows are configuration. In the seat, rows are memory: the
+pack's ``trust`` atoms, dated and supersedable, moved by ``ljos learn`` when
+an outcome shows who was right. This crate takes rows from anywhere as
+JSON and does not care which.
+
+Outcomes are rare; most issues close without anyone saying which option
+was right. Dawid and Skene (doi:10.2307/2346806) estimate each voter's
+accuracy without a truth, from how often it agrees with the answer the
+other voters make likely, by expectation maximisation. ``reliability`` runs
+that over a project's settled issues, and ``ljos calibrate`` turns the
+accuracies into rows, so weights move from the tracker's own history. The
+row a voter gets is its accuracy, which is the weight a linear opinion pool
+gives a source believed that reliable (Genest and Zidek,
+doi:10.1214/ss/1177013825). Acemoglu, Como, Fagnani and Ozdaglar
+(doi:10.1287/moor.1120.0570) show what a stubborn voter does to such a
+pool: with an anchor near zero it stays on its ballot and pulls the rest, which is
+why a persona's anchor is a parameter here and not a default.
+
+The rules were measured where the truth is known
+(``examples/synthetic_voters.rs``): voters with accuracies drawn uniformly
+between 0.35 and 0.95, so some are worse than chance, answer two-way
+questions, and the group decides under each rule; twenty seeds, four
+hundred questions each. Nine voters: one voter one vote 0.820; the
+accuracies as linear weights 0.873; the accuracies as log odds
+(Nitzan and Paroush, doi:10.2307/2526438) 0.934 against 0.939 for the
+same weights from the true accuracies, the ceiling; Hedge from equal
+rows 0.831, because after enough misses every row sits on the floor and
+the settle is a count again; Hedge with a fixed share of recovery
+(Herbster and Warmuth, doi:10.1023/A:1007424614876) 0.877; and the
+online form of calibration, each voter's smoothed record of hits and
+misses so far as log odds before every question, 0.929. Fifteen voters:
+0.877, 0.936, 0.974, 0.976, 0.891, 0.937, 0.972. The record shrunk by
+empirical Bayes, as ``ljos learn`` now keeps it, scores 0.929 and 0.971.
+Log-odds weights reach within a point of the ceiling whether estimated
+in one batch or kept as a running record; multiplicative shrinking does
+not, even with recovery. ``ljos calibrate`` writes log odds for that
+reason, and ``ljos learn`` keeps the record.
+
+Voices that share a cause
+=========================
+
+The jury theorem promises that a majority of better-than-chance voters is
+right more often the larger it grows. The promise rests on independent
+errors (Grofman, Owen and Feld, doi:10.1007/BF00125672). Votes driven by a
+common cause are correlated. Correlation caps what more voters can add
+(Ladha, doi:10.2307/2111584; Kaniovski, doi:10.1007/s11238-008-9120-4;
+Dietrich and Spiekermann, doi:10.1093/mind/fzt074). Personas that run on
+one model share its mistakes. Two of the Helm leaderboard's 71 models that
+both err pick the same wrong answer about 60% of the time, against a third
+by chance. More accurate models err more alike (Kim, Garg, Peng and Garg,
+doi:10.48550/arXiv.2506.07962).
+
+``derive/sympy/jury.py`` does the arithmetic: ``n`` voters correlated ``rho``
+are worth ``n / (1 + (n - 1) rho)`` independent ones, at most ``1 / rho``
+however many sit. Model the common cause as a latent accuracy, and the
+majority's chance saturates. A panel of 51 at a mean accuracy of 0.7 and
+``rho = 0.3`` is right 0.770 of the time, against a ceiling of 0.773;
+independent voters would reach 0.9986. The weights that make the most of a
+cluster divide each member by ``1 + (k - 1) rho``, so a cluster of ``k``
+counts as ``k / (1 + (k - 1) rho)`` voices. It counts as one as ``rho`` goes
+to one.
+
+``correlation`` reads ``rho`` off a project's history, scoring each voter's
+correctness on each item against the outcome where one was named and the
+Dawid-Skene answer otherwise. ``rho`` is the correlation of those scores for
+each pair. The discount each voter keeps for ``settle --discount-of`` is
+``1 / (1 + sum_{j !`` i} rho\ :sub:`ij`)= over the pairs it counts. The command
+prints it beside the panel's ``effective_voters`` under equal weights and
+its ``independent_voters`` once discounted.
+
+``examples/correlated_voters.rs`` seats five clones of one judge, right 0.70
+of the time, beside four independent voters in [0.60, 0.75]. The discount
+is read again every 25 questions against the named outcomes. A count
+scores 0.701 and log-odds weights 0.710; the same weights with the
+discount score 0.797, and the true weights with the clones merged 0.805.
+
+The reading needs those outcomes. The clone bloc makes up most of the
+Dawid-Skene answer (the example's ``infer`` argument), and read against it,
+its members look right on every item. Their correctness never varies.
+Their correlation reads zero: the reading holds 8.51 independent voices
+where there are five, and the discount leaves the group at 0.706. It does
+little harm on seven voters with no clones: 0.831 on named outcomes and
+0.833 under ``infer``, against 0.834. Without named outcomes it buys
+nothing. The seat records one each time ``ljos learn`` names the option an
+issue closed on, and applies the discount once five exist.
+
+On a short history
+------------------
+
+A seat decides a handful of issues, then tens, so the correlations and the
+voters' records it learns from are both short. The correlation of two
+voters who err apart reads about ``N(0, 1/m)`` over ``m`` shared items, so
+counting every positive reading would discount independent voters by
+noise. ``correlation`` counts a pair only when ``sqrt(m) rho`` passes the
+one-sided test of independence at five percent, 1.645 (``--gate``);
+``m rho^2`` is Pearson's chi-square for the pair's two-by-two table of right
+and wrong, which ``derive/sympy/jury.py`` checks. Exact clones with both a
+hit and a miss among the shared items read one, and would pass the gate
+from three shared items, though by default ``--min-shared`` skips any pair
+with fewer than five. Voters who err apart pass about one time in twenty.
+
+A voter's record is as short. The plug-in log odds of a record of five
+drop a good voter who started unlucky to the floor, and lose to a plain
+count on a panel of similar voters. Empirical Bayes shrinks each voter's
+accuracy toward the panel's pooled accuracy (Efron and Morris,
+doi:10.1080/01621459.1975.10479864); the prior weakens as the records
+spread beyond sampling noise. That noise is the pooled variance times
+``N / (N - 1)``, divided by each record's length and averaged, where ``N``
+counts the ballots the records hold. The spread between voters cannot be
+told from noise on a panel's first outcome. Every voter weighs the same. A
+long record keeps the differences it shows.
+
+``examples/correlation_history.rs`` measures the decision after ``h`` named
+outcomes, 4000 seeds a cell:
+
+================================== ===== ===== ======== ======================== ======================
+Panel                              ``h`` Count Log odds Log odds, gated discount Shrunk, gated discount
+================================== ===== ===== ======== ======================== ======================
+5 clones, 4 voters in [0.60, 0.75] 3     0.698 0.730    0.730                    0.702
+\                                  5     0.700 0.719    0.736                    0.780
+\                                  100   0.700 0.708    0.805                    0.813
+7 voters in [0.60, 0.75]           1     0.837 0.812    0.812                    0.837
+\                                  3     0.836 0.772    0.772                    0.824
+\                                  5     0.843 0.780    0.773                    0.826
+\                                  100   0.836 0.824    0.821                    0.834
+7 voters in [0.55, 0.90]           5     0.904 0.884    0.876                    0.896
+\                                  30    0.888 0.909    0.906                    0.902
+\                                  100   0.900 0.920    0.919                    0.918
+3 clones, 4 voters in [0.55, 0.90] 5     0.780 0.789    0.808                    0.830
+\                                  100   0.774 0.830    0.876                    0.879
+================================== ===== ===== ======== ======================== ======================
+
+The ungated discount costs the panel of seven similar voters three points
+at five outcomes (0.750 against 0.780); the gated one costs less than one
+(0.773). Shrinking with the gated discount beats plug-in log odds in every
+panel but one from five outcomes on, by up to ten and a half points where
+clones sit. The exception is the panel of widely differing voters, where
+the shrunk rows trail plug-in log odds by under a point from thirty
+outcomes on. The discount reads no pair before five outcomes. The shrunk
+rows then trail by up to three points where clones sit, because plug-in
+log odds floor the clones that start unlucky, which breaks the bloc. They
+trail a count by 2.0 points at worst where a count is best (0.820 against
+0.840 at eight outcomes), and on the first outcome they are the count.
+``ljos learn`` shrinks for that reason.
+
+The geometric median of the ballots
+===================================
+
+Each ballot is a point of the simplex. The geometric median minimises
+the sum of Euclidean distances to those points (Vardi and Zhang,
+doi:10.1073/pnas.97.4.1423). Weiszfeld's iteration finds it. A point
+shared by more than half the ballots is that median, so a minority
+voting the other way does not move it. The mean does. Minsker
+(doi:10.3150/14-BEJ645) gives the breakdown point as one half.
+``settle_geometric_median`` reports the median as the shares. The panel
+is read as having adopted that one position, so polarization and
+disagreement are zero.
+
+A stated confidence
+===================
+
+A ballot may carry a confidence in ``(0, 1]``, the probability the voter
+gives that its choice is the outcome. ``calibrated_confidence`` replaces a
+stated value with the hit rate among earlier statements of the same
+confidence, to the nearest thousandth (Zadrozny and Elkan,
+doi:10.1145/775047.775151). Murphy reads a record in those same bins
+(1973, doi:10.1175/1520-0450(1973)012<0595:ANVPOT>2.0.CO;2). A
+confidence with no earlier twin is left as stated. ``abstain_below`` drops
+a ballot whose calibrated confidence is under a threshold, Chow's reject
+option (doi:10.1109/TIT.1970.1054406). A ballot with no confidence is
+kept.
+
+Scoring a record on what came before
+====================================
+
+``replay`` walks the questions in cast order. A question with no named
+outcome is skipped. For each of the others it builds four forecasts
+and scores them on that question. The count, the calibrated weights and
+the lineage weights read earlier outcomes only, Dawid's prequential
+check (doi:10.2307/2981683). The DeGroot forecast reads the file's trust
+rows as given, which carry no time, so rows learned from the whole
+outcome list let later outcomes into that one forecast.
+
+The four are a plain count, the DeGroot forecast on the file's trust
+rows, the calibrated weights, and those weights times the lineage
+weights. With no trust rows the DeGroot forecast is the count, because
+every voter listens equally and the mean of the ballots is the count.
+
+The quadratic score is the sum over options of ``(p - y)^2``, with ``y``
+one on the named outcome and zero elsewhere (Brier 1950; Gneiting and
+Raftery, doi:10.1198/016214506000001437). The log score is ``-ln`` of the
+probability put on the outcome (Good,
+doi:10.1111/j.2517-6161.1952.tb00104.x). A forecast that put nothing on
+the outcome has no finite log score, and the mean is over the rest.
+Both means are lower when the forecast is better.
+
+``measurements/replay_history.txt`` is the stdout of
+``cargo run --release --example replay_history -- measurements/replay_panel.json``
+on the develop commit that first carried the example, since rebased into
+main; the example reproduces the numbers. The panel is three clones of
+``model:alpha``, right 0.60 of the time and always in agreement, beside
+three independent voters at 0.72, 0.68 and 0.66. It has forty eight
+two-way questions, seed 7, and no trust rows. Each method scored all 48
+questions. One forecast of each method put no probability on the
+outcome, so the log mean is over the other 47.
+
+================== ====== ======== ======== =========
+Method             Scored Brier    Log      Unbounded
+================== ====== ======== ======== =========
+count              48     0.359954 0.458164 1        
+degroot            48     0.359954 0.458164 1        
+calibrated         48     0.360070 0.458283 1        
+calibrated-lineage 48     0.299523 0.395456 1        
+================== ====== ======== ======== =========
+
+The count and the DeGroot forecast printed the same scores. The file
+names no trust row. The file was built with clones, so lineage
+grouping is expected to help there.
+
+``measurements/replay_independent.txt`` is the stdout of
+``cargo run --release --example replay_history -- measurements/replay_panel_independent.json``
+on the develop commit that first carried the independent panel, since
+rebased into main; the example reproduces the numbers. The panel has no clones.
+Six voters draw apart, at 0.55, 0.62, 0.68, 0.74, 0.82 and 0.90, each
+with its own family and key. It has forty eight two-way questions,
+seed 7, and no trust rows. Each method scored all 48 questions, and
+every log score was finite.
+
+================== ====== ======== ======== =========
+Method             Scored Brier    Log      Unbounded
+================== ====== ======== ======== =========
+count              48     0.218750 0.352321 0        
+degroot            48     0.218750 0.352321 0        
+calibrated         48     0.201969 0.327355 0        
+calibrated-lineage 48     0.201969 0.327355 0        
+================== ====== ======== ======== =========
+
+The count and the DeGroot forecast printed the same scores. The
+calibrated row and the calibrated-lineage row printed the same scores.
+The file names no trust row.
+
+Weights learned from outcomes
+=============================
+
+``shrunk_accuracy`` reads each voter's hits and misses on questions with a
+named outcome and shrinks the rate toward the panel's pooled accuracy
+(Efron and Morris, doi:10.1080/01621459.1975.10479864). When the records
+differ by no more than binomial noise, as they do after one outcome,
+every voter gets the pooled accuracy. ``calibration_weights`` turns that
+accuracy into log odds, held inside ``[0.01, 0.99]``, and scales the
+positive part so the best voter is one (Nitzan and Paroush,
+doi:10.2307/2526438). A voter at or below chance keeps the floor
+``0.01``. These are the weights ``ljos learn`` writes.
+
+One voice per family or key
+===========================
+
+A family name or a key is a common cause a short history cannot measure
+yet. Voters who share a model share its mistakes (Kim, Garg, Peng and
+Garg, doi:10.48550/arXiv.2506.07962). Voters who share a key speak for
+one operator. A shared cause is one voice (Dietrich and Spiekermann,
+doi:10.1093/mind/fzt074). The weights for dependent sources give that
+group one source's weight as the dependence goes to one (Winkler,
+doi:10.1287/mnsc.27.4.479), the same limit the cluster discount reaches
+for exact clones.
+
+``lineage_weights`` joins voters who share a family or a key, transitively,
+and gives each member of a component of size ``k`` the weight ``1/k``. A
+voter with neither is a component alone. Spelling is kept, so
+``model:alpha`` and ``Model:Alpha`` are two families.
+
+Independence before influence
+=============================
+
+A settle is social influence run to its end. Influence can destroy the
+information a crowd holds. Ballots seen before one's own is cast start
+cascades (Bikhchandani, Hirshleifer and Welch, doi:10.1086/261849): a
+voter rationally follows the ones before it, and its private evidence
+never reaches the count. Seeing what others guess narrows a crowd without
+making it more accurate (Lorenz, Rauhut, Schweitzer and Helbing,
+doi:10.1073/pnas.1008636108). People give a wrong answer to agree with a
+room (Asch, doi:10.1037/h0093718); the Delphi method collects judgments
+apart for that reason (Dalkey and Helmer, doi:10.1287/mnsc.9.3.458).
+Panels of language models show the same. Majority voting over the first
+answers already has most of what debate gains, and debate alone leaves
+expected correctness where it was (Choi, Zhu and Li,
+doi:10.48550/arXiv.2508.17536).
+
+The ballots a settle reads should be cast before any voter sees another's.
+The seat's panel hands each persona a brief that carries no ballot and
+records each vote before it prints the tally. The settle does the listening
+afterwards, where it can be weighed and reported.
+
+Derivations, proofs and certificates
+====================================
+
+One command runs each check:
+
+================== ====================================================== =====================================================================================================================================================================================================================
+Tool               Run                                                    What it shows
+================== ====================================================== =====================================================================================================================================================================================================================
+SymPy              ``python3 derive/sympy/fj.py``                         ``P`` is row-stochastic; the social power; the ``w_j (S + sw - w_j)`` weights a constant self-weight gives; earned self-trust as the weighted vote; the mixture under one anchor; the second eigenvalue
+SymPy              ``python3 derive/sympy/jury.py``                       ``n_eff``; the cluster discount; the beta-binomial ceiling; extremizing; ``rho`` from agreement; ``m rho^2`` as the two-by-two chi-square behind the gate
+SymPy              ``python3 derive/sympy/golden.py``                     four settles solved in rationals, which the Rust tests match to 1e-12
+Lean 4 and Mathlib ``cd derive/lean && lake exe cache get && lake build`` the step is a contraction with one fixed point the iteration reaches; Banach's stopping bound; rows stay distributions; Nitzan and Paroush's theorem; idempotent earned rows; the stationary weights of constant ones
+Sollya             ``sollya derive/sollya/rounding.sollya``               in interval arithmetic: the rounding floor of the bound, the rounds it needs, the tie allowance, the log-odds range of calibrate's smoothed accuracies
+================== ====================================================== =====================================================================================================================================================================================================================
+
+``#print axioms`` on each Lean theorem lists only ``propext``,
+``Classical.choice`` and ``Quot.sound``.
+
+Seldon
+======
+
+Seldon is an opinion-dynamics engine that integrates the same models as
+ordinary differential equations. This crate can write its inputs and read its output so the discrete
+step can be checked against a second implementation. It does not link
+Seldon; it runs the binary when present.

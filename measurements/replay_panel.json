@@ -1,0 +1,2214 @@
+{
+  "ballots": [
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q0"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q0"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q0"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q0"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q0"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q0"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q1"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q1"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q1"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q1"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q1"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q1"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q2"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q2"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q2"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q2"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q2"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q2"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q3"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q3"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q3"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q3"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q3"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q3"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q4"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q4"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q4"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q4"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q4"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q4"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q5"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q5"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q5"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q5"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q5"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q5"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q6"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q6"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q6"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q6"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q6"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q6"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q7"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q7"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q7"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q7"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q7"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q7"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q8"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q8"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q8"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q8"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q8"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q8"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q9"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q9"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q9"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q9"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q9"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q9"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q10"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q10"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q10"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q10"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q10"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q10"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q11"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q11"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q11"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q11"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q11"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q11"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q12"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q12"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q12"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q12"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q12"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q12"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q13"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q13"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q13"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q13"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q13"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q13"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q14"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q14"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q14"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q14"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q14"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q14"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q15"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q15"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q15"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q15"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q15"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q15"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q16"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q16"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q16"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q16"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q16"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q16"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q17"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q17"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q17"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q17"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q17"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q17"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q18"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q18"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q18"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q18"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q18"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q18"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q19"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q19"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q19"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q19"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q19"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q19"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q20"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q20"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q20"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q20"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q20"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q20"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q21"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q21"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q21"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q21"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q21"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q21"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q22"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q22"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q22"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q22"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q22"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q22"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q23"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q23"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q23"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q23"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q23"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q23"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q24"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q24"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q24"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q24"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q24"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q24"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q25"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q25"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q25"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q25"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q25"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q25"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q26"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q26"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q26"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q26"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q26"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q26"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q27"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q27"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q27"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q27"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q27"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q27"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q28"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q28"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q28"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q28"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q28"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q28"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q29"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q29"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q29"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q29"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q29"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q29"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q30"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q30"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q30"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q30"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q30"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q30"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q31"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q31"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q31"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q31"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q31"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q31"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q32"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q32"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q32"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q32"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q32"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q32"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q33"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q33"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q33"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q33"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q33"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q33"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q34"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q34"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q34"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q34"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q34"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q34"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q35"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q35"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q35"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q35"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q35"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q35"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q36"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q36"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q36"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q36"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q36"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q36"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q37"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q37"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q37"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q37"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q37"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q37"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q38"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q38"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q38"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q38"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q38"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q38"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q39"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q39"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q39"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q39"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q39"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q39"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q40"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q40"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q40"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q40"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q40"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q40"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q41"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q41"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q41"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q41"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q41"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q41"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q42"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q42"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q42"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q42"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q42"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q42"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q43"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q43"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q43"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q43"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q43"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q43"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q44"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q44"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q44"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q44"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q44"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q44"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q45"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q45"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q45"
+    },
+    {
+      "agent": "ind1",
+      "choice": "no",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q45"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q45"
+    },
+    {
+      "agent": "ind3",
+      "choice": "yes",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q45"
+    },
+    {
+      "agent": "clone1",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q46"
+    },
+    {
+      "agent": "clone2",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q46"
+    },
+    {
+      "agent": "clone3",
+      "choice": "no",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q46"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q46"
+    },
+    {
+      "agent": "ind2",
+      "choice": "yes",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q46"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q46"
+    },
+    {
+      "agent": "clone1",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q47"
+    },
+    {
+      "agent": "clone2",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q47"
+    },
+    {
+      "agent": "clone3",
+      "choice": "yes",
+      "family": "model:alpha",
+      "key": "key-alpha",
+      "question": "q47"
+    },
+    {
+      "agent": "ind1",
+      "choice": "yes",
+      "family": "model:beta",
+      "key": "key-b",
+      "question": "q47"
+    },
+    {
+      "agent": "ind2",
+      "choice": "no",
+      "family": "model:gamma",
+      "key": "key-c",
+      "question": "q47"
+    },
+    {
+      "agent": "ind3",
+      "choice": "no",
+      "family": "model:delta",
+      "key": "key-d",
+      "question": "q47"
+    }
+  ],
+  "outcomes": [
+    {
+      "outcome": "yes",
+      "question": "q0"
+    },
+    {
+      "outcome": "yes",
+      "question": "q1"
+    },
+    {
+      "outcome": "yes",
+      "question": "q2"
+    },
+    {
+      "outcome": "yes",
+      "question": "q3"
+    },
+    {
+      "outcome": "no",
+      "question": "q4"
+    },
+    {
+      "outcome": "no",
+      "question": "q5"
+    },
+    {
+      "outcome": "yes",
+      "question": "q6"
+    },
+    {
+      "outcome": "yes",
+      "question": "q7"
+    },
+    {
+      "outcome": "yes",
+      "question": "q8"
+    },
+    {
+      "outcome": "no",
+      "question": "q9"
+    },
+    {
+      "outcome": "yes",
+      "question": "q10"
+    },
+    {
+      "outcome": "yes",
+      "question": "q11"
+    },
+    {
+      "outcome": "no",
+      "question": "q12"
+    },
+    {
+      "outcome": "yes",
+      "question": "q13"
+    },
+    {
+      "outcome": "yes",
+      "question": "q14"
+    },
+    {
+      "outcome": "yes",
+      "question": "q15"
+    },
+    {
+      "outcome": "yes",
+      "question": "q16"
+    },
+    {
+      "outcome": "no",
+      "question": "q17"
+    },
+    {
+      "outcome": "no",
+      "question": "q18"
+    },
+    {
+      "outcome": "no",
+      "question": "q19"
+    },
+    {
+      "outcome": "yes",
+      "question": "q20"
+    },
+    {
+      "outcome": "no",
+      "question": "q21"
+    },
+    {
+      "outcome": "no",
+      "question": "q22"
+    },
+    {
+      "outcome": "yes",
+      "question": "q23"
+    },
+    {
+      "outcome": "yes",
+      "question": "q24"
+    },
+    {
+      "outcome": "yes",
+      "question": "q25"
+    },
+    {
+      "outcome": "no",
+      "question": "q26"
+    },
+    {
+      "outcome": "yes",
+      "question": "q27"
+    },
+    {
+      "outcome": "no",
+      "question": "q28"
+    },
+    {
+      "outcome": "no",
+      "question": "q29"
+    },
+    {
+      "outcome": "no",
+      "question": "q30"
+    },
+    {
+      "outcome": "no",
+      "question": "q31"
+    },
+    {
+      "outcome": "yes",
+      "question": "q32"
+    },
+    {
+      "outcome": "yes",
+      "question": "q33"
+    },
+    {
+      "outcome": "no",
+      "question": "q34"
+    },
+    {
+      "outcome": "yes",
+      "question": "q35"
+    },
+    {
+      "outcome": "no",
+      "question": "q36"
+    },
+    {
+      "outcome": "no",
+      "question": "q37"
+    },
+    {
+      "outcome": "yes",
+      "question": "q38"
+    },
+    {
+      "outcome": "yes",
+      "question": "q39"
+    },
+    {
+      "outcome": "yes",
+      "question": "q40"
+    },
+    {
+      "outcome": "no",
+      "question": "q41"
+    },
+    {
+      "outcome": "yes",
+      "question": "q42"
+    },
+    {
+      "outcome": "yes",
+      "question": "q43"
+    },
+    {
+      "outcome": "no",
+      "question": "q44"
+    },
+    {
+      "outcome": "no",
+      "question": "q45"
+    },
+    {
+      "outcome": "yes",
+      "question": "q46"
+    },
+    {
+      "outcome": "no",
+      "question": "q47"
+    }
+  ]
+}

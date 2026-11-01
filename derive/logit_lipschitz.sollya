@@ -1,0 +1,10 @@
+prec = 165;
+f = log(x / (1 - x));
+d = diff(f);
+I = [0.35; 0.95];
+s = dirtyinfnorm(d, I);
+exact = 400 / 19;
+gap = abs(s - exact);
+print(gap);
+if gap > 1e-30 then print("FAIL") else print("certified");
+quit;

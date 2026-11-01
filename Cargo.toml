@@ -1,0 +1,40 @@
+[package]
+name = "ljos-consensus"
+version = "0.9.0"
+edition = "2021"
+rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/leidarljos/consensus"
+description = "DeGroot / Friedkin–Johnsen over a trust graph; Seldon ODE when seldon is on PATH"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/consensus-v{ version }-{ target }.tar.gz"
+bin-dir = "consensus-v{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+# The release tarball or nothing. A target without one fails here, and
+# `cargo install` builds it from source.
+disabled-strategies = ["quick-install", "compile"]
+
+[[bin]]
+name = "ljos-consensus"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+eindir-core = { version = "0.6.0", features = ["capi"] }
+rgmin = "0.2.0"
+ndarray = "0.17"
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+approx = "0.5"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(seldon_capi)'] }
