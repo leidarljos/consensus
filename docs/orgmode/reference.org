@@ -42,6 +42,29 @@ Polarization and disagreement follow Musco, Musco and Tsourakakis
 (doi:10.1145/3178876.3186103). Only the iterate and exact engines fill the
 last five fields.
 
+Exit status of =settle --issue=:
+
+When that read does not yield ballots, =settle= writes one line to stderr
+and exits with a status from =sysexits.h= (FreeBSD). The line is the whole
+of stderr: it names what happened and says to pass =--ballots JSON=
+instead. What =vissue= itself wrote is not copied, so a tracker that
+prints several lines cannot bury the instruction.
+
+| Status | =sysexits.h= | The line |
+|---+---|---|
+| 69 | =EX_UNAVAILABLE= | =vissue not on PATH; pass --ballots JSON= |
+| 74 | =EX_IOERR= | =vissue vote ID --json could not run; pass --ballots JSON= |
+| 74 | =EX_IOERR= | =vissue vote ID --json exited N; pass --ballots JSON= |
+| 74 | =EX_IOERR= | =vissue vote ID --json exited on a signal; pass --ballots JSON= |
+| 65 | =EX_DATAERR= | =vissue vote ID --json was not ballot JSON; pass --ballots JSON= |
+| 66 | =EX_NOINPUT= | =vissue vote ID --json returned no ballots; pass --ballots JSON= |
+
+=N= is the status =vissue= exited with. =EX_UNAVAILABLE= is a support
+program that is not there, =EX_IOERR= a read that did not finish,
+=EX_DATAERR= stdout that is not ballot JSON this program accepts, and
+=EX_NOINPUT= a read that succeeded and held nothing, the code =sysexits=
+gives an empty message. Any other failure of a parsed =settle= exits 1.
+
 =ljos-consensus surprising (--issue ID | --ballots JSON) --predictions JSON=
 
 The surprisingly popular answer (Prelec, Seung and McCoy,

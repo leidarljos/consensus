@@ -1,7 +1,7 @@
 //! `ljos-consensus settle`: DeGroot here; `seldon` on PATH is the ODE.
 
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, ExitCode};
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
@@ -163,13 +163,29 @@ enum Cmd {
     },
 }
 
-fn main() -> Result<()> {
+fn main() -> ExitCode {
     // A closed pipe ends the run quietly: `ljos-consensus settle | head` and
     // a seat that reads only the first lines are not a panic.
     // SAFETY: resetting a signal disposition before any thread is spawned.
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            if let Some(read) = err.downcast_ref::<IssueRead>() {
+                eprintln!("{}", read.line);
+                ExitCode::from(read.code)
+            } else {
+                // The line `Termination` prints for `Result`, including a caused-by chain.
+                eprintln!("Error: {err:?}");
+                ExitCode::FAILURE
+            }
+        }
+    }
+}
+
+fn run() -> Result<()> {
     match Cli::parse().cmd {
         Cmd::Surprising {
             issue,
@@ -285,7 +301,11 @@ fn main() -> Result<()> {
             tol,
             engine,
         } => {
-            let ballots = load_ballots(issue.as_deref(), ballots.as_deref())?;
+            let ballots = if let (Some(id), None) = (issue.as_deref(), ballots.as_deref()) {
+                issue_ballots(id)?
+            } else {
+                load_ballots(issue.as_deref(), ballots.as_deref())?
+            };
             if ballots.is_empty() {
                 bail!("settle: no ballots, so nothing to settle");
             }
@@ -428,6 +448,86 @@ fn load_ballots(issue: Option<&str>, ballots: Option<&str>) -> Result<Vec<Ballot
         bail!("pass --ballots JSON or --issue");
     };
     ballots_from_vissue(id)
+}
+
+/// `settle --issue` when the tracker read does not yield ballots. `code`
+/// is the `sysexits.h` status documented in `docs/orgmode/reference.org`.
+/// `line` is the whole of stderr.
+#[derive(Debug)]
+struct IssueRead {
+    code: u8,
+    line: String,
+}
+
+impl std::fmt::Display for IssueRead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.line)
+    }
+}
+
+impl std::error::Error for IssueRead {}
+
+/// `sysexits.h` `EX_UNAVAILABLE`: the support program is not on `PATH`.
+const EXIT_VISSUE_ABSENT: u8 = 69;
+/// `sysexits.h` `EX_IOERR`: `vissue` could not be started, or it did not
+/// exit zero. The seat passes `--ballots` rather than retrying the read.
+const EXIT_VISSUE_FAILED: u8 = 74;
+/// `sysexits.h` `EX_DATAERR`: stdout is not ballot JSON this program accepts.
+const EXIT_VISSUE_DATA: u8 = 65;
+/// `sysexits.h` `EX_NOINPUT`: the read succeeded and held no ballots.
+/// `sysexits` gives this code to an empty "No message" input.
+const EXIT_VISSUE_EMPTY: u8 = 66;
+
+/// Ballots for `settle --issue`. Each failure is an [`IssueRead`].
+fn issue_ballots(id: &str) -> Result<Vec<Ballot>, IssueRead> {
+    if !which_ok("vissue") {
+        return Err(IssueRead {
+            code: EXIT_VISSUE_ABSENT,
+            line: "vissue not on PATH; pass --ballots JSON".to_string(),
+        });
+    }
+    // Drop the OS text: it can run to several sentences, and the next
+    // step is `--ballots` whatever the kernel said.
+    let out = match Command::new("vissue").args(["vote", id, "--json"]).output() {
+        Ok(out) => out,
+        Err(_) => {
+            return Err(IssueRead {
+                code: EXIT_VISSUE_FAILED,
+                line: format!("vissue vote {id} --json could not run; pass --ballots JSON"),
+            });
+        }
+    };
+    if !out.status.success() {
+        let line = match out.status.code() {
+            Some(code) => format!("vissue vote {id} --json exited {code}; pass --ballots JSON"),
+            None => format!("vissue vote {id} --json exited on a signal; pass --ballots JSON"),
+        };
+        return Err(IssueRead {
+            code: EXIT_VISSUE_FAILED,
+            line,
+        });
+    }
+    // One stable line for every unusable body: bytes that are not UTF-8,
+    // JSON the parser refuses, or a ballot it will not take. The parser's
+    // own text stays off stderr so the instruction is the whole line.
+    let Ok(raw) = String::from_utf8(out.stdout) else {
+        return Err(not_ballot_json(id));
+    };
+    match ballots_from_json(&raw) {
+        Ok(ballots) if !ballots.is_empty() => Ok(ballots),
+        Ok(_) => Err(IssueRead {
+            code: EXIT_VISSUE_EMPTY,
+            line: format!("vissue vote {id} --json returned no ballots; pass --ballots JSON"),
+        }),
+        Err(_) => Err(not_ballot_json(id)),
+    }
+}
+
+fn not_ballot_json(id: &str) -> IssueRead {
+    IssueRead {
+        code: EXIT_VISSUE_DATA,
+        line: format!("vissue vote {id} --json was not ballot JSON; pass --ballots JSON"),
+    }
 }
 
 /// Items for the reliability estimate: `--items` JSON, else every issue of
