@@ -1,7 +1,7 @@
 //! `ljos-consensus settle`: DeGroot here; `seldon` on PATH is the ODE.
 
 use std::path::PathBuf;
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
@@ -604,9 +604,13 @@ fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(Str
         let Some(id) = row.get("id").and_then(serde_json::Value::as_str) else {
             continue;
         };
-        let ballots = ballots_from_vissue(id)?;
-        if ballots.len() >= 2 {
-            items.push(ballots.into_iter().map(|b| (b.agent, b.choice)).collect());
+        // One issue a hand edit broke leaves the rest of the project to read.
+        match vote_json(id) {
+            Ok(ballots) if ballots.len() >= 2 => {
+                items.push(ballots.into_iter().map(|b| (b.agent, b.choice)).collect());
+            }
+            Ok(_) => {}
+            Err(reason) => eprintln!("{project}: skipped {id}: {reason}"),
         }
     }
     if items.is_empty() {
@@ -619,16 +623,26 @@ fn ballots_from_vissue(id: &str) -> Result<Vec<Ballot>> {
     if !which_ok("vissue") {
         bail!("vissue not on PATH; pass --ballots JSON");
     }
+    vote_json(id).map_err(|e| anyhow::anyhow!("{e}; pass --ballots JSON"))
+}
+
+/// The ballots `vissue vote ID --json` prints, or one line saying why
+/// there are none. vissue's own stderr passes through as it writes it.
+fn vote_json(id: &str) -> Result<Vec<Ballot>, String> {
     let out = Command::new("vissue")
         .args(["vote", id, "--json"])
+        .stderr(Stdio::inherit())
         .output()
-        .context("run vissue vote --json")?;
+        .map_err(|e| format!("vissue vote {id} --json could not run: {e}"))?;
     if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        bail!("vissue vote {id} --json failed; pass --ballots JSON\n{err}");
+        return Err(match out.status.code() {
+            Some(code) => format!("vissue vote {id} --json exited {code}"),
+            None => format!("vissue vote {id} --json exited on a signal"),
+        });
     }
-    let raw = String::from_utf8(out.stdout).context("vissue vote --json stdout")?;
-    ballots_from_json(&raw).map_err(|e| anyhow::anyhow!("{e}; pass --ballots JSON"))
+    let raw = String::from_utf8(out.stdout)
+        .map_err(|_| format!("vissue vote {id} --json printed bytes that are not UTF-8"))?;
+    ballots_from_json(&raw)
 }
 
 fn settle_seldon(

@@ -125,7 +125,9 @@ Dawid and Skene's estimate (doi:10.2307/2346806) of each voter's accuracy
 from many items with no known truth: expectation maximisation over the
 items' hidden answers and the voters' accuracies, twenty rounds by default.
 =--items= is a JSON array of ballot arrays; =--project= reads every issue
-of a tracker project that holds two or more ballots. Output: =items=,
+of a tracker project that holds two or more ballots. An issue whose
+ballots cannot be read is skipped, with a line on stderr naming it and
+why, and the rest are read. Output: =items=,
 =rounds=, and =accuracy= as an object of voter to a value in (0, 1),
 Laplace smoothed so no voter reaches a certainty.
 
