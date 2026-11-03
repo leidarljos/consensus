@@ -30,11 +30,30 @@
 //! (derive/sympy/jury.py). On its own the gate would pass exact clones from
 //! three shared items when they have both a hit and a miss there. By default
 //! a pair needs five shared items (`min_shared`).
+//!
+//! `examples/correlation_gate` measures both where the truth is known, on
+//! pairs right 0.60 to 0.75 of the time whose correctness correlates `rho`
+//! (`measurements/correlation_gate-20000.txt`). The 2x2 table is coarse at a
+//! seat's lengths, so `sqrt(m) rho` is not yet normal and 1.645 does not
+//! hold its five percent: independent pairs pass 0.060 of the time at six
+//! shared items, 0.086 at seven, 0.072 at ten, 0.066 at twenty and still
+//! 0.054 at a hundred. The gate stays. A higher one cuts those false alarms
+//! only by missing more partly shared errors, and a point moved until this
+//! grid reads five percent would be fitted to these accuracies; Fisher's
+//! exact test on the table would hold the level at every length. Five holds
+//! up. Through five shared items the gate passes only identical records
+//! with a hit and a miss, which independent pairs show 0.082 of the time at
+//! three and 0.059 at four; five, at 0.039, is the one length from three to
+//! a hundred where false alarms fall under five percent. Exact clones are
+//! missed only when the judge is right, or wrong, on every shared item:
+//! 0.149 of the time at five, 0.024 at ten.
 
 use std::collections::BTreeMap;
 
 /// The one-sided five percent point of the standard normal: the gate a
-/// pair's `sqrt(m) rho` must pass before its correlation is counted.
+/// pair's `sqrt(m) rho` must pass before its correlation is counted. Past
+/// five shared items it passes 0.054 to 0.086 of independent pairs, not
+/// 0.05; the module doc says why it stays.
 pub const INDEPENDENCE_Z: f64 = 1.645;
 
 use serde::{Deserialize, Serialize};
@@ -316,5 +335,40 @@ mod tests {
             ungated.discount
         );
         assert!(ungated.gate.abs() < f64::EPSILON);
+    }
+
+    mod gate_grid {
+        include!("../examples/correlation_gate/grid.rs");
+    }
+
+    /// The gate rates the module doc quotes re-run from their seeds and read
+    /// as `measurements/correlation_gate-20000.txt` records them: false
+    /// alarms either side of the floor of five and at their worst, partly
+    /// shared errors missed at twenty items, exact clones missed at five.
+    #[test]
+    fn the_committed_gate_rates_re_run() {
+        let table = include_str!("../measurements/correlation_gate-20000.txt");
+        let trials: u64 = table
+            .split(" trials a cell")
+            .next()
+            .and_then(|head| head.rsplit(' ').next())
+            .and_then(|n| n.parse().ok())
+            .expect("the run names its trials a cell");
+        let read = |items: &[Vec<(String, String)>], truths: &[Option<String>]| {
+            correlation(items, truths, 1, 2, INDEPENDENCE_Z).discount["v0"]
+        };
+        for (m, k) in [(4, 0), (5, 0), (7, 0), (20, 4), (5, 6)] {
+            let row = table
+                .lines()
+                .find(|l| l.starts_with(&format!("| {m} |")))
+                .expect("a row per shared-item count");
+            let committed = row.split('|').map(str::trim).nth(k + 2);
+            assert_eq!(
+                Some(gate_grid::cell(m, k, trials, read).as_str()),
+                committed,
+                "m {m}, rho {}",
+                gate_grid::RHO[k]
+            );
+        }
     }
 }
