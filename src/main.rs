@@ -216,11 +216,16 @@ enum SelfTrustArg {
 /// That bounded confidence with one bound per voter stops at all is a conjecture (Mirtabatabaei and Bullo, doi:10.1137/11082751X), and even a shared bound can need rounds quadratic in `n` (Wedin and Hegarty, doi:10.1007/s00454-014-9657-7).
 /// DeGroot has `q` one, and the energy stops on rgmin's own gradient test.
 /// So the cap is a budget: past it a settle reports `converged: false`.
-/// `measurements/settle_budget.txt` runs all three on random panels of 2 to 128 voters.
-/// No panel took more than 1345 rounds, the fewest steps after which one 16-voter energy settle counts as settled.
-/// The cap is the next power of two, since the 99th percentiles move by hundreds of rounds from one size to the next and the largest count carries no more digits than that.
+/// The cap is [`MOST_MEASURED_ROUNDS`] rounded up to a power of two, 1.52 times it.
 /// The energy stops on its first settled point, except where the point settles only on the rounding floor and rgmin's test stays out of reach: 2 of the 1400 panels, both of 128 voters, ran to the cap.
-const UNBOUNDED_MAX_ITER: usize = 2048;
+const UNBOUNDED_MAX_ITER: usize = MOST_MEASURED_ROUNDS.next_power_of_two();
+
+/// The most rounds any settle took in `measurements/settle_budget.txt`, which runs all three on random panels of 2 to 128 voters: the fewest steps after which one 16-voter energy settle counts as settled.
+/// A test holds the cap to the table.
+///
+/// At one size the most a panel took is up to 1.53 times that size's 99th percentile (the energy at 64 voters, 640 against 417).
+/// So 200 panels a size pin the tail only to about that factor, and the margin rounding up to a power of two leaves is about that factor again.
+const MOST_MEASURED_ROUNDS: usize = 1345;
 
 /// Why [`finite_alpha`] refused a token.
 #[derive(Debug)]
