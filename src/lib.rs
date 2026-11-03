@@ -818,12 +818,14 @@ pub fn influence_matrix_with(
         .iter()
         .map(|a| discount.get(a).copied().unwrap_or(1.0).max(0.0))
         .collect();
+    // A name listed twice keeps its first seat.
+    let mut seat = std::collections::HashMap::with_capacity(n);
+    for (i, a) in agents.iter().enumerate() {
+        seat.entry(a.as_str()).or_insert(i);
+    }
     let mut w = vec![vec![0.0; n]; n];
     for (from, to, wt) in trust {
-        let (Some(i), Some(j)) = (
-            agents.iter().position(|a| a == from),
-            agents.iter().position(|a| a == to),
-        ) else {
+        let (Some(&i), Some(&j)) = (seat.get(from.as_str()), seat.get(to.as_str())) else {
             continue;
         };
         // A weight that is negative or not finite listens to nobody.

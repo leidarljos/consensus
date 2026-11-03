@@ -151,44 +151,50 @@ pub fn effective_voters(c: &[f64]) -> f64 {
 }
 
 /// The strongly connected groups of `a`'s graph that no edge leaves and in
-/// which every voter listens fully: the DeGroot classes.
+/// which every voter listens fully: the DeGroot classes. No edge leaves a
+/// class, so a path between two of its voters never passes a voter that
+/// keeps some of its ballot, and reachability is taken among the voters
+/// that listen fully alone. A panel where every voter keeps some of its
+/// ballot has no class and pays no closure.
 fn closed_listening_classes(a: &[Vec<f64>], s: &[f64]) -> Vec<Vec<usize>> {
     let n = a.len();
-    let mut reach = vec![vec![false; n]; n];
-    for i in 0..n {
-        reach[i][i] = true;
-        for j in 0..n {
+    let listening: Vec<usize> = (0..n).filter(|&i| s[i] >= 1.0).collect();
+    let l = listening.len();
+    let mut reach = vec![vec![false; l]; l];
+    for (x, &i) in listening.iter().enumerate() {
+        reach[x][x] = true;
+        for (y, &j) in listening.iter().enumerate() {
             if a[i][j] > 0.0 {
-                reach[i][j] = true;
+                reach[x][y] = true;
             }
         }
     }
-    for k in 0..n {
-        for i in 0..n {
-            if reach[i][k] {
-                for j in 0..n {
-                    if reach[k][j] {
-                        reach[i][j] = true;
+    for k in 0..l {
+        for x in 0..l {
+            if reach[x][k] {
+                for y in 0..l {
+                    if reach[k][y] {
+                        reach[x][y] = true;
                     }
                 }
             }
         }
     }
-    let mut seen = vec![false; n];
+    let mut seen = vec![false; l];
     let mut out = Vec::new();
-    for i in 0..n {
-        if seen[i] {
+    for x in 0..l {
+        if seen[x] {
             continue;
         }
-        let class: Vec<usize> = (0..n).filter(|&j| reach[i][j] && reach[j][i]).collect();
-        for &j in &class {
-            seen[j] = true;
+        let members: Vec<usize> = (0..l).filter(|&y| reach[x][y] && reach[y][x]).collect();
+        for &y in &members {
+            seen[y] = true;
         }
+        let class: Vec<usize> = members.iter().map(|&y| listening[y]).collect();
         let closed = class
             .iter()
             .all(|&u| (0..n).all(|v| a[u][v] == 0.0 || class.contains(&v)));
-        let listening = class.iter().all(|&u| s[u] >= 1.0);
-        if closed && listening {
+        if closed {
             out.push(class);
         }
     }
