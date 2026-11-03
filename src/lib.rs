@@ -107,6 +107,16 @@ pub fn roster(ballots: &[Ballot]) -> (Vec<String>, Vec<String>) {
     (agents, options)
 }
 
+/// Each voter's seat in `agents` by name, so a trust row is looked up rather
+/// than scanned for. A name listed twice keeps its first seat.
+fn seats(agents: &[String]) -> std::collections::HashMap<&str, usize> {
+    let mut seat = std::collections::HashMap::with_capacity(agents.len());
+    for (i, a) in agents.iter().enumerate() {
+        seat.entry(a.as_str()).or_insert(i);
+    }
+    seat
+}
+
 /// Row-stochastic trust. Missing self-weight is filled with `self_weight`.
 pub fn influence_matrix(
     agents: &[String],
@@ -833,12 +843,10 @@ pub fn eigentrust(
     let alpha = alpha.clamp(0.0, 1.0);
     // c[i][j]: how much i trusts j, rows normalised; a voter with no rows
     // trusts everyone equally, as the settle's default does.
+    let seat = seats(agents);
     let mut c = vec![vec![0.0; n]; n];
     for (from, to, w) in trust {
-        let (Some(i), Some(j)) = (
-            agents.iter().position(|a| a == from),
-            agents.iter().position(|a| a == to),
-        ) else {
+        let (Some(&i), Some(&j)) = (seat.get(from.as_str()), seat.get(to.as_str())) else {
             continue;
         };
         if i != j && *w > 0.0 {
@@ -1048,11 +1056,7 @@ pub fn influence_matrix_with(
         .iter()
         .map(|a| discount.get(a).copied().unwrap_or(1.0).max(0.0))
         .collect();
-    // A name listed twice keeps its first seat.
-    let mut seat = std::collections::HashMap::with_capacity(n);
-    for (i, a) in agents.iter().enumerate() {
-        seat.entry(a.as_str()).or_insert(i);
-    }
+    let seat = seats(agents);
     let mut w = vec![vec![0.0; n]; n];
     for (from, to, wt) in trust {
         let (Some(&i), Some(&j)) = (seat.get(from.as_str()), seat.get(to.as_str())) else {
