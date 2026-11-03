@@ -1,4 +1,4 @@
-# cargo run --release --example replay_history -- --write-independent measurements/replay_panel_independent.json
+# c71e993dfe4b77efd45c5fe1762bfdb874e7acdd cargo run --release --example replay_history -- --write-independent measurements/replay_panel_independent.json
 {
   "ballots": [
     {
