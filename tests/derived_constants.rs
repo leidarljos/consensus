@@ -107,10 +107,10 @@ fn the_cap_without_a_round_bound_clears_every_measured_settle() {
     let table = include_str!("../measurements/settle_budget.txt");
     let most = table
         .lines()
-        .filter(|l| l.starts_with("| ") && !l.starts_with("| engine"))
+        .filter(|l| l.starts_with("| ") && !l.starts_with("| voters"))
         .map(|l| {
             l.split('|')
-                .nth(5)
+                .nth(4)
                 .unwrap()
                 .trim()
                 .parse::<usize>()

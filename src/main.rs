@@ -217,7 +217,7 @@ enum SelfTrustArg {
 /// DeGroot has `q` one, and the energy stops on rgmin's own gradient test.
 /// So the cap is a budget: past it a settle reports `converged: false`.
 /// The cap is [`MOST_MEASURED_ROUNDS`] rounded up to a power of two, 1.52 times it.
-/// The energy stops on its first settled point, except where the point settles only on the rounding floor and rgmin's test stays out of reach: 2 of the 1400 panels, both of 128 voters, ran to the cap.
+/// The energy stops on its first settled point, except where the point settles only on the rounding floor and rgmin's test stays out of reach: the column `run to the cap` of `measurements/settle_budget.txt` counts 2 of its 1400 energy panels, both of 128 voters.
 const UNBOUNDED_MAX_ITER: usize = MOST_MEASURED_ROUNDS.next_power_of_two();
 
 /// The most rounds any settle took in `measurements/settle_budget.txt`, which runs all three on random panels of 2 to 128 voters: the fewest steps after which one 16-voter energy settle counts as settled.

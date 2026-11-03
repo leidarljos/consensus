@@ -15,7 +15,12 @@
 //!
 //! The energy stops on rgmin's own gradient test, which can stay out of reach after the point it returns counts as settled.
 //! Its count is the fewest L-BFGS steps whose point the energy reports settled, found by doubling the cap and then bisecting it.
-//! A count at [`LIMIT`] is a panel that never stopped or never settled, and the last column says how many there were.
+//! A count at [`LIMIT`] is a panel that never stopped or never settled, and the column `at the limit` says how many there were.
+//!
+//! The cap the CLI sets for these settles is the most rounds in the table rounded up to a power of two, and the example derives it the same way.
+//! The last column counts the panels that take the whole cap.
+//! For bounded confidence and DeGroot that is a count at or above it.
+//! The energy runs again under the cap, and a panel counts when rgmin's own test does not stop it first, even where its point already counts as settled.
 
 use std::collections::BTreeMap;
 
@@ -28,12 +33,12 @@ use ljos_consensus::{influence_matrix, roster, settle_bounded, settle_energy, Ba
 const LARGEST: usize = 128;
 
 /// Each size has 200 panels, so two panels set the 99th percentile.
-/// The sweep then takes two and a half minutes on one core.
+/// The sweep then takes about two minutes on one core.
 /// Its time is linear in this count.
 const PANELS: u64 = 200;
 
 /// Rounds a run may take here.
-/// It only has to sit above the cap the table is read for, 2048, so the table can show that no panel needed more; a panel that reaches it is counted in the last column.
+/// It only has to sit above the cap the table is read for, 2048, so the table can show that no panel needed more; a panel that reaches it is counted in the column `at the limit`.
 const LIMIT: usize = 8192;
 
 /// The CLI's `--self-weight`.
@@ -118,12 +123,48 @@ fn energy_steps(
     hi
 }
 
-fn row(name: &str, n: usize, counts: &mut [usize]) -> String {
+/// Panel `k` of `n` voters.
+struct Panel {
+    ballots: Vec<Ballot>,
+    bounds: BTreeMap<String, f64>,
+    rows: Vec<(String, String, f64)>,
+    anchors: BTreeMap<String, f64>,
+}
+
+fn panel(n: usize, k: u64) -> Panel {
+    let mut rng = Lcg(((n as u64) << 32) | k);
+    let name = |i: usize| format!("v{i:02}");
+    let m = 2 + rng.below(3);
+    let ballots: Vec<Ballot> = (0..n)
+        .map(|i| Ballot {
+            agent: name(i),
+            choice: format!("o{}", rng.below(m)),
+        })
+        .collect();
+    let bounds: BTreeMap<String, f64> = (0..n)
+        .map(|i| (name(i), (4.0 * rng.next_f64()).min(2.0)))
+        .collect();
+    let mut rows = Vec::with_capacity(n * n);
+    for i in 0..n {
+        for j in (0..n).filter(|&j| j != i) {
+            rows.push((name(i), name(j), 0.01 + 0.99 * rng.next_f64()));
+        }
+    }
+    let anchors: BTreeMap<String, f64> = (0..n).map(|i| (name(i), rng.next_f64())).collect();
+    Panel {
+        ballots,
+        bounds,
+        rows,
+        anchors,
+    }
+}
+
+fn row(n: usize, counts: &mut [usize], capped: usize) -> String {
     counts.sort_unstable();
     let at = |q: usize| counts[(counts.len() * q / 100).min(counts.len() - 1)];
     let limit = counts.iter().filter(|&&c| c >= LIMIT).count();
     format!(
-        "| {name} | {n} | {} | {} | {} | {limit} |",
+        "| {n} | {} | {} | {} | {limit} | {capped} |",
         at(50),
         at(99),
         counts[counts.len() - 1]
@@ -132,46 +173,59 @@ fn row(name: &str, n: usize, counts: &mut [usize]) -> String {
 
 fn main() {
     let tol = Opts::default().tol;
-    println!("Rounds to stop at tol {tol:e}, {PANELS} panels a size, limit {LIMIT}\n");
-    println!("| engine | voters | median | 99th percentile | most | at the limit |");
-    println!("|---|---|---|---|---|---|");
-    let mut lines = Vec::new();
-    let mut n = 2;
-    while n <= LARGEST {
-        let (mut bounded, mut degroot, mut energy) = (vec![], vec![], vec![]);
+    let sizes: Vec<usize> = std::iter::successors(Some(2), |n| Some(n * 2))
+        .take_while(|n| *n <= LARGEST)
+        .collect();
+    let (mut bounded, mut degroot, mut energy) = (vec![], vec![], vec![]);
+    for &n in &sizes {
+        let (mut b, mut d, mut e) = (vec![], vec![], vec![]);
         for k in 0..PANELS {
-            let mut rng = Lcg(((n as u64) << 32) | k);
-            let name = |i: usize| format!("v{i:02}");
-            let m = 2 + rng.below(3);
-            let ballots: Vec<Ballot> = (0..n)
-                .map(|i| Ballot {
-                    agent: name(i),
-                    choice: format!("o{}", rng.below(m)),
-                })
-                .collect();
-            let bounds: BTreeMap<String, f64> = (0..n)
-                .map(|i| (name(i), (4.0 * rng.next_f64()).min(2.0)))
-                .collect();
-            let mut rows = Vec::with_capacity(n * n);
-            for i in 0..n {
-                for j in (0..n).filter(|&j| j != i) {
-                    rows.push((name(i), name(j), 0.01 + 0.99 * rng.next_f64()));
-                }
-            }
-            let anchors: BTreeMap<String, f64> =
-                (0..n).map(|i| (name(i), rng.next_f64())).collect();
-            let out = settle_bounded(&ballots, 1.0, &bounds, LIMIT, tol);
-            bounded.push(if out.converged { out.rounds } else { LIMIT });
-            degroot.push(degroot_rounds(&ballots, &rows, tol));
-            energy.push(energy_steps(&ballots, &rows, &anchors, tol));
+            let p = panel(n, k);
+            let out = settle_bounded(&p.ballots, 1.0, &p.bounds, LIMIT, tol);
+            b.push(if out.converged { out.rounds } else { LIMIT });
+            d.push(degroot_rounds(&p.ballots, &p.rows, tol));
+            e.push(energy_steps(&p.ballots, &p.rows, &p.anchors, tol));
         }
-        lines.push(("bounded confidence", n, bounded));
-        lines.push(("seldon degroot", n, degroot));
-        lines.push(("energy", n, energy));
-        n *= 2;
+        bounded.push(b);
+        degroot.push(d);
+        energy.push(e);
     }
-    lines.sort_by_key(|(name, n, _)| (*name, *n));
-    for (name, n, mut counts) in lines {
-        println!("{}", row(name, n, &mut counts));
+    let most = [&bounded, &degroot, &energy]
+        .iter()
+        .flat_map(|engine| engine.iter().flatten())
+        .copied()
+        .max()
+        .unwrap();
+    let cap = most.next_power_of_two();
+    let energy_capped: Vec<usize> = sizes
+        .iter()
+        .map(|&n| {
+            (0..PANELS)
+                .filter(|&k| {
+                    let p = panel(n, k);
+                    let out =
+                        settle_energy(&p.ballots, &p.rows, SELF_WEIGHT, 1.0, &p.anchors, cap, tol);
+                    out.rounds >= cap
+                })
+                .count()
+        })
+        .collect();
+    println!("Rounds to stop at tol {tol:e}, {PANELS} panels a size, limit {LIMIT}, cap {cap}");
+    for (name, engine) in [
+        ("bounded confidence", &mut bounded),
+        ("energy", &mut energy),
+        ("seldon degroot", &mut degroot),
+    ] {
+        println!("\n{name}\n");
+        println!("| voters | median | 99th percentile | most | at the limit | run to the cap |");
+        println!("|---|---|---|---|---|---|");
+        for (i, (&n, counts)) in sizes.iter().zip(engine.iter_mut()).enumerate() {
+            let capped = if name == "energy" {
+                energy_capped[i]
+            } else {
+                counts.iter().filter(|&&c| c >= cap).count()
+            };
+            println!("{}", row(n, counts, capped));
+        }
     }
 }
