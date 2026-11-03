@@ -37,6 +37,7 @@ OWNED = (
     "measurements/replay_panel.json",
     "measurements/replay_panel_independent.json",
     "measurements/correlation_history-0-7-4000.txt",
+    "measurements/correlation_gate-20000.txt",
 )
 
 WRITE_FLAGS = ("--write-independent", "--write")

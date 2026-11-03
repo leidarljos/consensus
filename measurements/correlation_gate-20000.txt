@@ -1,4 +1,4 @@
-637d83c9aa3474df85c45ada6b1df6fa98d16608 cargo run --release --example correlation_gate -- 20000
+# 637d83c9aa3474df85c45ada6b1df6fa98d16608 cargo run --release --example correlation_gate -- 20000
 
 Two voters right p of the time, p uniform in [0.60, 0.75], share m items with named outcomes; with probability rho an item is one where both cast one judge's ballot. A pair counts when sqrt(m) rho passes 1.645, read from 2 shared items; 20000 trials a cell.
 
