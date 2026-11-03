@@ -1,0 +1,41 @@
+name: changelog
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # 26.9.0 is the towncrier release this draft was checked against.
+      # `ignore` in towncrier.toml is what makes `build` fail an invalid name.
+      - run: python -m pip install --disable-pip-version-check -q 'towncrier==26.9.0'
+      - name: towncrier build --draft
+        run: |
+          set -eu
+          # The crate version is the draft heading. The draft does not write CHANGELOG.md.
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)
+          test -n "$version"
+          towncrier build --draft --version "$version"
+          tmp=$(mktemp -d)
+          cp towncrier.toml "$tmp/"
+          mkdir -p "$tmp/changelog.d"
+          cp -a changelog.d/. "$tmp/changelog.d/"
+          printf '%s\n' 'this name has no type' > "$tmp/changelog.d/not-a-fragment.md"
+          if towncrier build --draft --version "$version" --dir "$tmp" >"$tmp/out" 2>"$tmp/err"; then
+            echo "malformed fragment was accepted" >&2
+            cat "$tmp/out" "$tmp/err" >&2
+            exit 1
+          fi
+          cat "$tmp/out" "$tmp/err" > "$tmp/both"
+          grep -q "Invalid news fragment name" "$tmp/both"

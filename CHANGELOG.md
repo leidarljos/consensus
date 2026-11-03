@@ -2,6 +2,8 @@
 
 Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
+<!-- towncrier release notes start -->
+
 ## 0.9.0 (2026-10-27)
 
 - The DeGroot forecast in `record::replay` runs with earned self weight,
