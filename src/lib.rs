@@ -495,6 +495,14 @@ pub struct Surprise {
     pub predicted: Vec<f64>,
     /// Actual minus predicted; the answer is the largest.
     pub surprise: Vec<f64>,
+    /// The largest surprise less the next.
+    #[serde(default)]
+    pub margin: f64,
+    /// The margin is inside what rounding leaves open: two options the
+    /// rule cannot order.
+    #[serde(default)]
+    pub tie: bool,
+    /// Absent on a tie, and below two predictors.
     pub answer: Option<String>,
     /// How many voters also predicted; below two the rule says nothing.
     pub predictors: usize,
@@ -506,7 +514,9 @@ pub struct Surprise {
 /// actual share most exceeds its predicted share. A minority that knows
 /// the majority is wrong predicts that majority and votes against it, and
 /// that is what the rule reads. With fewer than two predictors it returns
-/// the shares and no answer.
+/// the shares and no answer. A tie does the same: the leading surprises
+/// are no farther apart than rounding can swap, `tie` is set and `answer`
+/// is absent. `margin` is the largest surprise less the next.
 #[must_use]
 pub fn surprisingly_popular(ballots: &[Ballot], predictions: &[Prediction]) -> Surprise {
     let (agents, options) = roster(ballots);
@@ -540,14 +550,23 @@ pub fn surprisingly_popular(ballots: &[Ballot], predictions: &[Prediction]) -> S
         })
         .collect();
     let surprise: Vec<f64> = actual.iter().zip(&predicted).map(|(a, p)| a - p).collect();
-    let answer = if predictors.len() >= 2 && !options.is_empty() {
-        let mut best = 0;
-        for i in 1..options.len() {
-            if surprise[i] > surprise[best] {
-                best = i;
-            }
-        }
-        Some(options[best].clone())
+    let p = predictors.len();
+    // `actual` is `count / n`, one division. `predicted` is the mean of `p`
+    // normalised shares: normalising a share is a sum and a division, the
+    // mean adds `p - 1` additions and a division, and Higham's Lemma 3.1
+    // adds the indices, so an entry carries at most `p + 2` roundings
+    // (section 3.1). Subtracting from `actual` makes `p + 3`. Both shares
+    // lie in [0, 1], so each surprise is off by at most `gamma(p + 3)`.
+    // The margin is one surprise less the next, and that difference can
+    // move by twice the bound.
+    let open = 2.0 * gamma(p + 3);
+    let (margin, tie) = margin_of(&surprise, open);
+    let answer = if p >= 2 && !tie {
+        surprise
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(i, _)| options[i].clone())
     } else {
         None
     };
@@ -556,8 +575,10 @@ pub fn surprisingly_popular(ballots: &[Ballot], predictions: &[Prediction]) -> S
         actual,
         predicted,
         surprise,
+        margin,
+        tie,
         answer,
-        predictors: predictors.len(),
+        predictors: p,
     }
 }
 
@@ -2186,9 +2207,32 @@ mod tests {
         assert!((s.actual[1] - 0.6).abs() < 1e-9);
         assert!(s.predicted[1] > 0.8, "{:?}", s.predicted);
         assert_eq!(s.answer.as_deref(), Some("no"), "{s:?}");
+        assert!(!s.tie, "{s:?}");
         assert_eq!(s.predictors, 4);
         let none = surprisingly_popular(&ballots, &predictions[..1]);
         assert_eq!(none.answer, None, "one predictor says nothing");
+    }
+
+    /// Two options with the same surprise are a tie. Renaming them does
+    /// not change the call: the answer was the spelling, and a tie names
+    /// none.
+    #[test]
+    fn an_even_surprise_is_a_tie() {
+        let panel = |left: &str, right: &str| {
+            let ballots = vec![ballot("a", left), ballot("b", right)];
+            let raw = format!(
+                r#"[{{"agent":"a","expect":"{left}"}},{{"agent":"b","expect":"{right}"}}]"#
+            );
+            surprisingly_popular(&ballots, &predictions_from_json(&raw).unwrap())
+        };
+        let xy = panel("x", "y");
+        assert!(xy.tie, "{xy:?}");
+        assert_eq!(xy.answer, None, "{xy:?}");
+        assert!(xy.margin.abs() < 1e-12, "{xy:?}");
+        assert!(xy.actual.iter().all(|s| (*s - 0.5).abs() < 1e-12), "{xy:?}");
+        let renamed = panel("z", "y");
+        assert_eq!(renamed.tie, xy.tie, "{renamed:?}");
+        assert_eq!(renamed.answer, xy.answer, "{renamed:?}");
     }
 
     /// Standing flows to whom the trusted trust; a voter nobody weighs keeps

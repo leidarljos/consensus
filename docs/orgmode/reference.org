@@ -108,8 +108,10 @@ The surprisingly popular answer (Prelec, Seung and McCoy,
 doi:10.1038/nature21054). =--predictions= is an array of ={agent, expect}=
 where =expect= is an option, or an object of option to the share the voter
 expects the others to give it. Output: =options=, =actual= and =predicted=
-shares, =surprise= (actual minus predicted), =answer= (the largest
-surprise; absent below two predictors), =predictors=.
+shares, =surprise= (actual minus predicted), =margin= (the largest surprise
+less the next), =tie= (that margin is within twice the rounding on one
+surprise), =answer= (the largest surprise; absent on a tie and below two
+predictors), =predictors=.
 
 =ljos-consensus reputation --trust JSON [--agents a,b,c] [--alpha A]=
 
