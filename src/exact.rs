@@ -334,6 +334,98 @@ mod tests {
         }
     }
 
+    /// The class search as it was before it kept to full listeners: a
+    /// transitive closure over every voter, then the closed groups whose
+    /// voters all listen fully.
+    fn full_closure_classes(a: &[Vec<f64>], s: &[f64]) -> Vec<Vec<usize>> {
+        let n = a.len();
+        let mut reach = vec![vec![false; n]; n];
+        for i in 0..n {
+            reach[i][i] = true;
+            for j in 0..n {
+                if a[i][j] > 0.0 {
+                    reach[i][j] = true;
+                }
+            }
+        }
+        for k in 0..n {
+            for i in 0..n {
+                if reach[i][k] {
+                    for j in 0..n {
+                        if reach[k][j] {
+                            reach[i][j] = true;
+                        }
+                    }
+                }
+            }
+        }
+        let mut seen = vec![false; n];
+        let mut out = Vec::new();
+        for i in 0..n {
+            if seen[i] {
+                continue;
+            }
+            let class: Vec<usize> = (0..n).filter(|&j| reach[i][j] && reach[j][i]).collect();
+            for &j in &class {
+                seen[j] = true;
+            }
+            let closed = class
+                .iter()
+                .all(|&u| (0..n).all(|v| a[u][v] == 0.0 || class.contains(&v)));
+            let listening = class.iter().all(|&u| s[u] >= 1.0);
+            if closed && listening {
+                out.push(class);
+            }
+        }
+        out
+    }
+
+    /// Four voters are the fewest that hold a DeGroot class beside two full
+    /// listeners joined only through a voter that keeps part of its ballot,
+    /// the case keeping the search to full listeners turns on.
+    const EVERY_PANEL_UP_TO: usize = 4;
+
+    /// Any susceptibility below one keeps part of the ballot; the search
+    /// reads no more of it than that.
+    const KEEPS_PART: f64 = 0.5;
+
+    #[test]
+    fn the_search_among_full_listeners_finds_the_full_closures_classes() {
+        // Every panel up to four voters, not a sample: each set of edges off
+        // the diagonal and each set of voters that listen fully, among them
+        // all, none and some. The diagonal changes neither what a voter
+        // reaches nor whether a group is closed.
+        for n in 0..=EVERY_PANEL_UP_TO {
+            let pairs: Vec<(usize, usize)> = (0..n)
+                .flat_map(|i| (0..n).filter(move |&j| j != i).map(move |j| (i, j)))
+                .collect();
+            for edges in 0u32..1 << pairs.len() {
+                for full in 0u32..1 << n {
+                    let s: Vec<f64> = (0..n)
+                        .map(|i| {
+                            if (full >> i) & 1 == 1 {
+                                1.0
+                            } else {
+                                KEEPS_PART
+                            }
+                        })
+                        .collect();
+                    let mut a = vec![vec![0.0; n]; n];
+                    for (k, &(i, j)) in pairs.iter().enumerate() {
+                        if (edges >> k) & 1 == 1 {
+                            a[i][j] = s[i];
+                        }
+                    }
+                    assert_eq!(
+                        closed_listening_classes(&a, &s),
+                        full_closure_classes(&a, &s),
+                        "{n} voters, edges {edges:b} over {pairs:?}, full listeners {full:b}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn social_power_sums_to_one_and_counts_a_dictator_once() {
         let w = vec![
