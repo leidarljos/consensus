@@ -1,4 +1,4 @@
-28c34d4f07613e726892264674e97ee454c4c06d cargo run --release --example correlation_history -- 0 7 4000
+# 28c34d4f07613e726892264674e97ee454c4c06d cargo run --release --example correlation_history -- 0 7 4000
 
 0 clones of one judge right 0.70 of the time beside 7 independent voters in [0.60, 0.75]; the decision after h named outcomes, 4000 seeds each; pairs read from 5 shared items, gate z = 1.645
 

@@ -1,3 +1,4 @@
+# cargo run --release --example replay_history -- --write measurements/replay_panel.json
 {
   "ballots": [
     {

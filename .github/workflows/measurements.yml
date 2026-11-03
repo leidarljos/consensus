@@ -1,0 +1,45 @@
+name: measurements
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "measurements/replay_history.txt"
+      - "measurements/replay_independent.txt"
+      - "measurements/replay_panel.json"
+      - "measurements/replay_panel_independent.json"
+      - "measurements/correlation_history-0-7-4000.txt"
+      - "examples/**"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.rs"
+      - "scripts/check_measurements.py"
+      - ".github/workflows/measurements.yml"
+  pull_request:
+    paths:
+      - "measurements/replay_history.txt"
+      - "measurements/replay_independent.txt"
+      - "measurements/replay_panel.json"
+      - "measurements/replay_panel_independent.json"
+      - "measurements/correlation_history-0-7-4000.txt"
+      - "examples/**"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.rs"
+      - "scripts/check_measurements.py"
+      - ".github/workflows/measurements.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Replay the recorded measurement commands
+        run: python3 scripts/check_measurements.py

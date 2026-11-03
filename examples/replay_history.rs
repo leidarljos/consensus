@@ -6,6 +6,11 @@
 //! $ cargo run --release --example replay_history -- --write-independent measurements/replay_panel_independent.json
 //! ```
 //!
+//! A panel file may open with a `#` line: an optional git SHA-1, then the
+//! command that wrote the file. Further `#` lines are notes, and one blank
+//! line may follow. Those lines are not the panel.
+//! `scripts/check_measurements.py` reads the same header.
+//!
 //! `--write` builds a seeded panel and does not score it. The panel is
 //! three clones of one model, right 0.60 of the time and always in
 //! agreement, beside three independent voters at 0.72, 0.68 and 0.66.
@@ -121,6 +126,46 @@ fn independent() -> (Vec<RecordedBallot>, Vec<OutcomeEntry>) {
     (ballots, outcomes)
 }
 
+/// A git SHA-1 is 40 hexadecimal digits. A measurement header may name
+/// the commit the capture was taken at.
+const SHA1_HEX_LEN: usize = 40;
+
+/// The recorded command on a measurement file's first line, if this line is one.
+fn recorded_command(line: &str) -> Option<&str> {
+    let line = line.trim().strip_prefix('#')?.trim_start();
+    let line = match line.split_once(' ') {
+        Some((word, tail))
+            if word.len() == SHA1_HEX_LEN && word.bytes().all(|b| b.is_ascii_hexdigit()) =>
+        {
+            tail.trim_start()
+        }
+        _ => line,
+    };
+    line.starts_with("cargo run --release --example ")
+        .then_some(line)
+}
+
+/// The panel text below a measurement header.
+///
+/// The first line is `# [<40-hex sha> ]cargo run --release --example ...`.
+/// Further `#` lines are notes. One blank line may follow. A file with
+/// no such first line is the panel itself.
+fn measurement_body(raw: &str) -> &str {
+    let Some((first, mut rest)) = raw.split_once('\n') else {
+        return raw;
+    };
+    if recorded_command(first).is_none() {
+        return raw;
+    }
+    while rest.starts_with('#') {
+        match rest.split_once('\n') {
+            Some((_, after)) => rest = after,
+            None => return "",
+        }
+    }
+    rest.strip_prefix('\n').unwrap_or(rest)
+}
+
 fn write_panel(path: &str, ballots: &[RecordedBallot], outcomes: &[OutcomeEntry]) -> ExitCode {
     let file = serde_json::json!({ "ballots": ballots, "outcomes": outcomes });
     let text = match serde_json::to_string_pretty(&file) {
@@ -164,7 +209,7 @@ fn main() -> ExitCode {
                     return ExitCode::from(1);
                 }
             };
-            let history = match history_from_json(&raw) {
+            let history = match history_from_json(measurement_body(&raw)) {
                 Ok(history) => history,
                 Err(err) => {
                     eprintln!("{err}");
