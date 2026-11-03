@@ -112,14 +112,47 @@ setting to use when reviewers are not expected to abandon their reading.
 
 * Bounded confidence
 
-Hegselmann and Krause, and Deffuant and colleagues
-(doi:10.1142/S0219525900000078), let each voter listen only to voters
-whose opinion lies within a bound of its own. Two blocs further apart than
-the bound never meet: the model produces clusters where the trust graph
-alone would produce one position. =--epsilon= runs that step, and
-=--epsilon-of= gives each voter its own bound, which is the shape a persona
-with a narrow audience takes. Castellano, Fortunato and Loreto review the
+Hegselmann and Krause (https://www.jasss.org/5/3/2.html) let each voter
+listen only to voters whose opinion lies within a bound of its own.
+=--epsilon= runs their step, (BC) over the confidence set (2.3): each
+round voter i moves to the plain mean of the voters it hears, itself
+included, =x_i(t+1) = (1 / |I_i(t)|) sum_{j in I_i(t)} x_j(t)=, where
+=I_i(t)= holds every voter j with =|x_i(t) - x_j(t)|_1= at most
+=epsilon_i=. They write the distance as an absolute value on a line. Here
+an opinion is a distribution over the options and the distance is L1, so
+ballots for two different options are 2 apart. With two options the L1
+distance is twice the gap in the first option's share, and the step is
+theirs on that share with half the bound. The bound includes its edge, as
+(2.3) does: two voters exactly =epsilon= apart hear each other.
+=--epsilon-of= gives each voter its own =epsilon_i=, which is the shape a
+persona with a narrow audience takes. Deffuant and colleagues
+(doi:10.1142/S0219525900000078) run the pairwise form, one random pair at
+a time; this crate does not. Castellano, Fortunato and Loreto review the
 family (doi:10.1103/RevModPhys.81.591).
+
+Two blocs further apart than the bound never meet: the step produces
+clusters where the trust graph alone would produce one position, and the
+outcome's =clusters= names them. A cluster is the voters joined by a chain
+of pairs each within the other's bound on the last step, and its
+=position= is the mean of their final opinions. Under one bound for every
+voter a fixed point puts each member on that position, and keeps clusters
+more than the bound apart. A voter whose opinion is an extreme point of
+its cluster's is a mean of opinions in the cluster, so every voter it
+hears holds the same opinion, and with one bound those are all the voters
+within reach of it: the cluster has no one anywhere else. A bound per
+voter lets a voter hear one that does not hear it back, and such a pair
+joins no cluster on its own.
+
+With one ballot per voter every opening opinion is a corner of the
+simplex, 2 from every other. One bound for all then either moves no one,
+below 2, so the clusters are the ballots, or merges everyone onto the
+count in one round, at 2. An opinion between corners comes from a voter
+whose own bound reaches 2, which hears every ballot and moves to their
+mean in round one, or from a library caller that splits a voter's unit
+across options. =tests/epsilon.rs= checks cases worked by hand: two blocs just
+short of the gap and at it, and a chain of four voters through a split
+one, which meets in four rounds at 403/1152 for the first option where
+the count gives 3/8. The step does not keep the mean opinion.
 
 * Reading a settle
 

@@ -61,6 +61,10 @@ pub struct Outcome {
     /// options the settle cannot order.
     #[serde(default)]
     pub tie: bool,
+    /// Where bounded confidence left the voters, in the order of each
+    /// cluster's first voter. Only that engine fills it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clusters: Vec<Cluster>,
 }
 
 impl Outcome {
@@ -243,12 +247,25 @@ fn spread(x: &[Vec<f64>], w: &[Vec<f64>]) -> (f64, f64) {
     (polarization, disagreement)
 }
 
-/// Bounded confidence (Hegselmann and Krause; Deffuant et al.,
-/// doi:10.1142/S0219525900000078): each agent averages only the agents whose
-/// opinion lies within `epsilon` of its own, in L1 over the options, with
-/// itself always included. Clusters form where the trust graph alone would
-/// converge; a persona with a narrow bound listens only to those near it.
-/// Returns the outcome with `engine` set to `bounded-confidence`.
+/// Voters bounded confidence leaves together: joined by a chain of pairs
+/// each within the other's bound on the last step.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Cluster {
+    /// The members, sorted.
+    pub agents: Vec<String>,
+    /// The members' mean final opinion, one entry per option. Under one
+    /// bound for every voter a fixed point puts each member on it.
+    pub position: Vec<f64>,
+}
+
+/// Bounded confidence, Hegselmann and Krause's step (BC)
+/// (https://www.jasss.org/5/3/2.html): each round every voter moves to the
+/// plain mean of the voters whose opinion lies within its bound of its own,
+/// in L1 over the options, itself included. The bound includes its edge, as
+/// their confidence set (2.3) does. Clusters form where the trust graph
+/// alone would converge; a persona with a narrow bound listens only to those
+/// near it. Returns the outcome with `engine` set to `bounded-confidence`
+/// and `clusters` filled.
 #[must_use]
 pub fn settle_bounded(
     ballots: &[Ballot],
@@ -345,9 +362,45 @@ pub fn settle_bounded(
         disagreement,
         margin,
         tie,
+        clusters: clusters_of(&agents, &x, &last_w),
         ..Outcome::default()
     }
     .sealed()
+}
+
+/// The components of the graph joining two voters when each heard the
+/// other under `w`, each with its members' mean opinion in `x`.
+fn clusters_of(agents: &[String], x: &[Vec<f64>], w: &[Vec<f64>]) -> Vec<Cluster> {
+    let n = agents.len();
+    let mut placed = vec![false; n];
+    let mut out = Vec::new();
+    for first in 0..n {
+        if placed[first] {
+            continue;
+        }
+        placed[first] = true;
+        let mut members = vec![first];
+        let mut next = 0;
+        while let Some(&i) = members.get(next) {
+            for j in 0..n {
+                if !placed[j] && w[i][j] > 0.0 && w[j][i] > 0.0 {
+                    placed[j] = true;
+                    members.push(j);
+                }
+            }
+            next += 1;
+        }
+        members.sort_unstable();
+        let size = members.len() as f64;
+        let position = (0..x[first].len())
+            .map(|k| members.iter().map(|&i| x[i][k]).sum::<f64>() / size)
+            .collect();
+        out.push(Cluster {
+            agents: members.iter().map(|&i| agents[i].clone()).collect(),
+            position,
+        });
+    }
+    out
 }
 
 /// Dawid and Skene's one-coin estimate of each voter's reliability from
