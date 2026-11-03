@@ -3,22 +3,58 @@
 
 * Command line
 
-=ljos-consensus settle [FLAGS]=
+The flags are what =ljos-consensus settle --help= prints.
 
-| Flag | Meaning |
-|---+---|
-| =--issue ID= | ballots from =vissue vote ID --json= |
-| =--ballots JSON= | =[{agent, choice}]=, or an object with =ballots=, =votes= or =agents[].voted= |
-| =--trust JSON= | =[[from, to, weight], ...]= or =[{from, to, weight}, ...]= |
-| =--self-trust MODE= | how a voter weighs its own ballot when its row does not say: =earned= (the default) as the others weigh it, or =constant= at =--self-weight= for every voter |
-| =--self-weight W= | the self-weight under =constant=, and the fallback under =earned= for a voter nobody names; default 0.5 |
-| =--discount-of JSON= | ={agent: d}=, the share of its inbound weight each voter keeps; =correlation= prints it |
-| =--susceptibility S= | 1 is DeGroot; below 1 anchors each voter to its ballot; default 1 |
-| =--susceptibility-of JSON= | ={agent: s}=, a persona's own anchor per voter |
-| =--epsilon E [--epsilon-of JSON]= | bounded confidence instead of the trust graph: each voter averages only voters within L1 distance =E= of its own opinion |
-| =--max-iter N=, =--tol T= | the fixed-point budget; defaults 200 and 1e-9 |
-| =--engine NAME= | =iterate= (the default) steps to the fixed point and stops on a bound; =exact= reads it off in closed form; =energy= minimises the Friedkin-Johnsen energy under a constant =--self-weight=, without =--discount-of=, and needs a voter below susceptibility 1 |
-| =--seldon [--out DIR]= | write Seldon inputs, run =seldon=, read the result |
+# [[[cog
+# import pathlib, sys
+# _root = pathlib.Path.cwd()
+# while not (_root / "scripts" / "cog_samples.py").is_file():
+#     if _root.parent == _root:
+#         raise SystemExit("cog_samples.py: run from the consensus checkout")
+#     _root = _root.parent
+# sys.path.insert(0, str(_root / "scripts"))
+# import cog_samples
+# cog.out(cog_samples.org_sample("reference_settle_help"))
+# ]]]
+#+begin_src console
+$ ljos-consensus settle --help
+Usage: ljos-consensus settle [OPTIONS]
+
+Options:
+      --issue <ISSUE>
+          
+      --ballots <BALLOTS>
+          JSON array of {agent, choice}
+      --trust <TRUST>
+          JSON array of {from, to, weight}
+      --seldon
+          If set, write Seldon inputs and exec `seldon`. When `seldon` is not on PATH, the files are still written and the command that runs them is printed
+      --out <OUT>
+          
+      --self-weight <SELF_WEIGHT>
+          A voter's weight on its own ballot when its row does not say: the fallback under `--self-trust earned`, every voter's under `constant` [default: 0.5]
+      --self-trust <SELF_TRUST>
+          `earned` (the default): a voter weighs itself as the others weigh it. With no voter anchored and no discount, the rows `learn` and `calibrate` write then settle as the weighted vote they describe. `constant`: `--self-weight` for every voter [default: earned]
+      --discount-of <DISCOUNT_OF>
+          JSON object of agent to the share of its inbound weight it keeps: `correlation`'s `discount`, under which exact clones count as one voice
+      --susceptibility <SUSCEPTIBILITY>
+          [default: 1]
+      --susceptibility-of <SUSCEPTIBILITY_OF>
+          JSON object of agent to susceptibility: a persona's own anchor
+      --epsilon <EPSILON>
+          Bounded confidence instead of the trust graph: each voter averages only voters within this L1 distance of its own opinion
+      --epsilon-of <EPSILON_OF>
+          JSON object of agent to its own confidence bound
+      --max-iter <MAX_ITER>
+          [default: 200]
+      --tol <TOL>
+          [default: 0.000000001]
+      --engine <ENGINE>
+          `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised [default: iterate]
+  -h, --help
+          Print help
+#+end_src
+# [[[end]]]
 
 Output:
 
@@ -27,7 +63,8 @@ Output:
 | =options= | the options, sorted |
 | =shares= | each option's share, in that order |
 | =rounds= | the steps taken |
-| =settled= | within =--tol= of the fixed point |
+| =settled= | the engine converged on one leading option |
+| =converged= | the engine stopped on its bound rather than its round cap |
 | =residual= | the bound or distance that says so |
 | =engine= | =degroot-fj=, =fj-exact=, =fj-energy=, =bounded-confidence=, =seldon= or =empty= |
 | =polarization= | the sum over voters of the squared distance from the mean final opinion |

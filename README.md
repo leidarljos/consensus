@@ -19,10 +19,22 @@ The seat that settles through this crate is documented at https://leidarljos.git
 
 ## First minute
 
+<!-- [[[cog
+import pathlib, sys
+_root = pathlib.Path.cwd()
+while not (_root / "scripts" / "cog_samples.py").is_file():
+    if _root.parent == _root:
+        raise SystemExit("cog_samples.py: run from the consensus checkout")
+    _root = _root.parent
+sys.path.insert(0, str(_root / "scripts"))
+import cog_samples
+cog.out(cog_samples.markdown_sample("readme_first"))
+]]] -->
 ```console
 $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"hold"}]' | jq -c
-{"options":["hold","ship"],"shares":[0.5,0.5],"rounds":1,"settled":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0,"agents":["alice","bob"],"influence":[0.5,0.5],"effective_voters":2.0,"margin":0.0,"tie":true}
+{"options":["hold","ship"],"shares":[0.5,0.5],"rounds":1,"settled":false,"converged":true,"residual":0.0,"engine":"degroot-fj","polarization":0.0,"disagreement":0.0,"agents":["alice","bob"],"influence":[0.5,0.5],"effective_voters":2.0,"margin":0.0,"tie":true}
 ```
+<!-- [[[end]]] -->
 
 The [tutorial](https://leidarljos.github.io/consensus/getting-started.html) adds trust, then an anchor.
 

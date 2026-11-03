@@ -15,13 +15,51 @@ already a Bitcoin crate.
 
 * 1. Settle with equal trust
 
-#+begin_src text
-$ ljos-consensus settle --ballots '[
-    {"agent":"alice","choice":"ship"},
-    {"agent":"bob","choice":"ship"},
-    {"agent":"carol","choice":"hold"}]'
-{ "options": ["hold","ship"], "shares": [0.333, 0.667], "rounds": 1, "settled": true, "engine": "degroot-fj" }
+# [[[cog
+# import pathlib, sys
+# _root = pathlib.Path.cwd()
+# while not (_root / "scripts" / "cog_samples.py").is_file():
+#     if _root.parent == _root:
+#         raise SystemExit("cog_samples.py: run from the consensus checkout")
+#     _root = _root.parent
+# sys.path.insert(0, str(_root / "scripts"))
+# import cog_samples
+# cog.out(cog_samples.org_sample("getting_started_equal"))
+# ]]]
+#+begin_src console
+$ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"ship"},{"agent":"carol","choice":"hold"}]'
+{
+  "options": [
+    "hold",
+    "ship"
+  ],
+  "shares": [
+    0.3333333333333333,
+    0.6666666666666666
+  ],
+  "rounds": 1,
+  "settled": true,
+  "converged": true,
+  "residual": 0.0,
+  "engine": "degroot-fj",
+  "polarization": 0.0,
+  "disagreement": 0.0,
+  "agents": [
+    "alice",
+    "bob",
+    "carol"
+  ],
+  "influence": [
+    0.3333333333333333,
+    0.3333333333333333,
+    0.3333333333333333
+  ],
+  "effective_voters": 3.0,
+  "margin": 0.3333333333333333,
+  "tie": false
+}
 #+end_src
+# [[[end]]]
 
 With no rows, every voter listens to everyone equally, so the group meets
 on the majority's position and the shares are the tally as a fraction;
@@ -29,20 +67,103 @@ the difference from a count shows once rows or anchors exist.
 
 * 2. Add trust
 
-#+begin_src text
-$ ljos-consensus settle --ballots '[...]' --trust '[
-    ["alice","carol",1.0], ["bob","carol",1.0], ["carol","carol",4.0], ["carol","alice",1.0]]'
-{ ... "shares": [0.6, 0.4] ... }
+# [[[cog
+# import pathlib, sys
+# _root = pathlib.Path.cwd()
+# while not (_root / "scripts" / "cog_samples.py").is_file():
+#     if _root.parent == _root:
+#         raise SystemExit("cog_samples.py: run from the consensus checkout")
+#     _root = _root.parent
+# sys.path.insert(0, str(_root / "scripts"))
+# import cog_samples
+# cog.out(cog_samples.org_sample("getting_started_trust"))
+# ]]]
+#+begin_src console
+$ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"ship"},{"agent":"carol","choice":"hold"}]' --trust '[["alice","carol",1.0],["bob","carol",1.0],["carol","carol",4.0],["carol","alice",1.0]]'
+{
+  "options": [
+    "hold",
+    "ship"
+  ],
+  "shares": [
+    0.7142857144236272,
+    0.28571428557637285
+  ],
+  "rounds": 21,
+  "settled": true,
+  "converged": true,
+  "residual": 4.1822223462162356e-10,
+  "engine": "degroot-fj",
+  "polarization": 2.358286519149434e-19,
+  "disagreement": 2.3004461637330454e-19,
+  "agents": [
+    "alice",
+    "bob",
+    "carol"
+  ],
+  "influence": [
+    0.2857142857142857,
+    0.0,
+    0.7142857142857143
+  ],
+  "effective_voters": 1.6896551724137931,
+  "margin": 0.42857142884725435,
+  "tie": false
+}
 #+end_src
+# [[[end]]]
 
-Alice and bob each listen to carol as much as to themselves; carol weighs
-herself four to one over alice. The group moves toward carol's =hold=.
+Alice's row gives carol the same weight alice keeps on her own ballot.
+Bob's row names only carol. Carol's row weighs her own ballot four to
+one over alice. The shares move off the tally and toward carol's =hold=.
 
 * 3. Anchor the voters
 
+# [[[cog
+# import pathlib, sys
+# _root = pathlib.Path.cwd()
+# while not (_root / "scripts" / "cog_samples.py").is_file():
+#     if _root.parent == _root:
+#         raise SystemExit("cog_samples.py: run from the consensus checkout")
+#     _root = _root.parent
+# sys.path.insert(0, str(_root / "scripts"))
+# import cog_samples
+# cog.out(cog_samples.org_sample("getting_started_anchor"))
+# ]]]
 #+begin_src console
-$ ljos-consensus settle --ballots '[...]' --trust '[...]' --susceptibility 0.5
+$ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"ship"},{"agent":"carol","choice":"hold"}]' --trust '[["alice","carol",1.0],["bob","carol",1.0],["carol","carol",4.0],["carol","alice",1.0]]' --susceptibility 0.5
+{
+  "options": [
+    "hold",
+    "ship"
+  ],
+  "shares": [
+    0.509803921603262,
+    0.4901960783967379
+  ],
+  "rounds": 13,
+  "settled": true,
+  "converged": true,
+  "residual": 5.061644992032654e-10,
+  "engine": "degroot-fj",
+  "polarization": 0.41983852358575297,
+  "disagreement": 0.8581314877541683,
+  "agents": [
+    "alice",
+    "bob",
+    "carol"
+  ],
+  "influence": [
+    0.2901960784313726,
+    0.20000000000000004,
+    0.5098039215686274
+  ],
+  "effective_voters": 2.603395123513633,
+  "margin": 0.019607843206524145,
+  "tie": false
+}
 #+end_src
+# [[[end]]]
 
 Below one, each voter stays partly anchored to the ballot they cast. The
 run always settles, and it settles on voters who still disagree; the shares

@@ -2,3 +2,7 @@
 # `cog -r @cogfiles.txt` rewrites them. CI runs `cog --check @cogfiles.txt`.
 # cogapp, not cocogitto: both install a command named cog.
 docs/source/conf.py -I scripts
+# Samples and the settle flag list. Each file's cog blocks run the binary.
+README.md
+docs/orgmode/getting-started.org
+docs/orgmode/reference.org
