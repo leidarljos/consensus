@@ -1,5 +1,6 @@
-# 5f11bc52a8ca90d6baf92f3faabfc2583447f248 cargo run --release --example correlation_gate -- 20000
-# Built from that commit by rustc 1.89.0, and run on one thread of an Intel(R) Xeon(R) Processor, family 6 model 207, 8 cores at 2.4 GHz.
+# c71e993dfe4b77efd45c5fe1762bfdb874e7acdd cargo run --release --example correlation_gate -- 20000
+# Built from that commit by rustc 1.89.0, and run CPU only, with no GPU and no model call, on one thread pinned to one core of an Intel(R) Xeon(R) Processor, family 6 model 207, 8 cores at 2.4 GHz.
+# Seed rule: trial t of every cell starts the generator of examples/correlation_gate/grid.rs at state 7919 t + 43, for t from 0 to 19999. Every cell reads the same 20000 seeds, so the cells differ only in m and rho.
 
 Two voters right p of the time, p uniform in [0.60, 0.75], share m items with named outcomes.
 With probability rho an item is one where both cast one judge's ballot.
