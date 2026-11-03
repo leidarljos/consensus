@@ -105,19 +105,24 @@ gives an empty message. Any other failure of a parsed =settle= exits 1.
 
 =ljos-consensus surprising (--issue ID | --ballots JSON) --predictions JSON=
 
-The surprisingly popular answer (Prelec, Seung and McCoy,
-doi:10.1038/nature21054). =--predictions= is an array of ={agent, expect}=
-where =expect= is an option, or an object of option to the share the voter
-expects the others to give it. Names are trimmed, and a blank name is left
-out. The mean takes one row per voter, the last if that voter sent
-several, and only from a voter who cast a ballot. A row with a negative
-share, a share that is not a finite number, or shares that sum to zero is
-left out. Each row left out is named, with the reason, on stderr and in
-=ignored=. Output: =options=, =actual= and =predicted= shares, =surprise=
-(actual minus predicted), =margin= (the largest surprise less the next),
-=tie= (that margin is within twice the rounding on one surprise), =answer=
-(the largest surprise; absent on a tie and below two predictors),
-=predictors=, =ignored=.
+The surprisingly popular answer (Prelec, Seung and McCoy, doi:10.1038/nature21054).
+=--predictions= is an array of ={agent, expect}=.
+=expect= is an option, or an object of option to the share the voter expects the others to give it.
+Names are trimmed, and a blank name is left out.
+The mean takes one row per voter, the last if that voter sent several, and only from a voter who cast a ballot.
+A negative share leaves the row out.
+A share that is not a finite number is left out.
+Shares that sum to zero leave that row out.
+Each row left out is named, with the reason, on stderr and in =ignored=.
+=options= lists the choices.
+=actual= and =predicted= hold the shares.
+=surprise= is actual minus predicted.
+=margin= is the largest surprise less the next.
+=tie= is set when that margin is within twice the rounding on one surprise.
+=answer= names the option with the largest surprise.
+A tie, or a count below two predictors, leaves =answer= absent.
+=predictors= counts the kept voters.
+=ignored= lists those rows.
 
 =ljos-consensus reputation --trust JSON [--agents a,b,c] [--alpha A]=
 
