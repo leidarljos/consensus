@@ -10,8 +10,8 @@
 //! double from two voters. Each has two options, and its voters split into
 //! two camps of adjacent names, the lower half on `a`. Where its panel
 //! does not say otherwise, a settle uses the CLI's defaults: earned
-//! self-trust with a fallback of 0.5, every voter listening fully, at most
-//! 200 rounds, a tolerance of 1e-9.
+//! self-trust with a fallback of 0.5, every voter listening fully, and the
+//! round cap and tolerance `Opts::default` derives.
 //!
 //! Four panels:
 //! - `rows`: every voter gives voter j the same weight, drawn in
@@ -22,7 +22,7 @@
 //! - `ring`: each voter names only the next, weight one. Earned self-trust
 //!   keeps half of each row on the voter's own ballot, so the slowest
 //!   disagreement shrinks by `cos(pi / n)` a round and the iteration needs
-//!   about `4 n^2` rounds to reach the tolerance. From eight voters on it
+//!   about `4 n^2` rounds to reach the tolerance. From four voters on it
 //!   spends the whole budget: the most rounds an iteration can take.
 //! - `ring, anchored`: the ring with every voter at susceptibility 0.7,
 //!   the anchor `docs/orgmode/howto.org` shows.

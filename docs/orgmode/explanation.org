@@ -33,9 +33,9 @@ near one is one voter's opinion, however many ballots it read.
 where every closed group of the trust graph holds an anchored voter. A
 closed group that listens fully gets its stationary distribution; the
 voters outside it solve against that. The iteration stays the default.
-Where it converges within its default 200 rounds it ends within =--tol=
+Where it converges within its default 27 rounds it ends within =--tol=
 of the same point. A panel slow to agree runs out of rounds first and
-reports =settled: false=, as a ring of eight voters does when each names
+reports =settled: false=, as a ring of four voters does when each names
 only the next.
 
 * Whose own voice counts
@@ -118,51 +118,49 @@ to check its point. The solve is cubic in the voters.
 
 =examples/settle_scaling.rs= times both from two voters to 4096 on one
 thread of an Intel Xeon (family 6, model 207, eight cores at 2.4 GHz) at
-commit =0c3ec2a37ade690253ce6e45d186ce0b1076cb94=, taking the fastest run
+commit =c71e993dfe4b77efd45c5fe1762bfdb874e7acdd=, taking the fastest run
 in a second of runs. Every panel has two options and, where it does not
 say otherwise, the CLI's defaults; =measurements/settle_scaling.txt=
 has the output. Four panels bracket the rounds an iteration takes. The
 =n (n - 1)= rows =learn= and =calibrate= write settle in one round. A
-ring, each voter naming only the next, spends the whole 200-round budget
-from eight voters on and stops short of the fixed point. The same ring
-with every voter anchored at 0.7 stops on Banach's bound at round 53.
-With no self-weight the ring cycles. The second column is =exact='s time
+ring, each voter naming only the next, spends the whole 27-round budget from four voters on and stops short of the fixed point.
+The same ring with every voter anchored at 0.7 stops on Banach's bound at round 26 with four voters.
+From eight on it runs out at 27, since the cap is derived for anchors of a half and under.
+With no self-weight the ring cycles.
+The second column is =exact='s time
 on the rows; the others are =iterate='s time over =exact='s.
 
 | Voters | Rows, =exact= | Rows | Ring | Ring, anchored | Ring, no self-weight |
 |---+---+---+---+---+---|
-| 2 | 0.98 µs | 1.05 | 1.05 | 1.09 | 0.95 |
-| 4 | 1.94 µs | 1.04 | 4.11 | 2.58 | 0.94 |
-| 8 | 5.34 µs | 1.02 | 12.96 | 3.43 | 0.88 |
-| 16 | 23.34 µs | 1.02 | 11.49 | 3.22 | 0.94 |
-| 32 | 143.87 µs | 1.01 | 10.37 | 2.79 | 0.93 |
-| 64 | 957.77 µs | 1.00 | 8.05 | 2.26 | 0.91 |
-| 128 | 7.38 ms | 1.00 | 5.53 | 1.68 | 0.86 |
-| 256 | 58.02 ms | 1.00 | 3.80 | 1.36 | 0.80 |
-| 512 | 463.42 ms | 1.00 | 2.41 | 1.16 | 0.71 |
-| 1024 | 3.71 s | 1.00 | 2.14 | 1.10 | 0.66 |
-| 2048 | 29.47 s | 1.00 | 1.53 | 1.11 | 0.60 |
-| 4096 | 282.72 s | 0.97 | 1.37 | 1.08 | 0.55 |
+| 2 | 0.88 µs | 1.07 | 1.06 | 1.11 | 0.78 |
+| 4 | 1.75 µs | 1.04 | 2.81 | 2.51 | 0.78 |
+| 8 | 5.00 µs | 1.02 | 2.87 | 2.59 | 0.73 |
+| 16 | 22.39 µs | 1.01 | 2.59 | 2.31 | 0.75 |
+| 32 | 141.48 µs | 1.01 | 2.33 | 2.00 | 0.73 |
+| 64 | 970.12 µs | 1.01 | 2.02 | 1.70 | 0.69 |
+| 128 | 7.23 ms | 0.99 | 1.62 | 1.38 | 0.63 |
+| 256 | 56.82 ms | 1.00 | 1.37 | 1.20 | 0.58 |
+| 512 | 451.25 ms | 1.08 | 1.18 | 1.10 | 0.52 |
+| 1024 | 4.33 s | 0.94 | 1.12 | 1.06 | 0.53 |
+| 2048 | 37.85 s | 1.03 | 1.07 | 1.03 | 0.52 |
+| 4096 | 238.64 s | 1.06 | 1.03 | 0.99 | 0.49 |
 
 A second sweep to 512 voters printed the same rounds and moved each time
 by less than a tenth. A cell over a second is a single run and carries
-whatever else the machine did then: at 4096 voters the anchored ring's
-two settles came in under the solve they contain.
+whatever else the machine did then.
 
 On the rows a seat keeps, the two engines cost the same at every size:
 one round costs what =exact= spends checking its point. The settle there
-grows as the cube, from half a second at 512 voters to almost five
-minutes at 4096. From 32 voters on, more than half of it goes to
+grows as the cube, from half a second at 512 voters to four minutes at 4096.
+From 32 voters on, more than half of it goes to
 building the matrix from the rows, before either engine starts.
 
-On the ring, =iterate= costs nearly thirteen times what =exact= does at
+On the ring, =iterate= costs nearly three times what =exact= does at
 eight voters, and never reaches the tolerance. The rounds cost as much as
-the solve, which puts =iterate= at twice =exact=, near a thousand voters;
-past that the solve both share dominates. Anchored, the ring needs 53
-rounds and that crossover falls to between 64 and 128 voters. The ring
-with no self-weight has no closed form. =exact= finds the cycle and
-falls back to the iteration, which builds the matrix and finds the cycle
-again, so =exact= takes up to 1.8 times as long as =iterate=.
+the solve, which puts =iterate= at twice =exact=, near 64 voters; past that the solve both share dominates.
+Anchored, the ring runs out at the same 27 rounds from eight voters on, and that crossover falls to 32 voters.
+The ring with no self-weight has no closed form.
+=exact= finds the cycle and falls back to the iteration, which builds the matrix and finds the cycle again, so =exact= takes up to twice as long as =iterate=.
 
 Choose =exact= wherever a closed form exists. It costs the
 same as =iterate= where one round settles and less where more are
@@ -496,7 +494,8 @@ Both means are lower when the forecast is better.
 
 =measurements/replay_history.txt= is the stdout of
 =cargo run --release --example replay_history -- measurements/replay_panel.json=
-at =042b4217798793cadf3f12dba4c6948b7cb10f8d=. The panel is three clones of
+at =c71e993dfe4b77efd45c5fe1762bfdb874e7acdd=.
+The panel is three clones of
 =model:alpha=, right 0.60 of the time and always in agreement, beside
 three independent voters at 0.72, 0.68 and 0.66. It has forty eight
 two-way questions, seed 7, and no trust rows. Each method scored all 48
@@ -516,7 +515,8 @@ grouping is expected to help there.
 
 =measurements/replay_independent.txt= is the stdout of
 =cargo run --release --example replay_history -- measurements/replay_panel_independent.json=
-at =042b4217798793cadf3f12dba4c6948b7cb10f8d=. The panel has no clones.
+at =c71e993dfe4b77efd45c5fe1762bfdb874e7acdd=.
+The panel has no clones.
 Six voters draw apart, at 0.55, 0.62, 0.68, 0.74, 0.82 and 0.90, each
 with its own family and key. It has forty eight two-way questions,
 seed 7, and no trust rows. Each method scored all 48 questions, and
