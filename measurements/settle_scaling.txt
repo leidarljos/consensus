@@ -1,0 +1,70 @@
+# 0c3ec2a37ade690253ce6e45d186ce0b1076cb94 cargo run --release --example settle_scaling
+# Built from that commit with examples/settle_scaling.rs added as git blob bbdc4d9c07fac1c8663b13f633ef3dde0d09e651, by rustc 1.89.0, and run on one thread of an Intel(R) Xeon(R) Processor, family 6 model 207, 8 cores at 2.4 GHz. The sweep took 37 minutes. Each time is the fastest run in a second of runs. A cell over a second is one run and carries whatever else the machine did then: at 4096 voters the anchored ring's iterate and exact came in under the solve they contain. The rounds, converged and exact engine columns repeat on every run; the times move, so a rerun does not reproduce this file byte for byte.
+
+rows
+
+| voters | rounds | converged | W | solve | iterate | exact | iterate / exact | exact engine |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 1 | true | 0.12 µs | 0.42 µs | 1.02 µs | 0.98 µs | 1.05 | fj-exact |
+| 4 | 1 | true | 0.32 µs | 0.80 µs | 2.02 µs | 1.94 µs | 1.04 | fj-exact |
+| 8 | 1 | true | 1.60 µs | 2.06 µs | 5.47 µs | 5.34 µs | 1.02 | fj-exact |
+| 16 | 1 | true | 10.68 µs | 8.75 µs | 23.87 µs | 23.34 µs | 1.02 | fj-exact |
+| 32 | 1 | true | 87.32 µs | 44.68 µs | 144.66 µs | 143.87 µs | 1.01 | fj-exact |
+| 64 | 1 | true | 604.31 µs | 310.48 µs | 956.78 µs | 957.77 µs | 1.00 | fj-exact |
+| 128 | 1 | true | 4.57 ms | 2.46 ms | 7.39 ms | 7.38 ms | 1.00 | fj-exact |
+| 256 | 1 | true | 35.66 ms | 21.07 ms | 58.30 ms | 58.02 ms | 1.00 | fj-exact |
+| 512 | 1 | true | 286.76 ms | 169.42 ms | 462.33 ms | 463.42 ms | 1.00 | fj-exact |
+| 1024 | 1 | true | 2.32 s | 1.38 s | 3.69 s | 3.71 s | 1.00 | fj-exact |
+| 2048 | 1 | true | 18.55 s | 10.74 s | 29.52 s | 29.47 s | 1.00 | fj-exact |
+| 4096 | 1 | true | 161.53 s | 89.86 s | 273.41 s | 282.72 s | 0.97 | fj-exact |
+
+ring
+
+| voters | rounds | converged | W | solve | iterate | exact | iterate / exact | exact engine |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 1 | true | 0.12 µs | 0.42 µs | 1.03 µs | 0.98 µs | 1.05 | fj-exact |
+| 4 | 58 | true | 0.23 µs | 0.74 µs | 7.12 µs | 1.73 µs | 4.11 | fj-exact |
+| 8 | 200 | false | 0.48 µs | 1.72 µs | 47.69 µs | 3.68 µs | 12.96 | fj-exact |
+| 16 | 200 | false | 1.47 µs | 6.07 µs | 125.01 µs | 10.88 µs | 11.49 | fj-exact |
+| 32 | 200 | false | 4.79 µs | 22.76 µs | 373.94 µs | 36.06 µs | 10.37 | fj-exact |
+| 64 | 200 | false | 19.40 µs | 123.91 µs | 1.44 ms | 179.51 µs | 8.05 | fj-exact |
+| 128 | 200 | false | 76.64 µs | 736.87 µs | 5.08 ms | 918.80 µs | 5.53 | fj-exact |
+| 256 | 200 | false | 301.76 µs | 5.19 ms | 22.51 ms | 5.92 ms | 3.80 | fj-exact |
+| 512 | 200 | false | 1.29 ms | 41.64 ms | 104.18 ms | 43.27 ms | 2.41 | fj-exact |
+| 1024 | 200 | false | 5.51 ms | 320.53 ms | 724.03 ms | 337.90 ms | 2.14 | fj-exact |
+| 2048 | 200 | false | 27.11 ms | 2.50 s | 3.75 s | 2.45 s | 1.53 | fj-exact |
+| 4096 | 200 | false | 190.96 ms | 18.64 s | 26.27 s | 19.10 s | 1.37 | fj-exact |
+
+ring, anchored
+
+| voters | rounds | converged | W | solve | iterate | exact | iterate / exact | exact engine |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 2 | true | 0.12 µs | 0.36 µs | 1.02 µs | 0.93 µs | 1.09 | fj-exact |
+| 4 | 30 | true | 0.22 µs | 0.68 µs | 4.31 µs | 1.67 µs | 2.58 | fj-exact |
+| 8 | 47 | true | 0.49 µs | 1.77 µs | 12.70 µs | 3.70 µs | 3.43 | fj-exact |
+| 16 | 52 | true | 1.49 µs | 7.42 µs | 39.52 µs | 12.28 µs | 3.22 | fj-exact |
+| 32 | 53 | true | 4.79 µs | 31.51 µs | 129.19 µs | 46.28 µs | 2.79 | fj-exact |
+| 64 | 53 | true | 19.48 µs | 202.65 µs | 574.59 µs | 253.73 µs | 2.26 | fj-exact |
+| 128 | 53 | true | 76.81 µs | 1.39 ms | 2.63 ms | 1.56 ms | 1.68 | fj-exact |
+| 256 | 53 | true | 302.26 µs | 10.79 ms | 15.50 ms | 11.42 ms | 1.36 | fj-exact |
+| 512 | 53 | true | 1.26 ms | 96.11 ms | 111.27 ms | 95.79 ms | 1.16 | fj-exact |
+| 1024 | 53 | true | 5.48 ms | 1.02 s | 1.00 s | 909.56 ms | 1.10 | fj-exact |
+| 2048 | 53 | true | 26.31 ms | 8.52 s | 9.34 s | 8.39 s | 1.11 | fj-exact |
+| 4096 | 53 | true | 182.90 ms | 192.08 s | 186.22 s | 172.29 s | 1.08 | fj-exact |
+
+ring, no self-weight
+
+| voters | rounds | converged | W | solve | iterate | exact | iterate / exact | exact engine |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 200 | false | 0.12 µs | 0.26 µs | 10.16 µs | 10.68 µs | 0.95 | degroot-fj |
+| 4 | 200 | false | 0.22 µs | 0.45 µs | 18.41 µs | 19.56 µs | 0.94 | degroot-fj |
+| 8 | 200 | false | 0.48 µs | 1.04 µs | 40.41 µs | 45.80 µs | 0.88 | degroot-fj |
+| 16 | 200 | false | 1.47 µs | 4.03 µs | 112.68 µs | 119.74 µs | 0.94 | degroot-fj |
+| 32 | 200 | false | 4.76 µs | 17.19 µs | 342.15 µs | 369.83 µs | 0.93 | degroot-fj |
+| 64 | 200 | false | 19.38 µs | 102.51 µs | 1.35 ms | 1.49 ms | 0.91 | degroot-fj |
+| 128 | 200 | false | 76.99 µs | 660.89 µs | 4.86 ms | 5.64 ms | 0.86 | degroot-fj |
+| 256 | 200 | false | 302.31 µs | 4.87 ms | 21.12 ms | 26.38 ms | 0.80 | degroot-fj |
+| 512 | 200 | false | 1.27 ms | 38.57 ms | 98.61 ms | 139.08 ms | 0.71 | degroot-fj |
+| 1024 | 200 | false | 5.43 ms | 296.29 ms | 594.37 ms | 900.59 ms | 0.66 | degroot-fj |
+| 2048 | 200 | false | 26.13 ms | 2.28 s | 3.49 s | 5.84 s | 0.60 | degroot-fj |
+| 4096 | 200 | false | 206.38 ms | 18.44 s | 22.77 s | 41.23 s | 0.55 | degroot-fj |
