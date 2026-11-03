@@ -135,3 +135,6 @@ $RECYCLE.BIN/
 !.leakguard.toml
 .venv-docs/
 docs/build/
+# One page per docs/orgmode/*.org, written by docs/scripts/export_org_to_rst.sh.
+# docs.yml and docs/build.sh regenerate these before sphinx-build.
+docs/source/*.rst
