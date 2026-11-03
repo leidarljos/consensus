@@ -1,0 +1,131 @@
+# 24 raw files in raw/, run in the order of order.txt (seed 3149443576).
+# Every file's header agrees on these lines:
+# rustc: rustc 1.89.0 (29483883e 2025-08-04)
+# machine: Intel(R) Xeon(R) Processor, family 6 model 207 stepping 2, 8 CPUs at 2400.000 MHz; L2 2048K over CPUs 2, L3 327680K over CPUs 0-7 (sysfs cache index2 and index3)
+# governor: none: the guest has no cpufreq driver for CPU 2, so the host sets the clock
+# virtualization: kvm (systemd-detect-virt), and /proc/cpuinfo sets the hypervisor flag
+# kernel: Linux 6.12.94+; transparent huge pages: always [madvise] never
+# this process may run on CPUs 2
+
+## Settle, 6 runs per commit
+
+# median and interquartile range (inclusive quartiles) over the runs; the ratio is c71e993's median over 3d067f7's.
+| voters | measure | c71e993 median | c71e993 IQR | 3d067f7 median | 3d067f7 IQR | ratio of medians |
+|---:|---|---:|---:|---:|---:|---:|
+| 512 | build s | 0.291 | 0.290 to 0.294 | 0.009 | 0.009 to 0.009 | 32.39 |
+| 512 | solve s | 0.215 | 0.213 to 0.217 | 0.067 | 0.066 to 0.067 | 3.24 |
+| 512 | iterate s | 0.509 | 0.505 to 0.512 | 0.077 | 0.077 to 0.079 | 6.61 |
+| 512 | exact s | 0.510 | 0.504 to 0.516 | 0.075 | 0.074 to 0.075 | 6.80 |
+| 512 | solve again s | 0.214 | 0.213 to 0.215 | 0.064 | 0.064 to 0.066 | 3.34 |
+| 1024 | build s | 2.319 | 2.314 to 2.325 | 0.036 | 0.036 to 0.037 | 64.42 |
+| 1024 | solve s | 1.766 | 1.755 to 1.773 | 0.558 | 0.547 to 0.572 | 3.16 |
+| 1024 | iterate s | 4.089 | 4.079 to 4.176 | 0.613 | 0.596 to 0.619 | 6.68 |
+| 1024 | exact s | 4.054 | 4.036 to 4.069 | 0.603 | 0.585 to 0.613 | 6.72 |
+| 1024 | solve again s | 1.734 | 1.728 to 1.750 | 0.554 | 0.541 to 0.567 | 3.13 |
+| 2048 | build s | 18.552 | 18.518 to 18.623 | 0.167 | 0.165 to 0.169 | 111.42 |
+| 2048 | solve s | 14.149 | 14.045 to 14.261 | 4.784 | 4.643 to 4.896 | 2.96 |
+| 2048 | iterate s | 33.007 | 32.926 to 33.203 | 5.051 | 4.905 to 5.132 | 6.53 |
+| 2048 | exact s | 32.751 | 32.554 to 32.781 | 4.958 | 4.882 to 5.079 | 6.60 |
+| 2048 | solve again s | 14.172 | 13.988 to 14.323 | 4.731 | 4.630 to 4.914 | 3.00 |
+| 4096 | build s | 148.199 | 147.833 to 148.689 | 0.731 | 0.715 to 0.747 | 202.73 |
+| 4096 | solve s | 116.027 | 115.509 to 118.321 | 38.884 | 37.442 to 39.498 | 2.98 |
+| 4096 | iterate s | 264.220 | 262.765 to 267.204 | 40.454 | 38.284 to 43.676 | 6.53 |
+| 4096 | exact s | 263.562 | 262.875 to 265.172 | 39.534 | 37.872 to 40.939 | 6.67 |
+| 4096 | solve again s | 113.858 | 112.111 to 116.353 | 39.547 | 37.528 to 40.392 | 2.88 |
+
+# iterate rounds and exact engine, over every run
+| voters | commit | iterate rounds | exact engine |
+|---:|---|---|---|
+| 512 | c71e993 | 6 | fj-exact |
+| 512 | 3d067f7 | 6 | fj-exact |
+| 1024 | c71e993 | 5 | fj-exact |
+| 1024 | 3d067f7 | 5 | fj-exact |
+| 2048 | c71e993 | 5 | fj-exact |
+| 2048 | 3d067f7 | 5 | fj-exact |
+| 4096 | c71e993 | 5 | fj-exact |
+| 4096 | 3d067f7 | 5 | fj-exact |
+
+# Runs in which a solve timed alone took longer than a settle that ran the same solve inside it.
+| voters | commit | solve over iterate | solve over exact | solve again over iterate | solve again over exact | median solve / solve again |
+|---:|---|---:|---:|---:|---:|---:|
+| 1024 | c71e993 | 0 of 6 | 0 of 6 | 0 of 6 | 0 of 6 | 1.015 |
+| 1024 | 3d067f7 | 0 of 6 | 0 of 6 | 0 of 6 | 0 of 6 | 1.010 |
+| 2048 | c71e993 | 0 of 6 | 0 of 6 | 0 of 6 | 0 of 6 | 1.002 |
+| 2048 | 3d067f7 | 0 of 6 | 0 of 6 | 0 of 6 | 0 of 6 | 1.003 |
+| 4096 | c71e993 | 0 of 6 | 0 of 6 | 0 of 6 | 0 of 6 | 1.029 |
+| 4096 | 3d067f7 | 0 of 6 | 1 of 6 | 1 of 6 | 3 of 6 | 0.989 |
+
+# Wall seconds per settle job, from order.txt, against the seconds it timed. The rest is the panels it built untimed, and any time the machine was paused: its clocks stop while it is, so its timings leave the pause out.
+| job | commit | run | wall s | timed s | wall - timed s |
+|---:|---|---:|---:|---:|---:|
+| 1 | c71e993 | 3 | 1031 | 1027 | 4 |
+| 4 | 3d067f7 | 3 | 176 | 173 | 3 |
+| 9 | 3d067f7 | 4 | 171 | 168 | 3 |
+| 10 | c71e993 | 6 | 1732 | 1033 | 699 |
+| 11 | c71e993 | 5 | 2651 | 1046 | 1605 |
+| 13 | 3d067f7 | 5 | 190 | 188 | 2 |
+| 16 | c71e993 | 1 | 1060 | 1056 | 4 |
+| 17 | 3d067f7 | 1 | 187 | 184 | 3 |
+| 18 | c71e993 | 4 | 1036 | 1032 | 4 |
+| 21 | 3d067f7 | 6 | 183 | 180 | 3 |
+| 22 | c71e993 | 2 | 1036 | 1032 | 4 |
+| 24 | 3d067f7 | 2 | 203 | 199 | 4 |
+
+## Kernel, 6 runs
+
+| working set MiB | ns per entry median | ns per entry IQR | GB/s moved median | GB/s moved IQR |
+|---:|---:|---:|---:|---:|
+| 4 | 0.277 | 0.275 to 0.279 | 57.8 | 57.3 to 58.1 |
+| 8 | 0.302 | 0.295 to 0.308 | 53.0 | 52.0 to 54.1 |
+| 16 | 0.338 | 0.326 to 0.352 | 47.4 | 45.4 to 49.1 |
+| 32 | 0.348 | 0.332 to 0.352 | 46.0 | 45.5 to 48.3 |
+| 64 | 0.354 | 0.334 to 0.356 | 45.2 | 44.9 to 47.9 |
+| 128 | 0.358 | 0.343 to 0.359 | 44.7 | 44.6 to 46.7 |
+| 144 | 0.358 | 0.344 to 0.360 | 44.7 | 44.5 to 46.5 |
+| 160 | 0.359 | 0.357 to 0.365 | 44.5 | 43.8 to 44.8 |
+| 176 | 0.370 | 0.363 to 0.379 | 43.1 | 42.2 to 44.1 |
+| 192 | 0.380 | 0.369 to 0.407 | 42.1 | 39.2 to 43.4 |
+| 208 | 0.414 | 0.380 to 0.495 | 38.9 | 32.4 to 42.2 |
+| 224 | 0.458 | 0.403 to 0.548 | 35.4 | 29.2 to 39.7 |
+| 240 | 0.527 | 0.431 to 0.626 | 31.2 | 25.6 to 37.1 |
+| 256 | 0.560 | 0.447 to 0.661 | 29.4 | 24.2 to 35.8 |
+| 512 | 0.858 | 0.772 to 0.931 | 18.8 | 17.2 to 20.7 |
+| 1024 | 0.933 | 0.889 to 0.977 | 17.2 | 16.4 to 18.0 |
+
+## Solve stages at 3d067f7, 6 runs
+
+| voters | stage | median | IQR |
+|---:|---|---:|---:|
+| 2048 | scale s | 0.006 | 0.005 to 0.007 |
+| 2048 | classes s | 0.000 | 0.000 to 0.000 |
+| 2048 | stop init s | 0.011 | 0.009 to 0.013 |
+| 2048 | eliminate s | 2.499 | 2.307 to 2.516 |
+| 2048 | back s | 2.382 | 2.337 to 2.411 |
+| 2048 | total s | 4.899 | 4.641 to 4.941 |
+| 2048 | total / n^3 ns | 0.571 | 0.540 to 0.575 |
+| 4096 | scale s | 0.025 | 0.024 to 0.025 |
+| 4096 | classes s | 0.000 | 0.000 to 0.000 |
+| 4096 | stop init s | 0.049 | 0.048 to 0.049 |
+| 4096 | eliminate s | 23.940 | 21.389 to 26.131 |
+| 4096 | back s | 19.845 | 19.225 to 20.123 |
+| 4096 | total s | 44.260 | 40.686 to 46.530 |
+| 4096 | total / n^3 ns | 0.644 | 0.592 to 0.677 |
+
+| voters | eighth | working set MiB | ns per entry median | ns per entry IQR |
+|---:|---|---:|---:|---:|
+| 2048 | 1/8 | 64 | 0.353 | 0.326 to 0.358 |
+| 2048 | 2/8 | 52 | 0.356 | 0.327 to 0.357 |
+| 2048 | 3/8 | 42 | 0.354 | 0.326 to 0.356 |
+| 2048 | 4/8 | 32 | 0.348 | 0.321 to 0.352 |
+| 2048 | 5/8 | 24 | 0.341 | 0.315 to 0.343 |
+| 2048 | 6/8 | 16 | 0.337 | 0.312 to 0.338 |
+| 2048 | 7/8 | 10 | 0.314 | 0.301 to 0.317 |
+| 2048 | 8/8 | 4 | 0.249 | 0.247 to 0.251 |
+| 4096 | 1/8 | 256 | 0.513 | 0.415 to 0.623 |
+| 4096 | 2/8 | 210 | 0.413 | 0.370 to 0.456 |
+| 4096 | 3/8 | 168 | 0.361 | 0.352 to 0.381 |
+| 4096 | 4/8 | 130 | 0.354 | 0.345 to 0.366 |
+| 4096 | 5/8 | 96 | 0.350 | 0.344 to 0.355 |
+| 4096 | 6/8 | 66 | 0.346 | 0.340 to 0.352 |
+| 4096 | 7/8 | 40 | 0.344 | 0.336 to 0.352 |
+| 4096 | 8/8 | 18 | 0.332 | 0.322 to 0.335 |

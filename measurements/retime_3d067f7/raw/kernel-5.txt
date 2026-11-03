@@ -1,0 +1,28 @@
+# kernel run 5 of 6, job 14 of 24 in order.txt, at commit 3d067f7b677a99fac14d9c338d6aa26b3e1951f3
+# command: taskset -c 2 target/release/examples/retime_kernel, in a checkout of that commit with this directory's kernel.rs as examples/retime_kernel.rs
+# rustc: rustc 1.89.0 (29483883e 2025-08-04)
+# machine: Intel(R) Xeon(R) Processor, family 6 model 207 stepping 2, 8 CPUs at 2400.000 MHz; L2 2048K over CPUs 2, L3 327680K over CPUs 0-7 (sysfs cache index2 and index3)
+# governor: none: the guest has no cpufreq driver for CPU 2, so the host sets the clock
+# virtualization: kvm (systemd-detect-virt), and /proc/cpuinfo sets the hypervisor flag
+# kernel: Linux 6.12.94+; transparent huge pages: always [madvise] never
+# started 2026-11-03T09:02:48Z
+# this process may run on CPUs 2
+# working set: the matrix alone, rows x 4096 x 8 bytes; the pivot row adds 32 KiB. GB/s counts a read and a write of 8 bytes per entry.
+| working set MiB | rows | sweeps | ns per entry | GB/s moved |
+|---:|---:|---:|---:|---:|
+| 4 | 128 | 8192 | 0.302 | 52.9 |
+| 8 | 256 | 4096 | 0.326 | 49.1 |
+| 16 | 512 | 2048 | 0.372 | 43.0 |
+| 32 | 1024 | 1024 | 0.377 | 42.4 |
+| 64 | 2048 | 512 | 0.380 | 42.1 |
+| 128 | 4096 | 256 | 0.385 | 41.6 |
+| 144 | 4608 | 227 | 0.387 | 41.3 |
+| 160 | 5120 | 204 | 0.397 | 40.3 |
+| 176 | 5632 | 186 | 0.413 | 38.7 |
+| 192 | 6144 | 170 | 0.454 | 35.3 |
+| 208 | 6656 | 157 | 0.612 | 26.1 |
+| 224 | 7168 | 146 | 0.778 | 20.6 |
+| 240 | 7680 | 136 | 0.795 | 20.1 |
+| 256 | 8192 | 128 | 0.656 | 24.4 |
+| 512 | 16384 | 64 | 0.933 | 17.1 |
+| 1024 | 32768 | 32 | 1.013 | 15.8 |

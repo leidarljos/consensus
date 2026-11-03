@@ -1,0 +1,17 @@
+# before run 4 of 6, job 18 of 24 in order.txt, at commit c71e993dfe4b77efd45c5fe1762bfdb874e7acdd
+# command: taskset -c 2 target/release/examples/retime_settle 2 512 1024 2048 4096, in a checkout of that commit with this directory's settle.rs as examples/retime_settle.rs
+# rustc: rustc 1.89.0 (29483883e 2025-08-04)
+# machine: Intel(R) Xeon(R) Processor, family 6 model 207 stepping 2, 8 CPUs at 2400.000 MHz; L2 2048K over CPUs 2, L3 327680K over CPUs 0-7 (sysfs cache index2 and index3)
+# governor: none: the guest has no cpufreq driver for CPU 2, so the host sets the clock
+# virtualization: kvm (systemd-detect-virt), and /proc/cpuinfo sets the hypervisor flag
+# kernel: Linux 6.12.94+; transparent huge pages: always [madvise] never
+# started 2026-11-03T09:25:56Z
+# this process may run on CPUs 2
+# 2 options, every voter at susceptibility 0.5, the rest Opts::default()
+# build s and solve s are timed alone, before the two settles: influence_matrix_with, then exact::fixed_point on its matrix. Each settle builds and solves again inside its own time, so a settle is not their sum. solve again s times the same solve after both settles, in the same process, so a solve that runs slower than a settle shows whether the order or the machine made it slow.
+| voters | build s | solve s | iterate s | rounds | exact s | exact engine | solve again s |
+|---:|---:|---:|---:|---:|---:|---|---:|
+| 512 | 0.290 | 0.215 | 0.506 | 6 | 0.509 | fj-exact | 0.213 |
+| 1024 | 2.316 | 1.752 | 4.076 | 5 | 4.053 | fj-exact | 1.733 |
+| 2048 | 18.642 | 14.037 | 32.943 | 5 | 32.734 | fj-exact | 14.335 |
+| 4096 | 148.067 | 115.875 | 265.555 | 5 | 262.628 | fj-exact | 111.655 |

@@ -1,0 +1,34 @@
+# steps run 6 of 6, job 7 of 24 in order.txt, at commit 3d067f7b677a99fac14d9c338d6aa26b3e1951f3
+# command: taskset -c 2 target/release/examples/retime_steps 2048 4096, in a checkout of that commit with this directory's steps.rs as examples/retime_steps.rs
+# rustc: rustc 1.89.0 (29483883e 2025-08-04)
+# machine: Intel(R) Xeon(R) Processor, family 6 model 207 stepping 2, 8 CPUs at 2400.000 MHz; L2 2048K over CPUs 2, L3 327680K over CPUs 0-7 (sysfs cache index2 and index3)
+# governor: none: the guest has no cpufreq driver for CPU 2, so the host sets the clock
+# virtualization: kvm (systemd-detect-virt), and /proc/cpuinfo sets the hypervisor flag
+# kernel: Linux 6.12.94+; transparent huge pages: always [madvise] never
+# started 2026-11-03T07:40:01Z
+# this process may run on CPUs 2
+# every voter names every other, weights 1 - u for u uniform, constant self-weight 0.5, every voter at susceptibility 0.5
+| voters | scale s | classes s | stop init s | eliminate s | back s | total s | total / n^3 ns |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2048 | 0.006 | 0.000 | 0.008 | 2.245 | 2.305 | 4.565 | 0.531 |
+| 4096 | 0.025 | 0.000 | 0.049 | 22.212 | 19.841 | 42.127 | 0.613 |
+
+# The elimination's rows in eighths. Working set: the bytes of `to` and `stop` still updated at the eighth's first row, (m - r) (m - r + n) 8. ns per entry: the eighth's seconds over the entries it updates.
+| voters | eighth | working set MiB | ns per entry |
+|---:|---|---:|---:|
+| 2048 | 1/8 | 64 | 0.318 |
+| 2048 | 2/8 | 52 | 0.318 |
+| 2048 | 3/8 | 42 | 0.317 |
+| 2048 | 4/8 | 32 | 0.312 |
+| 2048 | 5/8 | 24 | 0.307 |
+| 2048 | 6/8 | 16 | 0.304 |
+| 2048 | 7/8 | 10 | 0.297 |
+| 2048 | 8/8 | 4 | 0.248 |
+| 4096 | 1/8 | 256 | 0.425 |
+| 4096 | 2/8 | 210 | 0.387 |
+| 4096 | 3/8 | 168 | 0.370 |
+| 4096 | 4/8 | 130 | 0.368 |
+| 4096 | 5/8 | 96 | 0.368 |
+| 4096 | 6/8 | 66 | 0.368 |
+| 4096 | 7/8 | 40 | 0.367 |
+| 4096 | 8/8 | 18 | 0.352 |
