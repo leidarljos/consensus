@@ -81,12 +81,12 @@ last five fields.
 
 Exit status of every =--issue= reader:
 
-When that read does not yield ballots, the command writes one line to stderr
-and exits with a status from =sysexits.h= (FreeBSD). The line is the whole
-of stderr: it names what happened and says to pass =--ballots JSON=
-instead. What =vissue= itself wrote is not copied, so a tracker that
-prints several lines cannot bury the instruction. The table covers every
-=--issue= reader.
+When that read does not yield ballots, the command writes one line to stderr.
+It exits with a status from =sysexits.h= (FreeBSD).
+The line is the whole of stderr: it names what happened and says to pass =--ballots JSON= instead.
+What =vissue= itself wrote is not copied.
+So a tracker that prints more than one line cannot bury the instruction.
+The table covers every =--issue= reader.
 
 | Status | =sysexits.h= | The line |
 |---+---|---|
@@ -109,9 +109,10 @@ The surprisingly popular answer (Prelec, Seung and McCoy, doi:10.1038/nature2105
 =--predictions= is an array of ={agent, expect}=.
 =expect= is an option, or an object of option to the share the voter expects the others to give it.
 Names are trimmed, and a blank name is left out.
-The mean takes one row per voter, the last if that voter sent several, and only from a voter who cast a ballot.
+The mean takes one row per voter, the last if that voter sent more than one.
+The mean takes a row only from a voter who cast a ballot.
 A negative share leaves the row out.
-A share that is not a finite number is left out.
+A row whose share is not a finite number is left out.
 Shares that sum to zero leave that row out.
 Each row left out is named, with the reason, on stderr and in =ignored=.
 =options= lists the choices.
@@ -126,19 +127,23 @@ A tie, or a count below two predictors, leaves =answer= absent.
 
 =ljos-consensus reputation --trust JSON [--agents a,b,c] [--alpha A]=
 
-EigenTrust (Kamvar, Schlosser and Garcia-Molina,
-doi:10.1145/775152.775242): a global standing per voter from the pairwise
-rows, the principal eigenvector of the row-normalised trust matrix pulled
-toward a uniform pre-trust by =alpha= (default 0.15). =alpha= is clamped
-into =[0, 1]= and the printed value is the one the run used; a flag
-outside that range is named on stderr and still run. Each step multiplies
-L1 distance by =1 - alpha=, because the transpose of the trust matrix is
-column-stochastic and does not expand it, so the run takes
-=1 + ceil(ln(tol) / ln(1 - alpha))= rounds, =tol= being the settle's.
-=alpha= of 0 does not contract: the run stops on the same cap as an
-unbounded settle, and =converged= is false when that cap is what stopped
-it. Output: =alpha=, =standing= (voter to a share of one), =rounds=,
-=converged=, and =unrated=, the =--agents= names that no row mentions.
+EigenTrust gives a global standing per voter from the pairwise rows.
+Kamvar, Schlosser and Garcia-Molina describe it (doi:10.1145/775152.775242).
+The standing is the principal eigenvector of the row-normalised trust matrix.
+=alpha= pulls it toward a uniform pre-trust, and the default is 0.15.
+=alpha= is clamped into =[0, 1]=.
+The printed value is the one the run used.
+A finite out-of-range flag is named on stderr and still run.
+NaN and either infinity are usage errors and do not run.
+Each step multiplies L1 distance by =1 - alpha=.
+That holds because the transpose of the trust matrix is column-stochastic and does not expand it.
+So the run takes =1 + ceil(ln(tol) / ln(1 - alpha))= rounds.
+=tol= is the settle's tolerance.
+=alpha= of 0 does not contract.
+The run stops on the same cap as an unbounded settle.
+=converged= is false when that cap is what stopped it.
+Output: =alpha=, =standing= (voter to a share of one), =rounds= and =converged=.
+=unrated= is the =--agents= names that no row mentions.
 
 =ljos-consensus reliability (--items JSON | --project P) [--rounds N]=
 
