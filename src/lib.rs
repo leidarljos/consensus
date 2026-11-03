@@ -1562,14 +1562,25 @@ pub fn settle_energy(
             .collect(),
         pair,
         pinned,
+        // Logits are boxed to [-20, 20]. Two at opposite bounds are 40 apart,
+        // and the smaller softmax share is e^{-40} / (1 + e^{-40}). Binary64
+        // evaluates that as 4.248e-18, under EPSILON/2 = 2^{-53} and under
+        // half an ulp at 1 (2^{-54}), so the complementary share rounds to 1.
+        // A wider box buys no representable share.
         bounds: Bounds::new(
             Array1::from_elem(dim, -20.0),
             Array1::from_elem(dim, 20.0),
             0.0,
         ),
     };
-    // Start at the ballots, softly: logits summing to zero on each row, four
-    // apart between the chosen option and the rest.
+    // Start at the ballots, each row summing to zero, which is the gauge the
+    // softmax Jacobian kills (derive/sympy/constants.py). The chosen logit is
+    // 4(m - 1)/m and the others are -4/m, so the chosen option and each other
+    // are four apart: the log of their share ratio. Two options then put
+    // 1/(1 + e^{-4}) = 0.982 on the ballot, and the softmax slope on that
+    // share is of order e^{-4} = 0.018, a real first gradient. A start on the
+    // box is forty apart and its slope is the 4.248e-18 share above, which is
+    // not a direction the descent can follow.
     let mut z = Array1::<f64>::zeros(dim);
     let mf = m as f64;
     for i in 0..n {
@@ -1585,21 +1596,45 @@ pub fn settle_energy(
     // step is one. rgmin opens each line search at half the step it last
     // accepted, and a search that can only shrink then collapses the step
     // geometrically; the Wolfe search can grow it again.
-    // rgmin stops on `||g||_2 < gtol`.
-    // The point counts as settled once its largest gradient component is under `bar`.
-    // The largest component is at most the 2-norm, so stopping at `bar` stops on a settled point and not after it.
-    let bar = tol.max(1e-12) * (n as f64).sqrt();
+    // rgmin stops on `||g||_2 < gtol`. The largest gradient component is at
+    // most that norm, so stopping at `bar` stops on a settled point.
+    // A decrease of order `||g||^2` falls under the energy's rounding
+    // `EPSILON (1 + |E|)` once `||g||` is under the square root. At `|E| = 0`
+    // that root is `sqrt(EPSILON) = 2^{-26}`. The energy is not known until
+    // the point is in hand, so `bar` is held up to this least floor, and the
+    // settled test below applies the root to the energy it finds. A tighter
+    // bar spends rounds after the point is as settled as a unit-scale energy
+    // allows. `Opts::default().tol` sits just above `2^{-26}`, so the floor
+    // does not move that tolerance.
+    let bar = (tol * (n as f64).sqrt()).max(f64::EPSILON.sqrt());
     let control = rgmin::Control {
         maxiter: max_iter.max(1),
         gtol: bar,
         istep: 1.0,
+        // rgmin shortens an accepted step to this Euclidean length. Four is
+        // the gap the start uses, and a zero-sum row with that gap keeps
+        // every logit in (-4, 4). One step can spend the gap on a single
+        // logit, and it cannot carry that logit from the start onto a bound
+        // at ±20, which is still more than 16 away.
         maxmove: Some(4.0),
     };
     let report = rgmin::minimize_method(
         &energy,
         z.clone(),
         &control,
+        // Ten correction pairs. Nocedal and Wright, Numerical Optimization,
+        // 2nd ed., p. 177: modest L-BFGS memory, m between 3 and 20, is
+        // satisfactory. Their table 7.1 (p. 179) shows the better count
+        // depends on the problem, so ten is kept as a value in the range
+        // rather than one fitted to these panels.
         rgmin::Method::Lbfgs { memory: 10 },
+        // c1 = 1e-4 and c2 = 0.9 are the Wolfe constants Nocedal and Wright
+        // recommend for a Newton or quasi-Newton direction (2nd ed.,
+        // pp. 33-34; the BFGS notes repeat the pair on p. 142). Forty is
+        // the trial cap on rgmin's expand-and-zoom form of their algorithms
+        // 3.5 and 3.6 (pp. 60-61), the same cap as rgmin's default line
+        // search. The expand doubles a unit trial up to its own limit of
+        // 64, six doublings, and returns at the first strong Wolfe point.
         rgmin::LineSearch::Wolfe {
             c1: 1e-4,
             c2: 0.9,
