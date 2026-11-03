@@ -1,5 +1,6 @@
-# 5f11bc52a8ca90d6baf92f3faabfc2583447f248 cargo run --release --example correlation_history -- 0 7 4000
-# Built from that commit by rustc 1.89.0, and run on one thread of an Intel(R) Xeon(R) Processor, family 6 model 207, 8 cores at 2.4 GHz.
+# c71e993dfe4b77efd45c5fe1762bfdb874e7acdd cargo run --release --example correlation_history -- 0 7 4000
+# Built from that commit by rustc 1.89.0, and run CPU only, with no GPU and no model call, on one thread pinned to one core of an Intel(R) Xeon(R) Processor, family 6 model 207, 8 cores at 2.4 GHz.
+# Seed rule: seed s starts the generator of examples/correlation_history.rs at state 7919 s + 31, for s from 0 to 3999. Each seed draws its own voters and its own hundred outcomes, and every horizon h reads the first h of them.
 
 0 clones of one judge right 0.70 of the time beside 7 independent voters in [0.60, 0.75]; the decision after h named outcomes, 4000 seeds each; gate at level 0.05
 
