@@ -22,7 +22,7 @@ Usage: ljos-consensus settle [OPTIONS]
 
 Options:
       --issue <ISSUE>
-          
+          Tracker issue id. Ballots come from `vissue vote ID --json` when `--ballots` is absent
       --ballots <BALLOTS>
           JSON array of {agent, choice}
       --trust <TRUST>
@@ -30,15 +30,15 @@ Options:
       --seldon
           If set, write Seldon inputs and exec `seldon`. When `seldon` is not on PATH, the files are still written and the command that runs them is printed
       --out <OUT>
-          
+          Directory for the files `--seldon` writes. Absent, that is the working directory
       --self-weight <SELF_WEIGHT>
           A voter's weight on its own ballot when its row does not say: the fallback under `--self-trust earned`, every voter's under `constant` [default: 0.5]
       --self-trust <SELF_TRUST>
-          `earned` (the default): a voter weighs itself as the others weigh it. With no voter anchored and no discount, the rows `learn` and `calibrate` write then settle as the weighted vote they describe. `constant`: `--self-weight` for every voter [default: earned]
+          `earned` (the default): a voter weighs itself as the others weigh it. With no voter anchored and no discount, the rows `learn` and `calibrate` write then settle as the weighted vote they describe. `constant`: `--self-weight` for every voter [default: earned] [possible values: earned, constant]
       --discount-of <DISCOUNT_OF>
           JSON object of agent to the share of its inbound weight it keeps: `correlation`'s `discount`, under which exact clones count as one voice
       --susceptibility <SUSCEPTIBILITY>
-          [default: 1]
+          How far a voter not named in `--susceptibility-of` moves off its ballot, in [0, 1] [default: 1]
       --susceptibility-of <SUSCEPTIBILITY_OF>
           JSON object of agent to susceptibility: a persona's own anchor
       --epsilon <EPSILON>
@@ -50,7 +50,7 @@ Options:
       --tol <TOL>
           The distance a settle stops within. Default: 1.490116169344802e-8, as Opts::default derives it, for every engine
       --engine <ENGINE>
-          `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised [default: iterate]
+          `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised [default: iterate] [possible values: iterate, exact, energy]
   -h, --help
           Print help
 #+end_src

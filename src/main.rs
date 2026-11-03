@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use ljos_consensus::seldon::{parse_opinions_dir, seldon_absent_line, write_seldon_inputs};
 use ljos_consensus::{
     anchors_from_json, ballots_from_json, fj_contraction_bound, fj_rounds_to_tol, settle_energy,
@@ -25,6 +25,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Cmd {
     Settle {
+        /// Tracker issue id. Ballots come from `vissue vote ID --json` when `--ballots` is absent.
         #[arg(long)]
         issue: Option<String>,
         /// JSON array of {agent, choice}
@@ -38,6 +39,7 @@ enum Cmd {
         /// runs them is printed.
         #[arg(long)]
         seldon: bool,
+        /// Directory for the files `--seldon` writes. Absent, that is the working directory.
         #[arg(long)]
         out: Option<PathBuf>,
         /// A voter's weight on its own ballot when its row does not say:
@@ -49,13 +51,14 @@ enum Cmd {
         /// weigh it. With no voter anchored and no discount, the rows
         /// `learn` and `calibrate` write then settle as the weighted vote
         /// they describe. `constant`: `--self-weight` for every voter.
-        #[arg(long, default_value = "earned")]
-        self_trust: String,
+        #[arg(long, value_enum, default_value_t = SelfTrustArg::Earned)]
+        self_trust: SelfTrustArg,
         /// JSON object of agent to the share of its inbound weight it keeps:
         /// `correlation`'s `discount`, under which exact clones count as one
         /// voice.
         #[arg(long)]
         discount_of: Option<String>,
+        /// How far a voter not named in `--susceptibility-of` moves off its ballot, in [0, 1].
         #[arg(long, default_value_t = 1.0)]
         susceptibility: f64,
         /// JSON object of agent to susceptibility: a persona's own anchor.
@@ -73,8 +76,8 @@ enum Cmd {
         #[arg(long, help = format!("The distance a settle stops within. Default: {:?}, as Opts::default derives it, for every engine", Opts::default().tol))]
         tol: Option<f64>,
         /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised.
-        #[arg(long, default_value = "iterate")]
-        engine: String,
+        #[arg(long, value_enum, default_value_t = Engine::Iterate)]
+        engine: Engine,
     },
     /// How much the voters share their mistakes: the correlation of
     /// whether each was right, over a project's history. Truth is the
@@ -97,6 +100,7 @@ enum Cmd {
         /// reading.
         #[arg(long, default_value_t = ljos_consensus::correlation::INDEPENDENCE_LEVEL)]
         gate: f64,
+        /// Dawid-Skene rounds for an item that names no outcome.
         #[arg(long, default_value_t = 20)]
         rounds: usize,
         /// Accepted and ignored, so calls that still pass it run: the exact
@@ -109,6 +113,7 @@ enum Cmd {
     /// others' shares; the answer is the option whose actual share most
     /// exceeds its predicted share.
     Surprising {
+        /// Tracker issue id. Ballots come from `vissue vote ID --json` when `--ballots` is absent.
         #[arg(long)]
         issue: Option<String>,
         /// JSON array of {agent, choice}
@@ -143,6 +148,7 @@ enum Cmd {
         /// ballots, through `vissue list --json` and `vissue vote --json`.
         #[arg(long)]
         project: Option<String>,
+        /// EM rounds over the items' hidden answers and the voters' accuracies.
         #[arg(long, default_value_t = 20)]
         rounds: usize,
     },
@@ -152,18 +158,34 @@ enum Cmd {
     /// count, only the bound of one: size `--max-iter` by judgement, since
     /// convergence there is asymptotic. See `docs/orgmode/derivation.org`.
     Rounds {
-        /// Agents to cover, comma-separated; the rows' names when absent
-        /// are not available here, so this list is required.
+        /// Comma-separated voters the bound covers. This command reads no trust rows, so the names are given here.
         #[arg(long)]
         agents: String,
+        /// Susceptibility of a voter not named in `--susceptibility-of`, in [0, 1].
         #[arg(long, default_value_t = 1.0)]
         susceptibility: f64,
         /// JSON object of agent to susceptibility: a persona's own anchor.
         #[arg(long)]
         susceptibility_of: Option<String>,
+        /// The distance the predicted round count is guaranteed to reach.
         #[arg(long, default_value_t = Opts::default().tol)]
         tol: f64,
     },
+}
+
+/// `--engine`, spelled the way clap checks it on every path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum Engine {
+    Iterate,
+    Exact,
+    Energy,
+}
+
+/// `--self-trust`, spelled the way clap checks it on every path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum SelfTrustArg {
+    Earned,
+    Constant,
 }
 
 /// The round cap of `--epsilon`, `--seldon` and `--engine energy`.
@@ -342,7 +364,7 @@ fn run() -> Result<()> {
                 bail!("settle: no ballots, so nothing to settle");
             }
             let derived = Opts::default();
-            let cap = if epsilon.is_some() || use_seldon || engine == "energy" {
+            let cap = if epsilon.is_some() || use_seldon || engine == Engine::Energy {
                 UNBOUNDED_MAX_ITER
             } else {
                 derived.max_iter
@@ -358,6 +380,11 @@ fn run() -> Result<()> {
                 None => Vec::new(),
             };
             if let Some(eps) = epsilon {
+                // `--epsilon` reads neither flag. Name the ones the seat typed.
+                note_ignored(
+                    "--epsilon",
+                    &ignored_spellings(Some(&engine), Some(&self_trust)),
+                );
                 let bounds = match epsilon_of.as_deref() {
                     Some(raw) => bounds_from_json(raw)?,
                     None => std::collections::BTreeMap::new(),
@@ -372,6 +399,11 @@ fn run() -> Result<()> {
                 );
             }
             if use_seldon {
+                // Seldon writes its own DeGroot files from `--self-weight`.
+                note_ignored(
+                    "--seldon",
+                    &ignored_spellings(Some(&engine), Some(&self_trust)),
+                );
                 if let Some(outcome) = settle_seldon(
                     &ballots,
                     &trust,
@@ -383,7 +415,7 @@ fn run() -> Result<()> {
                 )? {
                     println!("{}", serde_json::to_string_pretty(&outcome)?);
                 }
-            } else if engine == "energy" {
+            } else if engine == Engine::Energy {
                 let any_anchor = ballots
                     .iter()
                     .any(|b| anchors.get(&b.agent).copied().unwrap_or(susceptibility) < 1.0);
@@ -394,6 +426,11 @@ fn run() -> Result<()> {
                          --engine iterate or exact, or pass --susceptibility"
                     );
                 }
+                // The energy uses a constant `--self-weight` and no earned row.
+                note_ignored(
+                    "--engine energy",
+                    &ignored_spellings(None, Some(&self_trust)),
+                );
                 let outcome = settle_energy(
                     &ballots,
                     &trust,
@@ -405,10 +442,9 @@ fn run() -> Result<()> {
                 );
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             } else {
-                let self_trust = match self_trust.as_str() {
-                    "earned" => SelfTrust::Earned(self_weight),
-                    "constant" => SelfTrust::Constant(self_weight),
-                    other => bail!("--self-trust is earned or constant, not {other:?}"),
+                let self_trust = match self_trust {
+                    SelfTrustArg::Earned => SelfTrust::Earned(self_weight),
+                    SelfTrustArg::Constant => SelfTrust::Constant(self_weight),
                 };
                 let discount = match discount_of.as_deref() {
                     Some(raw) => discount_from_json(raw)?,
@@ -422,16 +458,73 @@ fn run() -> Result<()> {
                     max_iter,
                     tol,
                 };
-                let outcome = match engine.as_str() {
-                    "exact" => settle_exact(&ballots, &trust, &opts),
-                    "iterate" => settle_with(&ballots, &trust, &opts),
-                    other => bail!("--engine is iterate, exact or energy, not {other:?}"),
+                let outcome = match engine {
+                    Engine::Exact => settle_exact(&ballots, &trust, &opts),
+                    Engine::Iterate => settle_with(&ballots, &trust, &opts),
+                    Engine::Energy => unreachable!("energy is settled above"),
                 };
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             }
         }
     }
     Ok(())
+}
+
+/// The clap spelling of a value enum, the same token `--help` lists.
+fn spelling(value: &impl ValueEnum) -> String {
+    let possible = value
+        .to_possible_value()
+        .expect("settle flags spell every variant");
+    possible.get_name().to_string()
+}
+
+/// Whether the seat typed `--name` or `--name=...`.
+///
+/// Clap fills `--engine` and `--self-trust` from their defaults, so the
+/// parsed value cannot say the flag was typed. A default the seat did not
+/// pass is not an ignored flag: every `--seldon` would otherwise name
+/// `--engine iterate`.
+fn long_opt_given(name: &str) -> bool {
+    let flag = format!("--{name}");
+    let prefix = format!("--{name}=");
+    std::env::args()
+        .skip(1)
+        .take_while(|arg| arg != "--")
+        .any(|arg| arg == flag || arg.starts_with(&prefix))
+}
+
+/// Flags this path does not read, limited to the ones the seat typed.
+///
+/// `None` means the path does read that flag, so it is not named even
+/// when it was typed.
+fn ignored_spellings(engine: Option<&Engine>, trust: Option<&SelfTrustArg>) -> Vec<String> {
+    let mut ignored = Vec::new();
+    if long_opt_given("engine") {
+        if let Some(engine) = engine {
+            ignored.push(format!("--engine {}", spelling(engine)));
+        }
+    }
+    if long_opt_given("self-trust") {
+        if let Some(trust) = trust {
+            ignored.push(format!("--self-trust {}", spelling(trust)));
+        }
+    }
+    ignored
+}
+
+/// One stderr line when a flag the seat passed is not read, because
+/// `because` chose the path. Nothing is printed when the seat passed none
+/// of them, and the settle is not refused.
+fn note_ignored(because: &str, ignored: &[String]) {
+    match ignored {
+        [] => {}
+        [one] => eprintln!("{one} is ignored because {because} was given"),
+        [one, two] => eprintln!("{one} and {two} are ignored because {because} was given"),
+        many => eprintln!(
+            "{} are ignored because {because} was given",
+            many.join(" and ")
+        ),
+    }
 }
 
 /// The settle's numbers, refused when out of range rather than clamped
