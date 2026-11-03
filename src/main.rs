@@ -68,9 +68,9 @@ enum Cmd {
         /// JSON object of agent to its own confidence bound.
         #[arg(long)]
         epsilon_of: Option<String>,
-        #[arg(long, help = per_engine("Rounds before an unconverged settle stops", Opts::default().max_iter, KEPT_MAX_ITER))]
+        #[arg(long, help = per_engine("Rounds before an unconverged settle stops", Opts::default().max_iter, UNBOUNDED_MAX_ITER))]
         max_iter: Option<usize>,
-        #[arg(long, help = per_engine("The distance a settle stops within", Opts::default().tol, KEPT_TOL))]
+        #[arg(long, help = format!("The distance a settle stops within. Default: {:?}, as Opts::default derives it, for every engine", Opts::default().tol))]
         tol: Option<f64>,
         /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised.
         #[arg(long, default_value = "iterate")]
@@ -166,21 +166,33 @@ enum Cmd {
     },
 }
 
-/// The round cap and tolerance of `--epsilon`, `--seldon` and
-/// `--engine energy`, kept at the values the crate shipped with. The
-/// derivation behind [`Opts::default`] is for the Friedkin-Johnsen bound,
-/// and none of these stops on it. Bounded confidence stops on a step, and
-/// freezes in finitely many rounds that no contraction counts. Seldon runs
-/// DeGroot with no anchor, where `q` is one. The energy counts L-BFGS
-/// iterations and stops on a gradient.
-const KEPT_MAX_ITER: usize = 200;
-const KEPT_TOL: f64 = 1e-9;
+/// The round cap of `--epsilon`, `--seldon` and `--engine energy`.
+///
+/// Their tolerance is [`Opts::default`]'s, about 2^-26, for every engine stops on a binary64 quantity whose floor is near that.
+/// A step of bounded confidence or of Seldon's DeGroot is a weighted mean of at most `n` opinions in `[0, 1]`, less the last one.
+/// Once no opinion moves, the step left is rounding, at most `gamma(n + 2)` (Higham, section 3.1).
+/// That is 3.7e-9 at [`ljos_consensus::SUPPORTED_VOTERS`], and the default tolerance, `4 gamma(2^25 + 1)`, clears it fourfold, so a still panel always stops.
+/// The energy counts as settled at a gradient of `sqrt(EPSILON (1 + |E|))`, at least 2^-26, so a smaller `gtol` adds rounds without settling any more points.
+///
+/// None of the three has a round bound.
+/// That bounded confidence with one bound per voter stops at all is a conjecture (Mirtabatabaei and Bullo, doi:10.1137/11082751X), and even a shared bound can need rounds quadratic in `n` (Wedin and Hegarty, doi:10.1007/s00454-014-9657-7).
+/// DeGroot has `q` one, and the energy stops on rgmin's own gradient test.
+/// So the cap is a budget: past it a settle reports `converged: false`.
+/// `measurements/settle_budget.txt` runs all three on random panels of 2 to 128 voters.
+/// No panel took more than 1345 rounds, the fewest steps after which one 16-voter energy settle counts as settled.
+/// The cap is the next power of two, since the 99th percentiles move by hundreds of rounds from one size to the next and the largest count carries no more digits than that.
+/// The energy keeps stepping past a settled point until rgmin's own test or the cap, so the cap is also what an energy settle whose test stays out of reach costs.
+const UNBOUNDED_MAX_ITER: usize = 2048;
 
-/// The help line of a settle budget whose default depends on the engine.
-fn per_engine(what: &str, derived: impl std::fmt::Debug, kept: impl std::fmt::Debug) -> String {
+/// The help line of the round cap, whose default depends on the engine.
+fn per_engine(
+    what: &str,
+    derived: impl std::fmt::Debug,
+    unbounded: impl std::fmt::Debug,
+) -> String {
     format!(
         "{what}. Default: {derived:?}, as Opts::default derives it, for --engine iterate and \
-         exact; {kept:?} for --epsilon, --seldon and --engine energy"
+         exact; {unbounded:?} for --epsilon, --seldon and --engine energy"
     )
 }
 
@@ -329,15 +341,13 @@ fn run() -> Result<()> {
             if ballots.is_empty() {
                 bail!("settle: no ballots, so nothing to settle");
             }
-            let (max_iter, tol) = if epsilon.is_some() || use_seldon || engine == "energy" {
-                (max_iter.unwrap_or(KEPT_MAX_ITER), tol.unwrap_or(KEPT_TOL))
+            let derived = Opts::default();
+            let cap = if epsilon.is_some() || use_seldon || engine == "energy" {
+                UNBOUNDED_MAX_ITER
             } else {
-                let derived = Opts::default();
-                (
-                    max_iter.unwrap_or(derived.max_iter),
-                    tol.unwrap_or(derived.tol),
-                )
+                derived.max_iter
             };
+            let (max_iter, tol) = (max_iter.unwrap_or(cap), tol.unwrap_or(derived.tol));
             check_settle_args(self_weight, susceptibility, epsilon, tol)?;
             let anchors = match susceptibility_of.as_deref() {
                 Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,

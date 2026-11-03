@@ -100,6 +100,41 @@ fn the_round_cap_and_tolerance_are_the_derived_ones() {
     assert_eq!(rounds["predicted_rounds"].as_u64(), Some(cap), "{rounds}");
 }
 
+/// `--epsilon`, `--seldon` and `--engine energy` have no round bound, and their cap is the next power of two above every count `measurements/settle_budget.txt` records.
+/// Their tolerance is the derived one.
+#[test]
+fn the_cap_without_a_round_bound_clears_every_measured_settle() {
+    let table = include_str!("../measurements/settle_budget.txt");
+    let most = table
+        .lines()
+        .filter(|l| l.starts_with("| ") && !l.starts_with("| engine"))
+        .map(|l| {
+            l.split('|')
+                .nth(5)
+                .unwrap()
+                .trim()
+                .parse::<usize>()
+                .unwrap()
+        })
+        .max()
+        .unwrap();
+    let cap = most.next_power_of_two();
+    let help = cli(&["settle", "--help"]);
+    assert!(
+        help.contains(&format!(
+            "{cap} for --epsilon, --seldon and --engine energy"
+        )),
+        "{help}"
+    );
+    assert!(
+        help.contains(&format!(
+            "Default: {:?}, as Opts::default derives it, for every engine",
+            Opts::default().tol
+        )),
+        "{help}"
+    );
+}
+
 /// Two voters who hear only each other, at susceptibility `q`, under the
 /// CLI's default cap and tolerance: the error shrinks by exactly `q` a
 /// round, the slowest `q` allows.

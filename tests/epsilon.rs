@@ -13,9 +13,9 @@ use ljos_consensus::{settle_bounded, Ballot, Outcome};
 /// chain's answer and its opening mean.
 const ROUNDING: f64 = 1e-12;
 
-/// `settle`'s own defaults, so the library cases run as the CLI would.
-const MAX_ITER: usize = 200;
-const TOL: f64 = 1e-9;
+/// `settle --epsilon`'s own defaults, so the library cases run as the CLI would: the cap of the settles with no round bound, and `Opts::default().tol`.
+const MAX_ITER: usize = 2048;
+const TOL: f64 = 1.490116169344802e-8;
 
 const BLOCS: &str = r#"[
     {"agent": "a", "choice": "ship"},

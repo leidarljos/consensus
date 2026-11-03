@@ -46,9 +46,9 @@ Options:
       --epsilon-of <EPSILON_OF>
           JSON object of agent to its own confidence bound
       --max-iter <MAX_ITER>
-          Rounds before an unconverged settle stops. Default: 27, as Opts::default derives it, for --engine iterate and exact; 200 for --epsilon, --seldon and --engine energy
+          Rounds before an unconverged settle stops. Default: 27, as Opts::default derives it, for --engine iterate and exact; 2048 for --epsilon, --seldon and --engine energy
       --tol <TOL>
-          The distance a settle stops within. Default: 1.490116169344802e-8, as Opts::default derives it, for --engine iterate and exact; 1e-9 for --epsilon, --seldon and --engine energy
+          The distance a settle stops within. Default: 1.490116169344802e-8, as Opts::default derives it, for every engine
       --engine <ENGINE>
           `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised [default: iterate]
   -h, --help

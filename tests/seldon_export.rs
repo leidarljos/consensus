@@ -16,10 +16,10 @@ use ljos_consensus::Ballot;
 
 // The settle defaults a seat gets with the flags omitted. `--self-weight`
 // fills a diagonal the trust rows do not name. `--max-iter` and `--tol` are
-// written as Seldon's `max_iterations` and `convergence`.
+// written as Seldon's `max_iterations` and `convergence`: the cap of the settles with no round bound, and `Opts::default().tol`.
 const SELF_WEIGHT: f64 = 0.5;
-const MAX_ITER: usize = 200;
-const TOL: f64 = 1e-9;
+const MAX_ITER: usize = 2048;
+const TOL: f64 = 1.490116169344802e-8;
 
 // One full share of attention each way. With the diagonal fill, a row is
 // `0.5 + 1` and is divided by that sum. Seldon applies those weights as
@@ -30,7 +30,7 @@ const BALLOTS_JSON: &str = r#"[{"agent":"a","choice":"ship"},{"agent":"b","choic
 const TRUST_JSON: &str =
     r#"[{"from":"a","to":"b","weight":1.0},{"from":"b","to":"a","weight":1.0}]"#;
 
-// `convergence` is Display of `TOL` (`1e-9`), which is `0.000000001`.
+// `convergence` is Display of `TOL`, which writes every digit and no exponent.
 // `connections_per_agent` is the other voter (n - 1); the self loop is not
 // part of that count.
 const CONFIG: &str = "\
@@ -46,10 +46,10 @@ start_output = 1
 start_numbering_from = 0
 
 [model]
-max_iterations = 200
+max_iterations = 2048
 
 [DeGroot]
-convergence = 0.000000001
+convergence = 0.00000001490116169344802
 
 [network]
 number_of_agents = 2
@@ -197,8 +197,11 @@ fn incoming(row: &[String]) -> (Vec<usize>, Vec<f64>) {
 fn assert_seldon_shape(config: &str, network: &str, opinions: &str) {
     assert_eq!(toml_assign(config, "simulation", "model"), "\"DeGroot\"");
     assert_eq!(toml_assign(config, "simulation", "rng_seed"), "1");
-    assert_eq!(toml_assign(config, "model", "max_iterations"), "200");
-    assert_eq!(toml_assign(config, "DeGroot", "convergence"), "0.000000001");
+    assert_eq!(toml_assign(config, "model", "max_iterations"), "2048");
+    assert_eq!(
+        toml_assign(config, "DeGroot", "convergence"),
+        "0.00000001490116169344802"
+    );
     assert_eq!(toml_assign(config, "network", "number_of_agents"), "2");
     assert_eq!(toml_assign(config, "network", "connections_per_agent"), "1");
     assert_eq!(toml_assign(config, "io", "n_output_agents"), "1");
@@ -265,10 +268,6 @@ fn empty_path_writes_files_and_prints_one_line() {
             "--self-weight",
         ])
         .arg(SELF_WEIGHT.to_string())
-        .arg("--max-iter")
-        .arg(MAX_ITER.to_string())
-        .arg("--tol")
-        .arg(TOL.to_string())
         .arg("--seldon")
         .arg("--out")
         .arg(&out)
