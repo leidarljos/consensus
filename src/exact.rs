@@ -12,6 +12,11 @@
 //! average its stationary distribution weighs (Berger,
 //! doi:10.1080/01621459.1981.10477662). Voters outside it settle by the
 //! linear system `(I - L W)` restricted to them, which is nonsingular there.
+//! Both are solved by folding one voter at a time into the rest, which takes
+//! `1 - a_ii` as the sum of what leaves voter i rather than as a difference
+//! (Grassmann, Taksar and Heyman, doi:10.1287/opre.33.5.1107). No step
+//! subtracts, so a voter that keeps only a sliver of its ballot costs the
+//! solve no digits, and every row of `P` sums to one to rounding.
 //! A periodic class can cycle for ever unless its members start in agreement;
 //! the solve refuses any periodic class, since it does not see the ballots.
 
@@ -21,7 +26,8 @@ pub enum Unsettled {
     /// A closed group of fully listening voters cycles with this period, so
     /// the iteration can oscillate for ever (Berger 1981).
     Periodic { members: Vec<usize>, period: usize },
-    /// A system the arithmetic could not solve: a pivot this small.
+    /// A voter outside every class that the arithmetic sees no way out of:
+    /// what leaves it sums to this.
     Singular(f64),
 }
 
@@ -59,34 +65,61 @@ pub fn fixed_point(w: &[Vec<f64>], s: &[f64]) -> Result<Vec<Vec<f64>>, Unsettled
             }
         }
     }
+    // A walk from voter i steps to j with probability a_ij, stops on its own
+    // ballot with 1 - s_i, and stops on a class's average once it enters
+    // the class; P_R says where it stops. `to` holds the steps within the
+    // rest, `stop` the stopping mass by column of P.
     let rest: Vec<usize> = (0..n).filter(|&i| in_class[i] == usize::MAX).collect();
-    if rest.is_empty() {
-        return Ok(p);
-    }
-    // (I - A_RR) P_R = B with B = [(I - L_R) on R's own columns,
-    // A_R,class P_class on the classes' columns].
     let m = rest.len();
-    let mut lhs = vec![vec![0.0; m]; m];
-    for (r, &i) in rest.iter().enumerate() {
-        for (c, &j) in rest.iter().enumerate() {
-            lhs[r][c] = f64::from(u8::from(r == c)) - a[i][j];
+    let mut to: Vec<Vec<f64>> = rest
+        .iter()
+        .map(|&i| rest.iter().map(|&j| a[i][j]).collect())
+        .collect();
+    let mut stop: Vec<Vec<f64>> = rest
+        .iter()
+        .map(|&i| {
+            let mut row = vec![0.0; n];
+            row[i] = 1.0 - s[i];
+            for k in (0..n).filter(|&k| in_class[k] != usize::MAX && a[i][k] > 0.0) {
+                for (x, pkj) in row.iter_mut().zip(&p[k]) {
+                    *x += a[i][k] * pkj;
+                }
+            }
+            row
+        })
+        .collect();
+    let mut out = vec![0.0; m];
+    for r in 0..m {
+        out[r] = to[r][r + 1..].iter().sum::<f64>() + stop[r].iter().sum::<f64>();
+        if out[r] <= 0.0 {
+            return Err(Unsettled::Singular(out[r]));
         }
-    }
-    let mut rhs = vec![vec![0.0; n]; m];
-    for (r, &i) in rest.iter().enumerate() {
-        rhs[r][i] = 1.0 - s[i];
-        for k in 0..n {
-            if in_class[k] == usize::MAX || a[i][k] == 0.0 {
+        let (done, later) = to.split_at_mut(r + 1);
+        let (stop_done, stop_later) = stop.split_at_mut(r + 1);
+        for (to_i, stop_i) in later.iter_mut().zip(stop_later.iter_mut()) {
+            let f = to_i[r] / out[r];
+            if f == 0.0 {
                 continue;
             }
-            for j in 0..n {
-                rhs[r][j] += a[i][k] * p[k][j];
+            for (x, y) in to_i[r + 1..].iter_mut().zip(&done[r][r + 1..]) {
+                *x += f * y;
+            }
+            for (x, y) in stop_i.iter_mut().zip(&stop_done[r]) {
+                *x += f * y;
             }
         }
     }
-    let solved = solve(lhs, rhs)?;
-    for (r, &i) in rest.iter().enumerate() {
-        p[i].clone_from(&solved[r]);
+    for r in (0..m).rev() {
+        let mut row = std::mem::take(&mut stop[r]);
+        for c in r + 1..m {
+            for (x, y) in row.iter_mut().zip(&p[rest[c]]) {
+                *x += to[r][c] * y;
+            }
+        }
+        for x in &mut row {
+            *x /= out[r];
+        }
+        p[rest[r]] = row;
     }
     Ok(p)
 }
@@ -196,60 +229,39 @@ fn period_of(a: &[Vec<f64>], class: &[usize]) -> usize {
     g.max(1)
 }
 
-/// The stationary distribution of `w` restricted to a closed class:
-/// `pi (I - W_CC) = 0`, `sum pi = 1`.
+/// The stationary distribution of `w` restricted to a closed class,
+/// `pi W_CC = pi` with `sum pi = 1`: fold the last voter into the others
+/// until one is left, then read `pi` back up from it.
 fn stationary(w: &[Vec<f64>], class: &[usize]) -> Result<Vec<f64>, Unsettled> {
     let m = class.len();
-    if m == 1 {
-        return Ok(vec![1.0]);
-    }
-    // Transpose: (I - W_CC)^T pi = 0, the last equation replaced by sum = 1.
-    let mut lhs = vec![vec![0.0; m]; m];
-    for (r, &i) in class.iter().enumerate() {
-        for (c, &j) in class.iter().enumerate() {
-            lhs[c][r] = f64::from(u8::from(r == c)) - w[i][j];
+    let mut t: Vec<Vec<f64>> = class
+        .iter()
+        .map(|&i| class.iter().map(|&j| w[i][j]).collect())
+        .collect();
+    for k in (1..m).rev() {
+        let out: f64 = t[k][..k].iter().sum();
+        if out <= 0.0 {
+            return Err(Unsettled::Singular(out));
         }
-    }
-    lhs[m - 1] = vec![1.0; m];
-    let mut rhs = vec![vec![0.0]; m];
-    rhs[m - 1][0] = 1.0;
-    Ok(solve(lhs, rhs)?.into_iter().map(|r| r[0]).collect())
-}
-
-/// Solve `lhs X = rhs` by Gaussian elimination with partial pivoting.
-fn solve(mut lhs: Vec<Vec<f64>>, mut rhs: Vec<Vec<f64>>) -> Result<Vec<Vec<f64>>, Unsettled> {
-    let m = lhs.len();
-    let k = rhs.first().map_or(0, Vec::len);
-    for col in 0..m {
-        let (piv, big) = (col..m)
-            .map(|r| (r, lhs[r][col].abs()))
-            .fold((col, -1.0), |acc, x| if x.1 > acc.1 { x } else { acc });
-        if big < 1e-13 {
-            return Err(Unsettled::Singular(big));
-        }
-        lhs.swap(col, piv);
-        rhs.swap(col, piv);
-        for r in col + 1..m {
-            let f = lhs[r][col] / lhs[col][col];
+        let (head, tail) = t.split_at_mut(k);
+        for row in head.iter_mut() {
+            row[k] /= out;
+            let f = row[k];
             if f == 0.0 {
                 continue;
             }
-            for c in col..m {
-                lhs[r][c] -= f * lhs[col][c];
-            }
-            for c in 0..k {
-                rhs[r][c] -= f * rhs[col][c];
+            for (x, y) in row[..k].iter_mut().zip(&tail[0][..k]) {
+                *x += f * y;
             }
         }
     }
-    let mut x = vec![vec![0.0; k]; m];
-    for r in (0..m).rev() {
-        for c in 0..k {
-            let tail: f64 = (r + 1..m).map(|j| lhs[r][j] * x[j][c]).sum();
-            x[r][c] = (rhs[r][c] - tail) / lhs[r][r];
-        }
+    let mut pi = vec![0.0; m];
+    pi[0] = 1.0;
+    for j in 1..m {
+        pi[j] = (0..j).map(|i| pi[i] * t[i][j]).sum();
     }
-    Ok(x)
+    let total: f64 = pi.iter().sum();
+    Ok(pi.into_iter().map(|x| x / total).collect())
 }
 
 #[cfg(test)]
