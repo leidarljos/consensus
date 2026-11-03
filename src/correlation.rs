@@ -28,8 +28,12 @@
 //! when `sqrt(m) rho` passes the one-sided test of independence at `gate`;
 //! `m rho^2` is Pearson's chi-square for the pair's 2x2 table
 //! (derive/sympy/jury.py). On its own the gate would pass exact clones from
-//! three shared items when they have both a hit and a miss there. By default
-//! a pair needs five shared items (`min_shared`).
+//! three shared items when they have both a hit and a miss there, but over
+//! three or four it passes two voters who err apart up to 9.4% and 5.6% of
+//! the time, past its five percent. By default a pair needs five shared
+//! items (`min_shared`): the least count at which the exact rate stays
+//! within five percent whatever the two voters' accuracies, at most 3.9%
+//! (derive/sympy/constants.py).
 //!
 //! `examples/correlation_gate` measures both where the truth is known, on
 //! pairs right 0.60 to 0.75 of the time whose correctness correlates `rho`

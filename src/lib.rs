@@ -65,6 +65,11 @@ pub struct Outcome {
     /// cluster's first voter. Only that engine fills it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clusters: Vec<Cluster>,
+    /// Set when the iteration ran out of rounds with its contraction
+    /// `q = max s_i` above [`CONTRACTION_BOUND`], past which the default
+    /// round cap guarantees nothing. It says how many rounds `q` needs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 impl Outcome {
@@ -867,6 +872,33 @@ pub fn influence_matrix_with(
     w
 }
 
+/// The largest contraction `q = max s_i` the default round cap and
+/// tolerance are derived for.
+///
+/// Nothing in the code bounds `q`. It is the susceptibility, which defaults
+/// to one, a DeGroot step that does not contract at all. Nor does the
+/// influence matrix force a self share that would bound the rounds another
+/// way. The self weight is a raw entry before its row is normalised, so the
+/// trust a row gives others thins it, down to zero. Even a lazy half (Levin,
+/// Peres and Wilmer, section 1.3) only makes `W` aperiodic, so DeGroot
+/// converges, and leaves the spectral gap that sets its rounds unbounded.
+///
+/// The bound is a half because Banach's factor `q / (1 - q)` is one there.
+/// At or under it the last step bounds the distance to the fixed point by
+/// itself, so after `t` rounds the bound [`settle_with`] stops on is at most
+/// `q^t` plus rounding. A settle above it that runs out of rounds says so in
+/// [`Outcome::note`] (derive/sympy/constants.py).
+pub const CONTRACTION_BOUND: f64 = 0.5;
+
+/// The largest panel the default tolerance is derived for.
+///
+/// Nothing caps a panel, but the tie test does. [`Outcome::sealed`] reads two
+/// shares within `4 n EPSILON` of each other as a tie before any residual,
+/// and a one-ballot margin `1 / n` clears that only while
+/// `n^2 < 1 / (4 EPSILON) = 2^50`. Past `2^25 - 1` voters no settle names a
+/// one-ballot winner (derive/sympy/constants.py).
+pub const SUPPORTED_VOTERS: usize = (1 << 25) - 1;
+
 /// What a settle is asked beyond the ballots and the rows.
 #[derive(Debug, Clone)]
 pub struct Opts {
@@ -882,13 +914,27 @@ pub struct Opts {
 
 impl Default for Opts {
     fn default() -> Self {
+        // Binary64 adds gamma(n + 2) / (1 - q) to the bound settle_with
+        // stops on (derive/sollya/rounding.sollya). The tolerance is twice
+        // that at SUPPORTED_VOTERS and CONTRACTION_BOUND, 4 gamma(2^25 + 1),
+        // about 1.49e-8. Rounding then takes at most half of it, up to the
+        // one rounding of tol itself, on any panel the tie test can decide,
+        // and truncation has the other half (derive/sympy/constants.py).
+        let tol = 2.0 * gamma(SUPPORTED_VOTERS + 2) / (1.0 - CONTRACTION_BOUND);
         Self {
             self_trust: SelfTrust::Constant(0.5),
             susceptibility: 1.0,
             anchors: std::collections::BTreeMap::new(),
             discount: std::collections::BTreeMap::new(),
-            max_iter: 200,
-            tol: 1e-9,
+            // At or under CONTRACTION_BOUND the truncation is at most q^t
+            // after t rounds. fj_rounds_to_tol(CONTRACTION_BOUND, tol), that is
+            // 1 + ceil(log2(1 / tol)) = 27, is the first count that puts it
+            // under the half of tol rounding leaves
+            // (derive/sympy/constants.py), and derive/sollya/rounding.sollya
+            // certifies the bound is then under tol on every such panel.
+            max_iter: fj_rounds_to_tol(CONTRACTION_BOUND, tol)
+                .expect("a half contracts and tol is below one"),
+            tol,
         }
     }
 }
@@ -1022,7 +1068,9 @@ fn outcome_of(
 /// then the distance to the closed-form fixed point
 /// ([`exact::fixed_point`]); when there is no closed form, it is the last
 /// step, which bounds nothing. When `max_iter` runs out first, the distance
-/// to the closed form is reported if it is smaller.
+/// to the closed form is reported if it is smaller. If the settle is still
+/// unconverged and `q` is above [`CONTRACTION_BOUND`], `note` says how many
+/// rounds `q` needs.
 #[must_use]
 pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &Opts) -> Outcome {
     let Some(setup) = setup(ballots, trust, opts) else {
@@ -1061,11 +1109,9 @@ pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &O
             break;
         }
     }
-    // A stiff panel can reach its fixed point well before its bound says so.
-    // In the worst case, where each step shrinks by only q, the bound needs
-    // more than 200 rounds at tol 1e-9 once q passes about 0.892.
-    // settle_with then reads the distance to the closed form instead.
-    // derive/sollya/rounding.sollya checks the counts at 0.89 and 0.9.
+    // A stiff panel can reach its fixed point well before its bound says so,
+    // so when the rounds run out the distance to the closed form is read
+    // instead.
     if !settled {
         if let Some(t) = &target {
             let measured = max_gap(&x, t);
@@ -1075,7 +1121,7 @@ pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &O
             }
         }
     }
-    outcome_of(
+    let mut out = outcome_of(
         setup,
         &x,
         p.as_deref(),
@@ -1083,7 +1129,17 @@ pub fn settle_with(ballots: &[Ballot], trust: &[(String, String, f64)], opts: &O
         settled,
         residual,
         "degroot-fj",
-    )
+    );
+    if !settled && q > CONTRACTION_BOUND {
+        let need = fj_rounds_to_tol(q, opts.tol).map_or_else(
+            || "no round count is guaranteed to reach tol".to_string(),
+            |r| format!("it needs {r} rounds to reach tol"),
+        );
+        out.note = Some(format!(
+            "contraction {q} is above {CONTRACTION_BOUND}, the bound the round cap is derived for; {need}"
+        ));
+    }
+    out
 }
 
 /// Higham's bound on the relative error of a `k`-term dot product in
@@ -1272,9 +1328,6 @@ pub fn settle_energy(
     // A voter that does not listen keeps its ballot: held, not descended.
     let pinned: Vec<bool> = pull.iter().map(|s| *s <= 0.0).collect();
 
-    /// Weight of the gauge term on each row's summed logits.
-    const GAUGE: f64 = 1e-2;
-
     struct Energy {
         n: usize,
         m: usize,
@@ -1326,22 +1379,19 @@ pub fn settle_energy(
                     }
                 }
             }
-            // dE/dz through the softmax: J = diag(x) - x x^T.
+            // dE/dz through the softmax: J = diag(x) - x x^T. J 1 = 0, so a
+            // row's gradient sums to zero, and wherever the box does not clip
+            // the descent keeps the row's summed logits where the start puts
+            // them, at zero (derive/sympy/constants.py). The Hessian is
+            // singular along that sum, which the descent never steps along.
             let mut gz = Array1::<f64>::zeros(self.n * self.m);
-            let zs = z.as_slice().unwrap();
             for i in 0..self.n {
                 if self.pinned[i] {
                     continue;
                 }
                 let dot: f64 = (0..self.m).map(|k| gx[i][k] * x[i][k]).sum();
-                // The softmax is shift-invariant along each row, so the
-                // energy is flat there and the Hessian singular; a penalty on
-                // the row's mean logit fixes that gauge without moving any
-                // opinion, and the minimiser sees a curved bowl.
-                let shift: f64 = zs[i * self.m..(i + 1) * self.m].iter().sum();
-                e += GAUGE * shift * shift;
                 for k in 0..self.m {
-                    gz[i * self.m + k] = x[i][k] * (gx[i][k] - dot) + 2.0 * GAUGE * shift;
+                    gz[i * self.m + k] = x[i][k] * (gx[i][k] - dot);
                 }
             }
             (e, gz)
@@ -1522,11 +1572,14 @@ pub fn settle_seldon(
 
 /// Nitzan and Paroush (doi:10.2307/2526438): the optimal weight of an
 /// independent binary voter is the log odds of its accuracy. `floor`
-/// keeps a voter off the certainties; the measured arms use `0.01`.
+/// keeps a voter off the certainties; the calibrated weights pass
+/// [`record::TRUST_FLOOR`]. It is held in `[2^-53, 1/2]`. Below the unit
+/// roundoff `1 - floor` can round to one, and the log odds are then
+/// infinite. Above a half `[floor, 1 - floor]` is empty.
 /// Negative when the voter is worse than chance.
 #[must_use]
 pub fn log_odds(accuracy: f64, floor: f64) -> f64 {
-    let floor = floor.clamp(1e-12, 0.49);
+    let floor = floor.clamp(f64::EPSILON / 2.0, 0.5);
     let p = accuracy.clamp(floor, 1.0 - floor);
     (p / (1.0 - p)).ln()
 }
@@ -2401,10 +2454,10 @@ mod tests {
     }
 
     /// A panel with susceptibility 0.95 contracts faster than its bound
-    /// says: opinions are within 1e-9 of the fixed point from round 34, but
-    /// the bound, at `q / (1 - q) = 19` times the step, gets there only at
-    /// round 40. A run stopped at 36 settles on the distance to the closed
-    /// form.
+    /// says: opinions are within the default tolerance of the fixed point
+    /// from round 30, but the bound, at `q / (1 - q) = 19` times the step,
+    /// gets there only at round 36. A run stopped at 33 settles on the
+    /// distance to the closed form, with no note.
     #[test]
     fn a_stiff_panel_settles_on_the_measured_distance() {
         let ballots: Vec<Ballot> = [("a", "x"), ("b", "y"), ("c", "y")]
@@ -2420,15 +2473,16 @@ mod tests {
             .collect();
         let opts = Opts {
             susceptibility: 0.95,
-            max_iter: 36,
+            max_iter: 33,
             ..Opts::default()
         };
         let it = settle_with(&ballots, &rows, &opts);
-        assert_eq!(it.rounds, 36, "{it:?}");
-        assert!(it.settled && it.residual < 1e-9, "{it:?}");
+        assert_eq!(it.rounds, 33, "{it:?}");
+        assert!(it.settled && it.residual < opts.tol, "{it:?}");
+        assert_eq!(it.note, None, "{it:?}");
         let ex = settle_exact(&ballots, &rows, &opts);
         for (a, b) in it.shares.iter().zip(&ex.shares) {
-            assert!((a - b).abs() < 1e-9);
+            assert!((a - b).abs() < opts.tol);
         }
     }
 

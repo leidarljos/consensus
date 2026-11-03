@@ -46,9 +46,9 @@ Options:
       --epsilon-of <EPSILON_OF>
           JSON object of agent to its own confidence bound
       --max-iter <MAX_ITER>
-          [default: 200]
+          Rounds before an unconverged settle stops. Default: 27, as Opts::default derives it, for --engine iterate and exact; 200 for --epsilon, --seldon and --engine energy
       --tol <TOL>
-          [default: 0.000000001]
+          The distance a settle stops within. Default: 1.490116169344802e-8, as Opts::default derives it, for --engine iterate and exact; 1e-9 for --epsilon, --seldon and --engine energy
       --engine <ENGINE>
           `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised [default: iterate]
   -h, --help
@@ -155,7 +155,7 @@ counts every positive reading.
 The contraction bound over the named voters and the round count it
 guarantees: =bound= is the largest susceptibility, and
 =predicted_rounds= is =1 + ceil(ln(tol) / ln(bound))= rounds to reach
-=tol= (default 1e-9). A pure DeGroot panel reports the bound of one and
+=tol= (default the settle's, about 1.49e-8). A pure DeGroot panel reports the bound of one and
 a null count with the reason, since convergence there is asymptotic;
 size =--max-iter= by judgement. One unanchored voter voids the
 guarantee for the whole panel, which is what the maximum says.

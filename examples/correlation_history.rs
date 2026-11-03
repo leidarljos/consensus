@@ -14,10 +14,10 @@
 //!   correlation counted (`gate` 0).
 //! - `gated`: the discount counting a pair only when `sqrt(m) rho` passes
 //!   the one-sided test of independence, `INDEPENDENCE_Z`.
-//! - `shrunk`: log-odds rows from each record shrunk toward the pooled
-//!   accuracy by empirical Bayes, so a short record weighs voters nearly
-//!   alike.
-//! - `shrunk, gated`: both; what `ljos learn` and `ljos consensus` run.
+//! - `shrunk`: log-odds rows from each record read by `shrunk_accuracy`,
+//!   which shrinks it toward the pooled accuracy by empirical Bayes, so a
+//!   short record weighs voters nearly alike.
+//! - `shrunk, gated`: both.
 //!
 //! ```console
 //! $ cargo run --release --example correlation_history -- 5 4 4000
@@ -30,6 +30,7 @@
 use std::collections::BTreeMap;
 
 use ljos_consensus::correlation::{correlation, INDEPENDENCE_Z};
+use ljos_consensus::record::{calibration_weights, shrunk_accuracy};
 use ljos_consensus::{settle_with, Ballot, Opts, SelfTrust};
 
 struct Lcg(u64);
@@ -44,92 +45,37 @@ impl Lcg {
     }
 }
 
-fn logit(p: f64) -> f64 {
-    let p = p.clamp(0.01, 0.99);
-    (p / (1.0 - p)).ln()
+/// Every voter's row on every other from `weights`.
+fn rows_from(weights: &[(String, f64)]) -> Vec<(String, String, f64)> {
+    let mut rows = Vec::new();
+    for (from, _) in weights {
+        for (to, w) in weights {
+            if from != to {
+                rows.push((from.clone(), to.clone(), *w));
+            }
+        }
+    }
+    rows
 }
 
+/// Log-odds rows from each voter's record, which starts at one hit and one
+/// miss.
 fn rows_of(record: &BTreeMap<String, (f64, f64)>) -> Vec<(String, String, f64)> {
-    let acc: BTreeMap<&String, f64> = record.iter().map(|(n, (h, m))| (n, h / (h + m))).collect();
-    let top = acc.values().map(|p| logit(*p).max(0.0)).fold(0.0, f64::max);
-    let mut rows = Vec::new();
-    for from in acc.keys() {
-        for (to, p) in &acc {
-            if from != to {
-                let w = if top > 0.0 {
-                    logit(*p).max(0.0) / top
-                } else {
-                    0.0
-                };
-                rows.push(((*from).clone(), (*to).clone(), w.clamp(0.01, 1.0)));
-            }
-        }
-    }
-    rows
+    let acc: Vec<(String, f64)> = record
+        .iter()
+        .map(|(n, (h, m))| (n.clone(), h / (h + m)))
+        .collect();
+    rows_from(&calibration_weights(&acc))
 }
 
-/// Log-odds rows from each voter's accuracy, shrunk toward the panel's
-/// pooled accuracy by empirical Bayes (Efron and Morris). The prior weakens
-/// as the voters' spread exceeds sampling noise: the pooled Bernoulli
-/// variance times `N / (N - 1)`, divided by each record's length and
-/// averaged, where `N` counts the ballots the records hold. Short records
-/// keep voters near the pooled accuracy. A first outcome leaves them on it,
-/// up to rounding; a long record keeps the differences it has shown.
+/// Log-odds rows from `shrunk_accuracy` on each voter's record, the hit and
+/// the miss it starts at taken back off.
 fn shrunk_rows(record: &BTreeMap<String, (f64, f64)>) -> Vec<(String, String, f64)> {
-    let counts: Vec<(&String, f64, f64)> = record
+    let counts: Vec<(String, (f64, f64))> = record
         .iter()
-        .map(|(name, (h, m))| (name, h - 1.0, h + m - 2.0))
+        .map(|(n, (h, m))| (n.clone(), (h - 1.0, m - 1.0)))
         .collect();
-    let (hits, seen): (f64, f64) = counts
-        .iter()
-        .fold((0.0, 0.0), |a, c| (a.0 + c.1, a.1 + c.2));
-    let pooled = if seen > 0.0 { hits / seen } else { 0.5 };
-    let read: Vec<(f64, f64)> = counts
-        .iter()
-        .filter(|c| c.2 > 0.0)
-        .map(|c| (c.1 / c.2, c.2))
-        .collect();
-    let strength = if read.len() >= 2 {
-        let k = read.len() as f64;
-        let mean = read.iter().map(|r| r.0).sum::<f64>() / k;
-        let spread = read.iter().map(|r| (r.0 - mean).powi(2)).sum::<f64>() / (k - 1.0);
-        let inv_n = read.iter().map(|r| 1.0 / r.1).sum::<f64>() / k;
-        let pq = pooled * (1.0 - pooled) * seen / (seen - 1.0);
-        let between = spread - pq * inv_n;
-        if between > 0.0 {
-            (pq / between - 1.0).max(0.0)
-        } else {
-            f64::INFINITY
-        }
-    } else {
-        f64::INFINITY
-    };
-    let acc: BTreeMap<&String, f64> = counts
-        .iter()
-        .map(|(name, h, n)| {
-            let p = if strength.is_finite() {
-                (h + strength * pooled) / (n + strength)
-            } else {
-                pooled
-            };
-            (*name, p)
-        })
-        .collect();
-    let top = acc.values().map(|p| logit(*p).max(0.0)).fold(0.0, f64::max);
-    let mut rows = Vec::new();
-    for from in acc.keys() {
-        for (to, p) in &acc {
-            if from != to {
-                let w = if top > 0.0 {
-                    logit(*p).max(0.0) / top
-                } else {
-                    1.0
-                };
-                rows.push(((*from).clone(), (*to).clone(), w.clamp(0.01, 1.0)));
-            }
-        }
-    }
-    rows
+    rows_from(&calibration_weights(&shrunk_accuracy(&counts)))
 }
 
 fn decide(

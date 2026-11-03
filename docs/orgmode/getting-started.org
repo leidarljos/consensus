@@ -86,16 +86,16 @@ $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"
     "ship"
   ],
   "shares": [
-    0.7142857144236272,
-    0.28571428557637285
+    0.7142857177943827,
+    0.2857142822056174
   ],
-  "rounds": 21,
+  "rounds": 18,
   "settled": true,
   "converged": true,
-  "residual": 4.1822223462162356e-10,
+  "residual": 1.0692042917703759e-8,
   "engine": "degroot-fj",
-  "polarization": 2.358286519149434e-19,
-  "disagreement": 2.3004461637330454e-19,
+  "polarization": 1.5495268779421464e-16,
+  "disagreement": 1.4949678420881814e-16,
   "agents": [
     "alice",
     "bob",
@@ -107,7 +107,7 @@ $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"
     0.7142857142857143
   ],
   "effective_voters": 1.6896551724137931,
-  "margin": 0.42857142884725435,
+  "margin": 0.42857143558876526,
   "tie": false
 }
 #+end_src
@@ -138,16 +138,16 @@ $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"
     "ship"
   ],
   "shares": [
-    0.509803921603262,
-    0.4901960783967379
+    0.5098039217654958,
+    0.4901960782345041
   ],
-  "rounds": 13,
+  "rounds": 12,
   "settled": true,
   "converged": true,
-  "residual": 5.061644992032654e-10,
+  "residual": 2.86398660342968e-9,
   "engine": "degroot-fj",
-  "polarization": 0.41983852358575297,
-  "disagreement": 0.8581314877541683,
+  "polarization": 0.41983852331547955,
+  "disagreement": 0.8581314871326967,
   "agents": [
     "alice",
     "bob",
@@ -159,7 +159,7 @@ $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"
     0.5098039215686274
   ],
   "effective_voters": 2.603395123513633,
-  "margin": 0.019607843206524145,
+  "margin": 0.01960784353099171,
   "tie": false
 }
 #+end_src

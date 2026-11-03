@@ -1,6 +1,7 @@
 """Exact fixed points for the Rust tests, computed in rationals with SymPy.
 
-Run: python3 derive/sympy/golden.py   (rewrites derive/golden/fj.json)
+Run: python3 derive/sympy/golden.py   (rewrites derive/golden/fj.json, and
+constants.json through constants.py)
 
 Each case is raw trust rows, a self-weight rule and susceptibilities. The
 row-stochastic W is built the way `influence_matrix_with` builds it, the
@@ -15,6 +16,8 @@ import pathlib
 import sys
 
 import sympy as sp
+
+import constants
 
 R = sp.Rational
 
@@ -128,7 +131,7 @@ def main():
     path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps(out, indent=1) + "\n")
     print(f"wrote {path}")
-    return 0
+    return constants.main()
 
 
 if __name__ == "__main__":

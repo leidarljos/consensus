@@ -34,7 +34,8 @@
 use std::collections::BTreeMap;
 
 use ljos_consensus::correlation::{correlation, INDEPENDENCE_Z};
-use ljos_consensus::{settle_with, Ballot, Opts, SelfTrust};
+use ljos_consensus::record::{calibration_weights, TRUST_FLOOR};
+use ljos_consensus::{log_odds, settle_with, Ballot, Opts, SelfTrust};
 
 struct Lcg(u64);
 
@@ -48,25 +49,18 @@ impl Lcg {
     }
 }
 
-fn logit(p: f64) -> f64 {
-    let p = p.clamp(0.01, 0.99);
-    (p / (1.0 - p)).ln()
-}
-
 /// Log-odds rows from each voter's record, scaled so the best stands at one.
 fn rows_of(record: &BTreeMap<String, (f64, f64)>) -> Vec<(String, String, f64)> {
-    let acc: BTreeMap<&String, f64> = record.iter().map(|(n, (h, m))| (n, h / (h + m))).collect();
-    let top = acc.values().map(|p| logit(*p).max(0.0)).fold(0.0, f64::max);
+    let acc: Vec<(String, f64)> = record
+        .iter()
+        .map(|(n, (h, m))| (n.clone(), h / (h + m)))
+        .collect();
+    let weights = calibration_weights(&acc);
     let mut rows = Vec::new();
-    for from in acc.keys() {
-        for (to, p) in &acc {
+    for from in record.keys() {
+        for (to, w) in &weights {
             if from != to {
-                let w = if top > 0.0 {
-                    logit(*p).max(0.0) / top
-                } else {
-                    0.0
-                };
-                rows.push(((*from).clone(), (*to).clone(), w.clamp(0.01, 1.0)));
+                rows.push((from.clone(), to.clone(), *w));
             }
         }
     }
@@ -135,9 +129,9 @@ fn main() {
         let mut rng = Lcg(seed.wrapping_mul(7919).wrapping_add(29));
         let solo_acc: Vec<f64> = (0..solos).map(|_| 0.60 + 0.15 * rng.next_f64()).collect();
         let mut oracle = BTreeMap::new();
-        oracle.insert("clone0".to_string(), logit(judge_acc));
+        oracle.insert("clone0".to_string(), log_odds(judge_acc, TRUST_FLOOR));
         for (i, p) in solo_acc.iter().enumerate() {
-            oracle.insert(format!("solo{i}"), logit(*p));
+            oracle.insert(format!("solo{i}"), log_odds(*p, TRUST_FLOOR));
         }
         let mut record: BTreeMap<String, (f64, f64)> =
             names.iter().map(|n| (n.clone(), (1.0, 1.0))).collect();

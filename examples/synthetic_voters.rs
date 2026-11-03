@@ -29,7 +29,7 @@
 //!   accuracy, and the rows are the log odds of that scaled to the best at
 //!   one, before each question. The online form of `calibrate`.
 //! - `learn log-odds online, shrunk`: the same record, but shrunk toward the
-//!   pooled accuracy as `ljos learn` now reads it.
+//!   pooled accuracy as `shrunk_accuracy` reads it.
 //! - `..., earned self-trust`: the same rows as `calibrate log-odds` and
 //!   `learn log-odds online`, with each voter weighing its own ballot as the
 //!   others weigh it, not at a constant 0.5. Under that fill the settle is
@@ -47,7 +47,8 @@
 
 use std::collections::BTreeMap;
 
-use ljos_consensus::{dawid_skene, settle_anchored, settle_with, Ballot, Opts, SelfTrust};
+use ljos_consensus::record::{calibration_weights, shrunk_accuracy, TRUST_FLOOR};
+use ljos_consensus::{dawid_skene, log_odds, settle_with, Ballot, Opts, SelfTrust};
 
 /// A small deterministic generator, so a seed is a run.
 struct Lcg(u64);
@@ -62,86 +63,48 @@ impl Lcg {
     }
 }
 
-const FLOOR: f64 = 0.01;
 const BETA: f64 = 0.5;
 
-fn logit(p: f64) -> f64 {
-    let p = p.clamp(0.01, 0.99);
-    (p / (1.0 - p)).ln()
+/// Every voter's row on every other from `weights`.
+fn rows_from(weights: &[(String, f64)]) -> Vec<(String, String, f64)> {
+    let mut rows = Vec::new();
+    for (from, _) in weights {
+        for (to, w) in weights {
+            if from != to {
+                rows.push((from.clone(), to.clone(), *w));
+            }
+        }
+    }
+    rows
 }
 
 /// Log-odds weights scaled so the best voter stands at one, as `calibrate` writes them.
 fn log_odds_rows(acc: &BTreeMap<String, f64>) -> Vec<(String, String, f64)> {
-    let top = acc.values().map(|p| logit(*p).max(0.0)).fold(0.0, f64::max);
-    let mut rows = Vec::new();
-    for from in acc.keys() {
-        for (to, p) in acc {
-            if from == to {
-                continue;
-            }
-            let w = if top > 0.0 {
-                logit(*p).max(0.0) / top
-            } else {
-                0.0
-            };
-            rows.push((from.clone(), to.clone(), w.clamp(FLOOR, 1.0)));
-        }
-    }
-    rows
+    let acc: Vec<(String, f64)> = acc.iter().map(|(n, p)| (n.clone(), *p)).collect();
+    rows_from(&calibration_weights(&acc))
 }
 
-/// Each voter's accuracy from its record, shrunk toward the pooled accuracy
-/// by empirical Bayes as ljos `shrunk_accuracy` reads it. `record` starts at
-/// one hit and one miss, which this takes back off.
+/// Each voter's accuracy from `shrunk_accuracy` on its record, which starts
+/// at one hit and one miss, taken back off here.
 fn shrunk_acc(record: &BTreeMap<String, (f64, f64)>) -> BTreeMap<String, f64> {
-    let raw: Vec<(&String, f64, f64)> = record
+    let counts: Vec<(String, (f64, f64))> = record
         .iter()
-        .map(|(n, (h, m))| (n, h - 1.0, h + m - 2.0))
+        .map(|(n, (h, m))| (n.clone(), (h - 1.0, m - 1.0)))
         .collect();
-    let (hits, seen) = raw.iter().fold((0.0, 0.0), |a, r| (a.0 + r.1, a.1 + r.2));
-    let pooled = if seen > 0.0 { hits / seen } else { 0.5 };
-    let read: Vec<(f64, f64)> = raw
-        .iter()
-        .filter(|r| r.2 > 0.0)
-        .map(|r| (r.1 / r.2, r.2))
-        .collect();
-    let strength = if read.len() >= 2 && seen > 1.0 {
-        let k = read.len() as f64;
-        let mean = read.iter().map(|r| r.0).sum::<f64>() / k;
-        let spread = read.iter().map(|r| (r.0 - mean).powi(2)).sum::<f64>() / (k - 1.0);
-        let pq = pooled * (1.0 - pooled) * seen / (seen - 1.0);
-        let noise = pq * read.iter().map(|r| 1.0 / r.1).sum::<f64>() / k;
-        let between = spread - noise;
-        (between > 1e-12).then(|| (pq / between - 1.0).max(0.0))
-    } else {
-        None
-    };
-    raw.iter()
-        .map(|(n, h, seen_i)| {
-            let p = match strength {
-                Some(k) if seen_i + k > 0.0 => (h + k * pooled) / (seen_i + k),
-                _ => pooled,
-            };
-            ((*n).clone(), p)
-        })
-        .collect()
+    shrunk_accuracy(&counts).into_iter().collect()
 }
 
 fn linear_rows(acc: &BTreeMap<String, f64>) -> Vec<(String, String, f64)> {
-    let mut rows = Vec::new();
-    for from in acc.keys() {
-        for (to, p) in acc {
-            if from != to {
-                rows.push((from.clone(), to.clone(), p.clamp(FLOOR, 1.0)));
-            }
-        }
-    }
-    rows
+    let weights: Vec<(String, f64)> = acc
+        .iter()
+        .map(|(n, p)| (n.clone(), p.clamp(TRUST_FLOOR, 1.0)))
+        .collect();
+    rows_from(&weights)
 }
 
 /// The option the settle gives the larger share.
 fn decide(ballots: &[Ballot], rows: &[(String, String, f64)]) -> String {
-    let out = settle_anchored(ballots, rows, 0.5, 1.0, &BTreeMap::new(), 200, 1e-9);
+    let out = settle_with(ballots, rows, &Opts::default());
     let mut best = (String::new(), f64::NEG_INFINITY);
     for (o, s) in out.options.iter().zip(&out.shares) {
         if *s > best.1 {
@@ -249,8 +212,10 @@ fn main() {
             })
             .collect();
         let estimated = dawid_skene(&ds_items, 20);
-        let oracle_w: BTreeMap<String, f64> =
-            acc.iter().map(|(n, p)| (n.clone(), logit(*p))).collect();
+        let oracle_w: BTreeMap<String, f64> = acc
+            .iter()
+            .map(|(n, p)| (n.clone(), log_odds(*p, TRUST_FLOOR)))
+            .collect();
         let linear = linear_rows(&estimated);
         let logodds = log_odds_rows(&estimated);
         // Hedge rows, one row per (from, to), starting at one.
@@ -308,9 +273,9 @@ fn main() {
                     for from in &names {
                         if from != &b.agent {
                             let w = hedge.get_mut(&(from.clone(), b.agent.clone())).unwrap();
-                            *w = (*w * BETA).max(FLOOR);
+                            *w = (*w * BETA).max(TRUST_FLOOR);
                             let v = shared.get_mut(&(from.clone(), b.agent.clone())).unwrap();
-                            *v = (*v * BETA).max(FLOOR);
+                            *v = (*v * BETA).max(TRUST_FLOOR);
                         }
                     }
                 }

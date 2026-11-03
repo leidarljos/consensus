@@ -68,10 +68,10 @@ enum Cmd {
         /// JSON object of agent to its own confidence bound.
         #[arg(long)]
         epsilon_of: Option<String>,
-        #[arg(long, default_value_t = 200)]
-        max_iter: usize,
-        #[arg(long, default_value_t = 1e-9)]
-        tol: f64,
+        #[arg(long, help = per_engine("Rounds before an unconverged settle stops", Opts::default().max_iter, KEPT_MAX_ITER))]
+        max_iter: Option<usize>,
+        #[arg(long, help = per_engine("The distance a settle stops within", Opts::default().tol, KEPT_TOL))]
+        tol: Option<f64>,
         /// `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised.
         #[arg(long, default_value = "iterate")]
         engine: String,
@@ -160,9 +160,27 @@ enum Cmd {
         /// JSON object of agent to susceptibility: a persona's own anchor.
         #[arg(long)]
         susceptibility_of: Option<String>,
-        #[arg(long, default_value_t = 1e-9)]
+        #[arg(long, default_value_t = Opts::default().tol)]
         tol: f64,
     },
+}
+
+/// The round cap and tolerance of `--epsilon`, `--seldon` and
+/// `--engine energy`, kept at the values the crate shipped with. The
+/// derivation behind [`Opts::default`] is for the Friedkin-Johnsen bound,
+/// and none of these stops on it. Bounded confidence stops on a step, and
+/// freezes in finitely many rounds that no contraction counts. Seldon runs
+/// DeGroot with no anchor, where `q` is one. The energy counts L-BFGS
+/// iterations and stops on a gradient.
+const KEPT_MAX_ITER: usize = 200;
+const KEPT_TOL: f64 = 1e-9;
+
+/// The help line of a settle budget whose default depends on the engine.
+fn per_engine(what: &str, derived: impl std::fmt::Debug, kept: impl std::fmt::Debug) -> String {
+    format!(
+        "{what}. Default: {derived:?}, as Opts::default derives it, for --engine iterate and \
+         exact; {kept:?} for --epsilon, --seldon and --engine energy"
+    )
 }
 
 fn main() -> ExitCode {
@@ -311,6 +329,15 @@ fn run() -> Result<()> {
             if ballots.is_empty() {
                 bail!("settle: no ballots, so nothing to settle");
             }
+            let (max_iter, tol) = if epsilon.is_some() || use_seldon || engine == "energy" {
+                (max_iter.unwrap_or(KEPT_MAX_ITER), tol.unwrap_or(KEPT_TOL))
+            } else {
+                let derived = Opts::default();
+                (
+                    max_iter.unwrap_or(derived.max_iter),
+                    tol.unwrap_or(derived.tol),
+                )
+            };
             check_settle_args(self_weight, susceptibility, epsilon, tol)?;
             let anchors = match susceptibility_of.as_deref() {
                 Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,

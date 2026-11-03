@@ -1,0 +1,33 @@
+{
+ "trust_floor": {
+  "value": "1/4503599627370496",
+  "log_odds_end": "36.043653389117",
+  "log_odds_floor": "1/9007199254740992"
+ },
+ "independence_z": {
+  "level": "1/20",
+  "value": "1.645"
+ },
+ "min_shared": {
+  "level": "1/20",
+  "value": 5,
+  "worst_rate": {
+   "3": "0.0938",
+   "4": "0.0561",
+   "5": "0.0391"
+  }
+ },
+ "contraction_bound": {
+  "value": "1/2"
+ },
+ "supported_voters": {
+  "value": 33554431
+ },
+ "tol": {
+  "value": "134217732/9007199221186559",
+  "f64": "1.490116169344802e-08"
+ },
+ "max_iter": {
+  "value": 27
+ }
+}

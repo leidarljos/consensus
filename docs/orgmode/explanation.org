@@ -97,10 +97,12 @@ system too near singular to solve; in both cases it reports
 
 Binary64 adds at most =gamma(n + 2) / (1 - q)= to the bound: Higham's
 gamma for the =n=-term dot product, the product with =s_i= and the anchor
-term. That floor is 1.1e-12 for a hundred voters at =q = 0.99=, far below
-the default tolerance of 1e-9. In the worst case the bound needs more
-than the default two hundred rounds once =q= passes about 0.892; when it
-would, the settle measures the distance to the closed-form point instead.
+term. The default tolerance is twice that floor at =q = 1/2= and
+=2^25 - 1= voters, the largest panel whose one-ballot margin the tie test
+can read, about 1.49e-8. The default cap of 27 rounds puts the bound
+under it on every panel with =q <= 1/2=. Past that the settle measures
+the distance to the closed-form point when the rounds run out, and
+=note= names the rounds =q= needs.
 
 =tie= says the two leading shares lie within twice the residual plus
 rounding of each other: the settle cannot order them.
@@ -324,14 +326,14 @@ between 0.35 and 0.95, so some are worse than chance, answer two-way
 questions, and the group decides under each rule; twenty seeds, four
 hundred questions each. Nine voters: one voter one vote 0.820; the
 accuracies as linear weights 0.873; the accuracies as log odds
-(Nitzan and Paroush, doi:10.2307/2526438) 0.934 against 0.939 for the
+(Nitzan and Paroush, doi:10.2307/2526438) 0.935 against 0.939 for the
 same weights from the true accuracies, the ceiling; Hedge from equal
-rows 0.831, because after enough misses every row sits on the floor and
+rows 0.839, because after enough misses every row sits on the floor and
 the settle is a count again; Hedge with a fixed share of recovery
 (Herbster and Warmuth, doi:10.1023/A:1007424614876) 0.877; and the
 online form of calibration, each voter's smoothed record of hits and
-misses so far as log odds before every question, 0.929. Fifteen voters:
-0.877, 0.936, 0.974, 0.976, 0.891, 0.937, 0.972. The record shrunk by
+misses so far as log odds before every question, 0.930. Fifteen voters:
+0.877, 0.936, 0.975, 0.976, 0.898, 0.937, 0.972. The record shrunk by
 empirical Bayes, as =ljos learn= now keeps it, scores 0.929 and 0.971.
 Log-odds weights reach within a point of the ceiling whether estimated
 in one batch or kept as a running record; multiplicative shrinking does
@@ -415,29 +417,29 @@ outcomes, 4000 seeds a cell:
 
 | Panel | =h= | Count | Log odds | Log odds, gated discount | Shrunk, gated discount |
 |---+---+---+---+---+---|
-| 5 clones, 4 voters in [0.60, 0.75] | 3 | 0.698 | 0.730 | 0.730 | 0.702 |
-| | 5 | 0.700 | 0.719 | 0.736 | 0.780 |
+| 5 clones, 4 voters in [0.60, 0.75] | 3 | 0.698 | 0.730 | 0.730 | 0.701 |
+| | 5 | 0.700 | 0.719 | 0.735 | 0.780 |
 | | 100 | 0.700 | 0.708 | 0.805 | 0.813 |
-| 7 voters in [0.60, 0.75] | 1 | 0.837 | 0.812 | 0.812 | 0.837 |
-| | 3 | 0.836 | 0.772 | 0.772 | 0.824 |
-| | 5 | 0.843 | 0.780 | 0.773 | 0.826 |
+| 7 voters in [0.60, 0.75] | 1 | 0.837 | 0.798 | 0.798 | 0.837 |
+| | 3 | 0.836 | 0.770 | 0.770 | 0.827 |
+| | 5 | 0.843 | 0.779 | 0.772 | 0.829 |
 | | 100 | 0.836 | 0.824 | 0.821 | 0.834 |
-| 7 voters in [0.55, 0.90] | 5 | 0.904 | 0.884 | 0.876 | 0.896 |
+| 7 voters in [0.55, 0.90] | 5 | 0.904 | 0.882 | 0.876 | 0.896 |
 | | 30 | 0.888 | 0.909 | 0.906 | 0.902 |
 | | 100 | 0.900 | 0.920 | 0.919 | 0.918 |
-| 3 clones, 4 voters in [0.55, 0.90] | 5 | 0.780 | 0.789 | 0.808 | 0.830 |
+| 3 clones, 4 voters in [0.55, 0.90] | 5 | 0.780 | 0.788 | 0.807 | 0.833 |
 | | 100 | 0.774 | 0.830 | 0.876 | 0.879 |
 
 The ungated discount costs the panel of seven similar voters three points
-at five outcomes (0.750 against 0.780); the gated one costs less than one
-(0.773). Shrinking with the gated discount beats plug-in log odds in every
+at five outcomes (0.749 against 0.779); the gated one costs less than one
+(0.772). Shrinking with the gated discount beats plug-in log odds in every
 panel but one from five outcomes on, by up to ten and a half points where
 clones sit. The exception is the panel of widely differing voters, where
-the shrunk rows trail plug-in log odds by under a point from thirty
+the shrunk rows trail plug-in log odds by under a point from twenty
 outcomes on. The discount reads no pair before five outcomes. The shrunk
 rows then trail by up to three points where clones sit, because plug-in
 log odds floor the clones that start unlucky, which breaks the bloc. They
-trail a count by 2.0 points at worst where a count is best (0.820 against
+trail a count by 1.6 points at worst where a count is best (0.824 against
 0.840 at eight outcomes), and on the first outcome they are the count.
 =ljos learn= shrinks for that reason.
 
@@ -488,7 +490,7 @@ Both means are lower when the forecast is better.
 
 =measurements/replay_history.txt= is the stdout of
 =cargo run --release --example replay_history -- measurements/replay_panel.json=
-at =4388350a1a82bccd57b8c8f45b6450e0e0aab01d=. The panel is three clones of
+at =042b4217798793cadf3f12dba4c6948b7cb10f8d=. The panel is three clones of
 =model:alpha=, right 0.60 of the time and always in agreement, beside
 three independent voters at 0.72, 0.68 and 0.66. It has forty eight
 two-way questions, seed 7, and no trust rows. Each method scored all 48
@@ -499,8 +501,8 @@ outcome, so the log mean is over the other 47.
 |--------------------+--------+----------+----------+-----------|
 | count              |     48 | 0.359954 | 0.458164 |         1 |
 | degroot            |     48 | 0.359954 | 0.458164 |         1 |
-| calibrated         |     48 | 0.360070 | 0.458283 |         1 |
-| calibrated-lineage |     48 | 0.299523 | 0.395456 |         1 |
+| calibrated         |     48 | 0.360057 | 0.458269 |         1 |
+| calibrated-lineage |     48 | 0.299518 | 0.395449 |         1 |
 
 The count and the DeGroot forecast printed the same scores. The file
 names no trust row. The file was built with clones, so lineage
@@ -508,7 +510,7 @@ grouping is expected to help there.
 
 =measurements/replay_independent.txt= is the stdout of
 =cargo run --release --example replay_history -- measurements/replay_panel_independent.json=
-at =a58266ce25333b6d51d82d8a78129ae82f791321=. The panel has no clones.
+at =042b4217798793cadf3f12dba4c6948b7cb10f8d=. The panel has no clones.
 Six voters draw apart, at 0.55, 0.62, 0.68, 0.74, 0.82 and 0.90, each
 with its own family and key. It has forty eight two-way questions,
 seed 7, and no trust rows. Each method scored all 48 questions, and
@@ -518,8 +520,8 @@ every log score was finite.
 |--------------------+--------+----------+----------+-----------|
 | count              |     48 | 0.218750 | 0.352321 |         0 |
 | degroot            |     48 | 0.218750 | 0.352321 |         0 |
-| calibrated         |     48 | 0.201969 | 0.327355 |         0 |
-| calibrated-lineage |     48 | 0.201969 | 0.327355 |         0 |
+| calibrated         |     48 | 0.201637 | 0.327085 |         0 |
+| calibrated-lineage |     48 | 0.201637 | 0.327085 |         0 |
 
 The count and the DeGroot forecast printed the same scores. The
 calibrated row and the calibrated-lineage row printed the same scores.
@@ -528,14 +530,17 @@ The file names no trust row.
 * Weights learned from outcomes
 
 =shrunk_accuracy= reads each voter's hits and misses on questions with a
-named outcome and shrinks the rate toward the panel's pooled accuracy
-(Efron and Morris, doi:10.1080/01621459.1975.10479864). When the records
-differ by no more than binomial noise, as they do after one outcome,
-every voter gets the pooled accuracy. =calibration_weights= turns that
-accuracy into log odds, held inside =[0.01, 0.99]=, and scales the
-positive part so the best voter is one (Nitzan and Paroush,
-doi:10.2307/2526438). A voter at or below chance keeps the floor
-=0.01=. These are the weights =ljos learn= writes.
+named outcome by Laplace's rule of succession, =(h + 1) / (n + 2)=, so a
+perfect record is not a certainty, and shrinks that toward the panel's
+pooled accuracy (Efron and Morris, doi:10.1080/01621459.1975.10479864).
+When the records differ by no more than binomial noise, as they do after
+one outcome, every voter gets the pooled accuracy. =calibration_weights=
+turns that accuracy into log odds and scales the positive part so the
+best voter is one (Nitzan and Paroush, doi:10.2307/2526438). A voter at
+or below chance keeps the floor =2^-52=, the least weight that still
+moves a sum with one, and the same floor clamps a bare accuracy of zero
+or one. =ljos learn= keeps its own copy of both, with 0.01 for the floor
+and the clamp.
 
 * One voice per family or key
 

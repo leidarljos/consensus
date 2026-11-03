@@ -8,8 +8,20 @@ use serde::{Deserialize, Serialize};
 use crate::{log_odds, settle_exact, Ballot, Opts, SelfTrust};
 
 /// The least weight [`calibration_weights`] gives a voter at or below
-/// chance. The seat writes the same floor on a trust row.
-pub const TRUST_FLOOR: f64 = 0.01;
+/// chance.
+///
+/// It is also the clamp on the accuracies, there only for numerical
+/// safety: [`shrunk_accuracy`] reads a record of `n` inside
+/// `[1 / (n + 2), (n + 1) / (n + 2)]`, and only a bare accuracy of zero or
+/// one reaches the clamp. Nothing in the crate fixes the length of a
+/// record, so binary64 (IEEE 754) sets the value. It is
+/// `f64::EPSILON`, the spacing of doubles at one: the least weight that one
+/// plus it is still a double above one. A floored voter beside the best,
+/// who weighs one, still moves their sum. Half of it, the unit roundoff,
+/// does not, since `1 + 2^-53` rounds back to one. `1 - 2^-52` is a double
+/// too, so the clamped log odds stay finite, at most `ln(2^52 - 1)`, about
+/// 36.04 (derive/sympy/constants.py).
+pub const TRUST_FLOOR: f64 = f64::EPSILON;
 
 /// The four forecasts [`replay`] scores, in the order the summary prints.
 pub const METHODS: [&str; 4] = ["count", "degroot", "calibrated", "calibrated-lineage"];
@@ -321,14 +333,18 @@ pub fn history_lineage(history: &History) -> BTreeMap<String, f64> {
 /// Each voter's accuracy from its `(hits, misses)`, shrunk toward the
 /// panel's pooled accuracy.
 ///
-/// Empirical Bayes, as Efron and Morris read a set of binomial rates
-/// (doi:10.1080/01621459.1975.10479864). The prior weakens as the records
-/// spread beyond binomial noise: the pooled variance times `N / (N - 1)`,
-/// divided by each record's length and averaged, where `N` counts the
-/// ballots the records hold. When the records differ by no more than that
-/// noise, as they do after one outcome, every voter gets the pooled
-/// accuracy. A voter with no ballot gets the pooled accuracy too. An empty
-/// record is `0.5`. The output keeps the input order.
+/// A record of `h` hits in `n` reads as Laplace's rule of succession,
+/// `(h + 1) / (n + 2)`, so a perfect record is not a certainty and does not
+/// turn its voter into a dictator. Empirical Bayes, as Efron and Morris
+/// read a set of binomial rates (doi:10.1080/01621459.1975.10479864), then
+/// moves it toward the pooled accuracy by `s / (n + s)`. The prior strength
+/// `s` weakens as the records spread beyond binomial noise: the pooled
+/// variance times `N / (N - 1)`, divided by each record's length and
+/// averaged, where `N` counts the ballots the records hold. When the
+/// records differ by no more than that noise, as they do after one outcome,
+/// every voter gets the pooled accuracy. A voter with no ballot gets the
+/// pooled accuracy too. An empty record is `0.5`. The output keeps the
+/// input order.
 #[must_use]
 pub fn shrunk_accuracy(records: &[(String, (f64, f64))]) -> Vec<(String, f64)> {
     let (hits, seen) = records.iter().fold((0.0, 0.0), |(h, n), (_, (hit, miss))| {
@@ -347,15 +363,16 @@ pub fn shrunk_accuracy(records: &[(String, (f64, f64))]) -> Vec<(String, f64)> {
         let pq = pooled * (1.0 - pooled) * seen / (seen - 1.0);
         let noise = pq * read.iter().map(|r| 1.0 / r.1).sum::<f64>() / k;
         let between = spread - noise;
-        (between > 1e-12).then(|| (pq / between - 1.0).max(0.0))
+        (between > 0.0).then(|| (pq / between - 1.0).max(0.0))
     } else {
         None
     };
     records
         .iter()
         .map(|(who, (h, m))| {
+            let n = h + m;
             let p = match strength {
-                Some(s) if h + m + s > 0.0 => (h + s * pooled) / (h + m + s),
+                Some(s) if n + s > 0.0 => (n * (h + 1.0) / (n + 2.0) + s * pooled) / (n + s),
                 _ => pooled,
             };
             (who.clone(), p)
@@ -365,11 +382,17 @@ pub fn shrunk_accuracy(records: &[(String, (f64, f64))]) -> Vec<(String, f64)> {
 
 /// Log-odds weights from accuracies, scaled so the best voter is one.
 ///
-/// The weight is `ln(p / (1 - p))` with `p` held in `[0.01, 0.99]`, the
-/// Nitzan and Paroush weight of an independent binary voter
-/// (doi:10.2307/2526438). A non-positive log odds, a voter at or below
-/// chance, is cut off and the weight is then [`TRUST_FLOOR`]. The ratios
-/// are the rule. The output keeps the input order.
+/// The weight is `ln(p / (1 - p))` with `p` held in
+/// `[TRUST_FLOOR, 1 - TRUST_FLOOR]`, the Nitzan and Paroush weight of an
+/// independent binary voter (doi:10.2307/2526438). A non-positive log
+/// odds, a voter at or below chance, is cut off and the weight is then
+/// [`TRUST_FLOOR`]. The ratios are the rule. The output keeps the input
+/// order.
+///
+/// It sees a bare accuracy, not the record behind it, so an accuracy of one
+/// is a certainty and gets the clamp's `ln(2^52 - 1)`, and a voter at 0.9 then
+/// weighs `ln 9 / ln(2^52 - 1)`, about 0.061, of it. Records go through
+/// [`shrunk_accuracy`] first, which never reads one as a certainty.
 #[must_use]
 pub fn calibration_weights(accuracy: &[(String, f64)]) -> Vec<(String, f64)> {
     let raw: Vec<(String, f64)> = accuracy
@@ -840,7 +863,7 @@ mod tests {
             ("c".into(), (6.0, 4.0)),
             ("d".into(), (9.0, 1.0)),
         ]);
-        let exact = [4619.0, 3929.0, 4159.0, 4849.0].map(|n| n / 6270.0);
+        let exact = [13512.0, 11787.0, 12362.0, 14087.0].map(|n| n / 18810.0);
         for ((who, p), want) in ten.iter().zip(exact) {
             assert!((p - want).abs() < 1e-12, "{who}: {p} against {want}");
         }
@@ -862,9 +885,10 @@ mod tests {
             ("d".into(), 1.0),
         ]);
         let of = |who: &str| w.iter().find(|(n, _)| n == who).unwrap().1;
+        let top = log_odds(1.0, TRUST_FLOOR);
         assert!((of("d") - 1.0).abs() < 1e-12);
-        assert!((of("a") - 0.478).abs() < 0.01, "{}", of("a"));
-        assert!((of("b") - 0.088).abs() < 0.01, "{}", of("b"));
+        assert!((of("a") - 9.0_f64.ln() / top).abs() < 1e-12, "{}", of("a"));
+        assert!((of("b") - 1.5_f64.ln() / top).abs() < 1e-12, "{}", of("b"));
         assert!(of("a") / of("b") > 5.0, "{}", of("a") / of("b"));
         assert!((of("c") - TRUST_FLOOR).abs() < 1e-12);
     }
@@ -978,6 +1002,46 @@ mod tests {
         assert!((last("calibrated") - wa / (wa + wb)).abs() < 1e-12);
         assert!((last("count") - 0.5).abs() < 1e-12);
         assert!(last("calibrated") > last("count"));
+    }
+
+    #[test]
+    fn a_perfect_record_reads_by_the_rule_of_succession_and_dictates_nothing() {
+        // Ten outcomes: a is always right, b misses the last, c is always
+        // wrong. The records spread past binomial noise, so nothing shrinks
+        // them and the rule of succession alone reads them: 11/12, 10/12
+        // and 1/12. On the eleventh a stands alone against b and c.
+        let mut rows = Vec::new();
+        let mut outcomes = Vec::new();
+        for t in 0..10 {
+            let q = format!("q{t}");
+            rows.push(ballot(&q, "a", "yes", None, None));
+            rows.push(ballot(
+                &q,
+                "b",
+                if t == 9 { "no" } else { "yes" },
+                None,
+                None,
+            ));
+            rows.push(ballot(&q, "c", "no", None, None));
+            outcomes.push((q, "yes"));
+        }
+        for (agent, choice) in [("a", "yes"), ("b", "no"), ("c", "no")] {
+            rows.push(ballot("q10", agent, choice, None, None));
+        }
+        outcomes.push(("q10".into(), "yes"));
+        let outcomes: Vec<(&str, &str)> = outcomes.iter().map(|(q, o)| (q.as_str(), *o)).collect();
+        let report = replay(&panel(rows, outcomes));
+        let on_a = report
+            .scored
+            .iter()
+            .find(|s| s.question == "q10" && s.method == "calibrated")
+            .unwrap()
+            .probability;
+        let b = 5.0_f64.ln() / 11.0_f64.ln();
+        assert!(
+            (on_a - 1.0 / (1.0 + b + TRUST_FLOOR)).abs() < 1e-12,
+            "{on_a}"
+        );
     }
 
     #[test]
