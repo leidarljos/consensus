@@ -141,7 +141,7 @@ enum Cmd {
         #[arg(long)]
         agents: Option<String>,
         /// Pull toward a uniform pre-trust; the floor a voter nobody weighs keeps.
-        #[arg(long, default_value_t = 0.15)]
+        #[arg(long, default_value_t = 0.15, value_parser = finite_alpha)]
         alpha: f64,
     },
     /// Estimate each voter's reliability from many settled items with no
@@ -222,6 +222,36 @@ enum SelfTrustArg {
 /// The energy stops on its first settled point, except where the point settles only on the rounding floor and rgmin's test stays out of reach: 2 of the 1400 panels, both of 128 voters, ran to the cap.
 const UNBOUNDED_MAX_ITER: usize = 2048;
 
+/// Why [`finite_alpha`] refused a token.
+#[derive(Debug)]
+struct AlphaParse(String);
+
+impl std::fmt::Display for AlphaParse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for AlphaParse {}
+
+/// `--alpha` when the token is a finite float.
+///
+/// Rust parses `NaN` and both infinities as `f64`. Left to `clamp`, a NaN
+/// stays NaN, the contraction test is false, and the standing is NaN.
+/// An infinity would clamp into `[0, 1]` and still run. Both are a usage
+/// error here, before that clamp. A finite value outside `[0, 1]` still
+/// parses. The command clamps it and names it on stderr.
+fn finite_alpha(raw: &str) -> Result<f64, AlphaParse> {
+    let alpha = raw
+        .parse::<f64>()
+        .map_err(|err| AlphaParse(err.to_string()))?;
+    if alpha.is_finite() {
+        Ok(alpha)
+    } else {
+        Err(AlphaParse("not a finite number".to_string()))
+    }
+}
+
 /// The help line of the round cap, whose default depends on the engine.
 fn per_engine(
     what: &str,
@@ -299,8 +329,9 @@ fn run() -> Result<()> {
                 }
             };
             // Clamping stays in the library. The printed alpha is the one
-            // the standing was computed with; an out-of-range flag is named
-            // and still run.
+            // the standing was computed with; a finite out-of-range flag is
+            // named and still run. A non-finite flag never reaches this
+            // point: `finite_alpha` rejects it while parsing.
             let flagged = alpha;
             let alpha = flagged.clamp(0.0, 1.0);
             if !(0.0..=1.0).contains(&flagged) {

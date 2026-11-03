@@ -65,6 +65,44 @@ fn out_of_range_alpha_is_printed_as_the_value_used() {
 }
 
 #[test]
+fn alpha_nan_is_a_usage_error() {
+    // Rust's float parser accepts these spellings of NaN and the
+    // infinities. `clamp` keeps a NaN, so the old run printed "using NaN"
+    // and wrote NaN standings. The infinities clamped into [0, 1] and
+    // still ran. Each is a usage error before that clamp. A leading minus
+    // is joined to the flag, or the parser reads another option.
+    let trust = r#"[["a","b",1]]"#;
+    let cases: &[(&[&str], &str)] = &[
+        (&["--trust", trust, "--alpha", "NaN"], "NaN"),
+        (&["--trust", trust, "--alpha", "nan"], "nan"),
+        (&["--trust", trust, "--alpha", "inf"], "inf"),
+        (&["--trust", trust, "--alpha", "+inf"], "+inf"),
+        (&["--trust", trust, "--alpha", "infinity"], "infinity"),
+        (&["--trust", trust, "--alpha", "+infinity"], "+infinity"),
+        (&["--trust", trust, "--alpha=-inf"], "-inf"),
+        (&["--trust", trust, "--alpha=-infinity"], "-infinity"),
+    ];
+    for (args, raw) in cases {
+        let mut cmd = vec!["reputation"];
+        cmd.extend_from_slice(args);
+        let out = Command::new(env!("CARGO_BIN_EXE_ljos-consensus"))
+            .args(&cmd)
+            .output()
+            .expect("spawn ljos-consensus");
+        let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
+        let stderr = String::from_utf8(out.stderr).expect("stderr utf-8");
+        assert_eq!(out.status.code(), Some(2), "{raw}\n{stdout}\n{stderr}");
+        assert!(stdout.is_empty(), "{raw}\n{stdout}");
+        let want = format!(
+            "error: invalid value '{raw}' for '--alpha <ALPHA>': not a finite number\n\
+             \n\
+             For more information, try '--help'.\n"
+        );
+        assert_eq!(stderr, want);
+    }
+}
+
+#[test]
 fn agents_no_row_mentions_are_unrated() {
     let (out, err) = reputation(&["--trust", r#"[["a","b",1]]"#, "--agents", "a,b,ghost"]);
     assert!(err.is_empty(), "{err}");
