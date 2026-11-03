@@ -77,49 +77,49 @@ Both engines solve the same linear system.
 It then adds its rounds, each a pass over the =n^2= weights for each option, where =exact= takes one step to check its point.
 The solve is cubic in the voters.
 
-=examples/settle_scaling.rs= times both from two voters to 4096 on one thread of an Intel Xeon (family 6, model 207, eight cores at 2.4 GHz) at commit =c71e993dfe4b77efd45c5fe1762bfdb874e7acdd=, taking the fastest run in a second of runs.
-Every panel has two options and, where it does not say otherwise, the CLI's defaults; =measurements/settle_scaling.txt= has the output.
+=examples/settle_scaling.rs= times both from two voters to 4096 on one thread of an Intel Xeon (family 6, model 207, eight cores at 2.4 GHz).
+Each time is the median of seven draws, each draw a fresh process that times every cell, so a cell's draws are spread over the whole sweep.
+Every panel has two options and, where it does not say otherwise, the CLI's defaults; =measurements/settle_scaling.txt= has the output, with the interquartile range of every figure and every draw.
 Four panels bracket the rounds an iteration takes.
 The =n (n - 1)= rows =learn= and =calibrate= write settle in one round.
 A ring, each voter naming only the next, spends the whole 27-round budget from four voters on and stops short of the fixed point.
 The same ring with every voter anchored at 0.7 stops on Banach's bound at round 26 with four voters.
 From eight on it runs out at 27, since the cap is derived for anchors of a half and under.
 With no self-weight the ring cycles.
-The second column is =exact='s time on the rows; the others are =iterate='s time over =exact='s.
+The second column is the median of =exact='s time on the rows; the others are the medians of =iterate='s time over =exact='s, taken draw by draw.
 
 | Voters | Rows, =exact= | Rows | Ring | Ring, anchored | Ring, no self-weight |
 |---+---+---+---+---+---|
-| 2 | 0.88 µs | 1.07 | 1.06 | 1.11 | 0.78 |
-| 4 | 1.75 µs | 1.04 | 2.81 | 2.51 | 0.78 |
-| 8 | 5.00 µs | 1.02 | 2.87 | 2.59 | 0.73 |
-| 16 | 22.39 µs | 1.01 | 2.59 | 2.31 | 0.75 |
-| 32 | 141.48 µs | 1.01 | 2.33 | 2.00 | 0.73 |
-| 64 | 970.12 µs | 1.01 | 2.02 | 1.70 | 0.69 |
-| 128 | 7.23 ms | 0.99 | 1.62 | 1.38 | 0.63 |
-| 256 | 56.82 ms | 1.00 | 1.37 | 1.20 | 0.58 |
-| 512 | 451.25 ms | 1.08 | 1.18 | 1.10 | 0.52 |
-| 1024 | 4.33 s | 0.94 | 1.12 | 1.06 | 0.53 |
-| 2048 | 37.85 s | 1.03 | 1.07 | 1.03 | 0.52 |
-| 4096 | 238.64 s | 1.06 | 1.03 | 0.99 | 0.49 |
+| 2 | 1.24 µs | 1.06 | 1.04 | 1.12 | 0.76 |
+| 4 | 2.60 µs | 1.03 | 2.63 | 2.58 | 0.77 |
+| 8 | 6.59 µs | 1.02 | 2.59 | 2.73 | 0.76 |
+| 16 | 22.43 µs | 1.03 | 2.57 | 2.63 | 0.73 |
+| 32 | 95.25 µs | 1.02 | 2.23 | 2.41 | 0.71 |
+| 64 | 484.05 µs | 1.00 | 1.96 | 2.20 | 0.68 |
+| 128 | 2.90 ms | 1.00 | 1.66 | 1.71 | 0.59 |
+| 256 | 20.60 ms | 1.00 | 1.31 | 1.38 | 0.59 |
+| 512 | 147.01 ms | 1.01 | 1.22 | 1.20 | 0.55 |
+| 1024 | 1.22 s | 1.01 | 1.13 | 1.17 | 0.52 |
+| 2048 | 9.53 s | 0.98 | 1.07 | 1.08 | 0.52 |
+| 4096 | 70.81 s | 1.00 | 1.02 | 1.01 | 0.51 |
 
-A second sweep to 512 voters printed the same rounds and moved each time by less than a tenth.
-A cell over a second is a single run and carries whatever else the machine did then.
+Every draw printed the same rounds, and no ratio's interquartile range is wider than 0.14.
 
 On the rows a seat keeps, the two engines cost the same at every size: one round costs what =exact= spends checking its point.
-The settle there grows as the cube, from half a second at 512 voters to four minutes at 4096.
-From 32 voters on, more than half of it goes to building the matrix from the rows, before either engine starts.
+The settle there grows as the cube, from 147 ms at 512 voters to 71 s at 4096.
+Building the matrix from the rows takes a third of it at 32 voters and a hundredth at 4096, where the solve takes nearly all of it.
 
-On the ring, =iterate= costs nearly three times what =exact= does at eight voters, and never reaches the tolerance.
+On the ring, =iterate= costs 2.6 times what =exact= does at eight voters, and never reaches the tolerance.
 The rounds cost as much as the solve, which puts =iterate= at twice =exact=, near 64 voters; past that the solve both share dominates.
-Anchored, the ring runs out at the same 27 rounds from eight voters on, and that crossover falls to 32 voters.
+Anchored, the ring runs out at the same 27 rounds from eight voters on, and =iterate= stays above twice =exact= to 64 voters.
 The ring with no self-weight has no closed form.
 =exact= finds the cycle and falls back to the iteration, which builds the matrix and finds the cycle again, so =exact= takes up to twice as long as =iterate=.
 
 Choose =exact= wherever a closed form exists.
-It costs the same as =iterate= where one round settles and less where more are needed, up to an order of magnitude below a few hundred voters, and it reaches the fixed point where the iteration's budget runs out.
+It costs the same as =iterate= where one round settles and less where more are needed, up to 2.7 times less below a hundred voters, and it reaches the fixed point where the iteration's budget runs out.
 =iterate= is the better choice on a panel that can cycle: every voter of a closed group listening fully and putting no weight on its own ballot, as =--self-trust constant --self-weight 0= allows.
 As the panel grows the engines draw together.
-At 4096 voters =iterate= costs at most 1.37 times =exact=, and the panel decides the time: both pay the solve, and on the seat's rows building the matrix costs more than solving it.
+At 4096 voters =iterate= costs at most 1.02 times =exact= on the panels with a closed form, and the panel decides the time: both pay the solve, which is nearly all of it.
 
 * Anchoring
 
