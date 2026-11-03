@@ -7,8 +7,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use ljos_consensus::seldon::{parse_opinions_dir, seldon_absent_line, write_seldon_inputs};
 use ljos_consensus::{
-    anchors_from_json, ballots_from_json, fj_contraction_bound, fj_rounds_to_tol, settle_energy,
-    settle_exact, settle_with, trust_from_json, Ballot, Opts, SelfTrust,
+    anchors_from_json, ballots_from_json, fj_contraction_bound, fj_rounds_to_tol, one_ballot_each,
+    settle_energy, settle_exact, settle_with, trust_from_json, Ballot, Opts, SelfTrust,
 };
 
 #[derive(Parser)]
@@ -379,12 +379,21 @@ fn run() -> Result<()> {
             rounds,
             min_shared: _,
         } => {
-            let items = load_items(items.as_deref(), project.as_deref())?;
-            let truths: Vec<Option<String>> = match truths.as_deref() {
+            // `--items` wins, as `load_items` does. `--truths` lines up with
+            // the positions `items_from_json` kept. What `--project` returns
+            // is already the list to score.
+            let (items, truths) = match items.as_deref() {
                 Some(raw) => {
-                    serde_json::from_str(raw).context("truths: a JSON array of strings or nulls")?
+                    let read = items_from_json(raw)?;
+                    let truths = align_truths(truths.as_deref(), read.len, &read.kept)?;
+                    (read.items, truths)
                 }
-                None => vec![None; items.len()],
+                None => {
+                    let items = load_items(None, project.as_deref())?;
+                    let kept: Vec<usize> = (0..items.len()).collect();
+                    let truths = align_truths(truths.as_deref(), items.len(), &kept)?;
+                    (items, truths)
+                }
             };
             let reading = ljos_consensus::correlation::correlation(&items, &truths, rounds, gate);
             println!("{}", serde_json::to_string_pretty(&reading)?);
@@ -734,16 +743,73 @@ fn not_ballot_json(id: &str) -> IssueRead {
     }
 }
 
+/// One `--items` array after the per-item reading.
+struct ItemRows {
+    items: Vec<Vec<(String, String)>>,
+    /// How many items the JSON array held, refused ones included.
+    len: usize,
+    /// Positions that were kept, so `--truths` can drop the same ones.
+    kept: Vec<usize>,
+}
+
+/// Read `--items`. Each item goes through [`one_ballot_each`], as `settle`
+/// reads a ballot: names trimmed, a repeated choice counted once. A refusal
+/// skips that item with one stderr line and the run continues, so one bad
+/// item does not drop the rest.
+fn items_from_json(raw: &str) -> Result<ItemRows> {
+    let rows: Vec<Vec<Ballot>> =
+        serde_json::from_str(raw).context("items: not a JSON array of ballot arrays")?;
+    let len = rows.len();
+    let mut items = Vec::new();
+    let mut kept = Vec::new();
+    for (k, item) in rows.into_iter().enumerate() {
+        match one_ballot_each(item) {
+            Ok(ballots) => {
+                kept.push(k);
+                items.push(ballots.into_iter().map(|b| (b.agent, b.choice)).collect());
+            }
+            Err(reason) => eprintln!("items[{k}]: skipped: {reason}"),
+        }
+    }
+    Ok(ItemRows { items, len, kept })
+}
+
+/// `--truths[k]` names the outcome of item `k`. Drop the positions `kept`
+/// left out, so a later truth stays on its own item. A length other than
+/// the item array is reported and does not stop the run: a missing entry is
+/// unnamed, and entries past the items are unused. `named` then counts items
+/// that have a name, not spare strings.
+fn align_truths(
+    truths: Option<&str>,
+    items_len: usize,
+    kept: &[usize],
+) -> Result<Vec<Option<String>>> {
+    let Some(raw) = truths else {
+        return Ok(vec![None; kept.len()]);
+    };
+    let parsed: Vec<Option<String>> =
+        serde_json::from_str(raw).context("truths: a JSON array of strings or nulls")?;
+    if parsed.len() != items_len {
+        eprintln!("{}", truths_length_line(parsed.len(), items_len));
+    }
+    Ok(kept
+        .iter()
+        .map(|&k| parsed.get(k).cloned().flatten())
+        .collect())
+}
+
+/// `truths: N entries for M items`, singular when N or M is one.
+fn truths_length_line(entries: usize, items: usize) -> String {
+    let entry_word = if entries == 1 { "entry" } else { "entries" };
+    let item_word = if items == 1 { "item" } else { "items" };
+    format!("truths: {entries} {entry_word} for {items} {item_word}")
+}
+
 /// Items for the reliability estimate: `--items` JSON, else every issue of
 /// a tracker project holding two or more ballots.
 fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(String, String)>>> {
     if let Some(raw) = items {
-        let rows: Vec<Vec<Ballot>> =
-            serde_json::from_str(raw).context("items: not a JSON array of ballot arrays")?;
-        return Ok(rows
-            .into_iter()
-            .map(|item| item.into_iter().map(|b| (b.agent, b.choice)).collect())
-            .collect());
+        return Ok(items_from_json(raw)?.items);
     }
     let Some(project) = project else {
         bail!("pass --items JSON or --project");
