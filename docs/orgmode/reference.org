@@ -79,13 +79,14 @@ Polarization and disagreement follow Musco, Musco and Tsourakakis
 (doi:10.1145/3178876.3186103). Only the iterate and exact engines fill the
 last five fields.
 
-Exit status of =settle --issue=:
+Exit status of every =--issue= reader:
 
-When that read does not yield ballots, =settle= writes one line to stderr
+When that read does not yield ballots, the command writes one line to stderr
 and exits with a status from =sysexits.h= (FreeBSD). The line is the whole
 of stderr: it names what happened and says to pass =--ballots JSON=
 instead. What =vissue= itself wrote is not copied, so a tracker that
-prints several lines cannot bury the instruction.
+prints several lines cannot bury the instruction. The table covers every
+=--issue= reader.
 
 | Status | =sysexits.h= | The line |
 |---+---|---|

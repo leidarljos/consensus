@@ -247,7 +247,11 @@ fn run() -> Result<()> {
             ballots,
             predictions,
         } => {
-            let ballots = load_ballots(issue.as_deref(), ballots.as_deref())?;
+            let ballots = if let (Some(id), None) = (issue.as_deref(), ballots.as_deref()) {
+                issue_ballots(id)?
+            } else {
+                load_ballots(ballots.as_deref())?
+            };
             let predictions = ljos_consensus::predictions_from_json(&predictions)
                 .map_err(|e| anyhow::anyhow!(e))?;
             let out = ljos_consensus::surprisingly_popular(&ballots, &predictions);
@@ -358,7 +362,7 @@ fn run() -> Result<()> {
             let ballots = if let (Some(id), None) = (issue.as_deref(), ballots.as_deref()) {
                 issue_ballots(id)?
             } else {
-                load_ballots(issue.as_deref(), ballots.as_deref())?
+                load_ballots(ballots.as_deref())?
             };
             if ballots.is_empty() {
                 bail!("settle: no ballots, so nothing to settle");
@@ -573,19 +577,18 @@ fn discount_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f6
     Ok(map)
 }
 
-fn load_ballots(issue: Option<&str>, ballots: Option<&str>) -> Result<Vec<Ballot>> {
-    if let Some(raw) = ballots {
-        return ballots_from_json(raw).map_err(|e| anyhow::anyhow!(e));
-    }
-    let Some(id) = issue else {
+/// `--ballots` JSON. An `--issue` id is read by [`issue_ballots`], which
+/// reports the sysexits status documented for that read.
+fn load_ballots(ballots: Option<&str>) -> Result<Vec<Ballot>> {
+    let Some(raw) = ballots else {
         bail!("pass --ballots JSON or --issue");
     };
-    ballots_from_vissue(id)
+    ballots_from_json(raw).map_err(|e| anyhow::anyhow!(e))
 }
 
-/// `settle --issue` when the tracker read does not yield ballots. `code`
-/// is the `sysexits.h` status documented in `docs/orgmode/reference.org`.
-/// `line` is the whole of stderr.
+/// An `--issue` read that did not yield ballots. `code` is the `sysexits.h`
+/// status documented in `docs/orgmode/reference.org`. `line` is the whole
+/// of stderr.
 #[derive(Debug)]
 struct IssueRead {
     code: u8,
@@ -611,7 +614,7 @@ const EXIT_VISSUE_DATA: u8 = 65;
 /// `sysexits` gives this code to an empty "No message" input.
 const EXIT_VISSUE_EMPTY: u8 = 66;
 
-/// Ballots for `settle --issue`. Each failure is an [`IssueRead`].
+/// Ballots for every `--issue` reader. Each failure is an [`IssueRead`].
 fn issue_ballots(id: &str) -> Result<Vec<Ballot>, IssueRead> {
     if !which_ok("vissue") {
         return Err(IssueRead {
@@ -710,13 +713,6 @@ fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(Str
         bail!("reliability: no issue in {project} holds two or more ballots");
     }
     Ok(items)
-}
-
-fn ballots_from_vissue(id: &str) -> Result<Vec<Ballot>> {
-    if !which_ok("vissue") {
-        bail!("vissue not on PATH; pass --ballots JSON");
-    }
-    vote_json(id).map_err(|e| anyhow::anyhow!("{e}; pass --ballots JSON"))
 }
 
 /// The ballots `vissue vote ID --json` prints, or one line saying why
