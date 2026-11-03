@@ -5,7 +5,7 @@ use std::process::{Command, ExitCode};
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use ljos_consensus::seldon::{parse_opinions_dir, write_seldon_inputs};
+use ljos_consensus::seldon::{parse_opinions_dir, seldon_absent_line, write_seldon_inputs};
 use ljos_consensus::{
     anchors_from_json, ballots_from_json, fj_contraction_bound, fj_rounds_to_tol, settle_energy,
     settle_exact, settle_with, trust_from_json, Ballot, Opts, SelfTrust,
@@ -33,7 +33,9 @@ enum Cmd {
         /// JSON array of {from, to, weight}
         #[arg(long)]
         trust: Option<String>,
-        /// If set, write a Seldon TOML and exec `seldon` instead of the discrete step.
+        /// If set, write Seldon inputs and exec `seldon`. When `seldon` is
+        /// not on PATH, the files are still written and the command that
+        /// runs them is printed.
         #[arg(long)]
         seldon: bool,
         #[arg(long)]
@@ -333,7 +335,7 @@ fn run() -> Result<()> {
                 );
             }
             if use_seldon {
-                let outcome = settle_seldon(
+                if let Some(outcome) = settle_seldon(
                     &ballots,
                     &trust,
                     self_weight,
@@ -341,8 +343,9 @@ fn run() -> Result<()> {
                     max_iter,
                     tol,
                     out,
-                )?;
-                println!("{}", serde_json::to_string_pretty(&outcome)?);
+                )? {
+                    println!("{}", serde_json::to_string_pretty(&outcome)?);
+                }
             } else if engine == "energy" {
                 let any_anchor = ballots
                     .iter()
@@ -599,15 +602,16 @@ fn settle_seldon(
     max_iter: usize,
     tol: f64,
     out: Option<PathBuf>,
-) -> Result<ljos_consensus::Outcome> {
+) -> Result<Option<ljos_consensus::Outcome>> {
     if (susceptibility - 1.0).abs() > f64::EPSILON {
         bail!("seldon DeGroot has no Friedkin–Johnsen anchor; omit --seldon or set --susceptibility 1");
     }
-    if !which_ok("seldon") {
-        bail!("seldon not on PATH; refuse to fake an ODE");
-    }
     let dir = out.unwrap_or_else(|| PathBuf::from("."));
     let job = write_seldon_inputs(&dir, ballots, trust, self_weight, max_iter, tol)?;
+    if !which_ok("seldon") {
+        println!("{}", seldon_absent_line(&dir));
+        return Ok(None);
+    }
     let config = dir.join("config.toml");
     let network = dir.join("network.txt");
     let opinions = dir.join("opinions.txt");
@@ -624,7 +628,9 @@ fn settle_seldon(
     if !st.success() {
         bail!("seldon exited {st}");
     }
-    parse_opinions_dir(&dir, &job.options, max_iter, tol).map_err(Into::into)
+    parse_opinions_dir(&dir, &job.options, max_iter, tol)
+        .map(Some)
+        .map_err(Into::into)
 }
 
 fn which_ok(bin: &str) -> bool {

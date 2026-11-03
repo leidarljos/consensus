@@ -1,8 +1,13 @@
 //! Seldon DeGroot inputs and `opinions_i.txt` parse.
 //!
-//! Seldon is exec'd, never linked. Config matches `examples/DeGroot/conf.toml`.
-//! Network is incoming edges (`generate_from_file`). Opinions are one scalar
-//! per agent: the sorted option index, which is what `SimpleAgent` holds.
+//! Seldon is exec'd, never linked. The files match seldon-code/seldon
+//! `b4c479a295431f41ecfe121a752d0bcc3465333f`: sections from
+//! `examples/DeGroot/conf.toml`, incoming rows from `generate_from_file`
+//! (`include/network_generation.hpp`, same columns as `test/res/network.txt`),
+//! and one scalar per agent from `SimpleAgent`
+//! (`include/agents/simple_agent.hpp`, read by `agents_from_file`).
+//! When `seldon` is not on PATH the CLI still writes the files and prints
+//! [`seldon_absent_line`], the invocation in `src/main.cpp`.
 
 use std::fs;
 use std::io::{self, Write};
@@ -60,6 +65,22 @@ pub fn write_seldon_inputs(
     })
 }
 
+/// The one line `settle --seldon` prints when `seldon` is not on PATH.
+///
+/// The three files are already under `dir`. The command is the one the CLI
+/// execs when the binary is present: config, `-o` the output directory,
+/// `-n` the network, `-a` the opinions (`src/main.cpp` at the commit above).
+#[must_use]
+pub fn seldon_absent_line(dir: &Path) -> String {
+    format!(
+        "seldon not on PATH; run: seldon {} -o {} -n {} -a {}",
+        dir.join("config.toml").display(),
+        dir.display(),
+        dir.join("network.txt").display(),
+        dir.join("opinions.txt").display(),
+    )
+}
+
 /// Read the highest-numbered `opinions_i.txt` Seldon wrote and fold it into shares.
 pub fn parse_opinions_dir(
     dir: &Path,
@@ -97,8 +118,16 @@ pub fn parse_opinions_dir(
 }
 
 fn write_config(dir: &Path, n: usize, max_iter: usize, tol: f64) -> io::Result<()> {
+    // Other voters, not the self loop: `generate_n_connections` adds self
+    // on top of this count, and only when `-n` is omitted. A single voter
+    // has no other voter; the floor keeps the count positive.
     let connections = n.saturating_sub(1).max(1);
-    // Field names and sections match examples/DeGroot/conf.toml.
+    // Field names and sections match examples/DeGroot/conf.toml at the
+    // commit named in the module docs. `rng_seed = 1` is fixed so the
+    // file does not store the parser's `random_device` default.
+    // `n_output_agents = 1` is that example's "write opinions every
+    // iteration". The other `[io]` keys are the defaults the example's
+    // comments name.
     let body = format!(
         "\
 [simulation]
@@ -127,6 +156,10 @@ connections_per_agent = {connections}
 }
 
 fn write_network(dir: &Path, agents: &[String], w: &[Vec<f64>]) -> io::Result<()> {
+    // `#` at column 0 is skipped. A blank line ends the file
+    // (`generate_from_file`), so the rows stay contiguous. The header
+    // matches `test/res/network.txt`. Seldon's `network_to_file` spells
+    // those columns with spaces; the parser reads neither header.
     let mut out =
         String::from("# idx_agent,n_neighbors_in,indices_neighbors_in[...],weights_in[...]\n");
     for (i, name) in agents.iter().enumerate() {
@@ -172,6 +205,8 @@ fn write_opinions(
         };
         values[i] = k as f64;
     }
+    // Same line rules as the network file. `SimpleAgent` reads one double
+    // after the first comma (`std::stod`), the sorted option index.
     let mut out = String::from("# idx_agent, opinion\n");
     for (i, name) in agents.iter().enumerate() {
         out.push_str(&format!("# agent {i} {name}\n"));
