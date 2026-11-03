@@ -506,6 +506,34 @@ pub struct Surprise {
     pub answer: Option<String>,
     /// How many voters also predicted; below two the rule says nothing.
     pub predictors: usize,
+    /// Rows left out of the mean, in the order they were read. Each entry
+    /// names the agent and the reason: a share that is negative or not
+    /// finite, shares that sum to zero, a row a later prediction from the
+    /// same agent replaced, an agent that cast no ballot, or a blank name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignored: Vec<String>,
+}
+
+/// Why `expect` is not a distribution the mean can take.
+///
+/// A forecast is a share of a ballot. A negative share, or one that is not
+/// finite, is already outside that range, and a row of them cannot be
+/// scaled into one: the mean divides by the sum of the row, so a sum of
+/// zero is not a distribution either.
+fn share_problem(expect: &std::collections::BTreeMap<String, f64>) -> Option<&'static str> {
+    if expect.values().any(|share| !share.is_finite()) {
+        return Some("a share is not a finite number");
+    }
+    if expect.values().any(|share| *share < 0.0) {
+        return Some("a share is negative");
+    }
+    // Zero is the sum that cannot be scaled. Every share is finite and
+    // non-negative by the checks above, so the sum is zero only when the
+    // row has no weight, including a row that named no option.
+    if expect.values().sum::<f64>() == 0.0 {
+        return Some("shares sum to zero");
+    }
+    None
 }
 
 /// The surprisingly popular answer (Prelec, Seung and McCoy,
@@ -513,10 +541,13 @@ pub struct Surprise {
 /// share the others will give each option; the answer is the option whose
 /// actual share most exceeds its predicted share. A minority that knows
 /// the majority is wrong predicts that majority and votes against it, and
-/// that is what the rule reads. With fewer than two predictors it returns
-/// the shares and no answer. A tie does the same: the leading surprises
-/// are no farther apart than rounding can swap, `tie` is set and `answer`
-/// is absent. `margin` is the largest surprise less the next.
+/// that is what the rule reads. The mean takes one forecast from each
+/// voter who cast a ballot, the last row when that voter sent several, and
+/// only a row whose shares are a distribution. Every other row is named in
+/// [`Surprise::ignored`]. With fewer than two such voters it returns the
+/// shares and no answer. A tie does the same: the leading surprises are no
+/// farther apart than rounding can swap, `tie` is set and `answer` is
+/// absent. `margin` is the largest surprise less the next.
 #[must_use]
 pub fn surprisingly_popular(ballots: &[Ballot], predictions: &[Prediction]) -> Surprise {
     let (agents, options) = roster(ballots);
@@ -525,32 +556,63 @@ pub fn surprisingly_popular(ballots: &[Ballot], predictions: &[Prediction]) -> S
         .iter()
         .map(|o| ballots.iter().filter(|b| b.choice == *o).count() as f64 / n)
         .collect();
-    let predictors: Vec<&Prediction> = predictions
-        .iter()
-        .filter(|p| !p.expect.is_empty())
-        .collect();
-    let predicted: Vec<f64> = options
-        .iter()
-        .map(|o| {
-            if predictors.is_empty() {
-                return 0.0;
-            }
-            predictors
-                .iter()
-                .map(|p| {
-                    let total: f64 = p.expect.values().sum();
-                    if total <= 0.0 {
-                        0.0
-                    } else {
+    // Names are compared trimmed, as `one_ballot_each` stores them.
+    let voters: std::collections::BTreeSet<&str> = ballots.iter().map(|b| b.agent.trim()).collect();
+    let mut last_of: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for (i, p) in predictions.iter().enumerate() {
+        let agent = p.agent.trim();
+        if !agent.is_empty() {
+            last_of.insert(agent, i);
+        }
+    }
+    let mut ignored = Vec::new();
+    let mut used: Vec<&Prediction> = Vec::new();
+    for (i, p) in predictions.iter().enumerate() {
+        let agent = p.agent.trim();
+        if agent.is_empty() {
+            ignored.push("a row has a blank agent".to_string());
+            continue;
+        }
+        let problem = share_problem(&p.expect);
+        if let Some(reason) = problem {
+            ignored.push(format!("{agent}: {reason}"));
+        }
+        // A later row replaces this one, usable or not. Both faults are
+        // named when a row is unfit and is also not the voter's last word.
+        if last_of.get(agent) != Some(&i) {
+            ignored.push(format!("{agent}: replaced by a later prediction"));
+            continue;
+        }
+        if problem.is_some() {
+            continue;
+        }
+        if !voters.contains(agent) {
+            ignored.push(format!("{agent}: cast no ballot"));
+            continue;
+        }
+        used.push(p);
+    }
+    // Each kept row is scaled by its own sum first, so the mean is a mean
+    // of distributions even when a voter wrote shares in some other proportion.
+    let predicted: Vec<f64> = if used.is_empty() {
+        vec![0.0; options.len()]
+    } else {
+        let rows = used.len() as f64;
+        options
+            .iter()
+            .map(|o| {
+                used.iter()
+                    .map(|p| {
+                        let total: f64 = p.expect.values().sum();
                         p.expect.get(o).copied().unwrap_or(0.0) / total
-                    }
-                })
-                .sum::<f64>()
-                / predictors.len() as f64
-        })
-        .collect();
+                    })
+                    .sum::<f64>()
+                    / rows
+            })
+            .collect()
+    };
     let surprise: Vec<f64> = actual.iter().zip(&predicted).map(|(a, p)| a - p).collect();
-    let p = predictors.len();
+    let p = used.len();
     // `actual` is `count / n`, one division. `predicted` is the mean of `p`
     // normalised shares: normalising a share is a sum and a division, the
     // mean adds `p - 1` additions and a division, and Higham's Lemma 3.1
@@ -578,13 +640,16 @@ pub fn surprisingly_popular(ballots: &[Ballot], predictions: &[Prediction]) -> S
         margin,
         tie,
         answer,
-        predictors: p,
+        predictors: used.len(),
+        ignored,
     }
 }
 
 /// Parse predictions as `[{"agent": a, "expect": {"option": share, ...}}]`
 /// or `[{"agent": a, "expect": "option"}]`, the latter a whole share on one
-/// option.
+/// option. Names are trimmed, as ballots are. A share that is not a number
+/// is kept as a non-finite value so the mean can name the row instead of
+/// dropping it.
 pub fn predictions_from_json(raw: &str) -> Result<Vec<Prediction>, String> {
     let v: serde_json::Value =
         serde_json::from_str(raw).map_err(|e| format!("predictions json: {e}"))?;
@@ -595,12 +660,18 @@ pub fn predictions_from_json(raw: &str) -> Result<Vec<Prediction>, String> {
                 .get("agent")
                 .and_then(|a| a.as_str())
                 .ok_or("predictions: a row without agent")?
+                .trim()
                 .to_string();
             let expect = match row.get("expect") {
                 Some(serde_json::Value::String(o)) => std::iter::once((o.clone(), 1.0)).collect(),
                 Some(serde_json::Value::Object(map)) => map
                     .iter()
-                    .filter_map(|(k, val)| val.as_f64().map(|f| (k.clone(), f)))
+                    .map(|(k, val)| {
+                        // `as_f64` is empty for a string, a null, or a number
+                        // too big for binary64. NaN keeps the key, which a
+                        // filter would have deleted and then averaged past.
+                        (k.clone(), val.as_f64().unwrap_or(f64::NAN))
+                    })
                     .collect(),
                 _ => return Err("predictions: a row without expect".to_string()),
             };
@@ -2241,8 +2312,78 @@ mod tests {
         assert_eq!(s.answer.as_deref(), Some("no"), "{s:?}");
         assert!(!s.tie, "{s:?}");
         assert_eq!(s.predictors, 4);
+        assert!(s.ignored.is_empty(), "{:?}", s.ignored);
         let none = surprisingly_popular(&ballots, &predictions[..1]);
         assert_eq!(none.answer, None, "one predictor says nothing");
+        assert!(none.ignored.is_empty(), "{:?}", none.ignored);
+    }
+
+    /// The mean is one distribution per voter. A negative share, the row it
+    /// replaces, and a forecast from someone who cast no ballot are named
+    /// and left out.
+    #[test]
+    fn a_negative_share_a_recast_and_a_non_voter_are_named() {
+        let ballots =
+            ballots_from_json(r#"[{"agent":"a","choice":"x"},{"agent":"b","choice":"y"}]"#)
+                .unwrap();
+        let predictions = predictions_from_json(
+            r#"[{"agent":"a","expect":{"x":-5,"y":6}},{"agent":"a","expect":"y"},{"agent":"zed","expect":"y"}]"#,
+        )
+        .unwrap();
+        let s = surprisingly_popular(&ballots, &predictions);
+        assert_eq!(s.predictors, 1);
+        assert_eq!(s.answer, None, "one voter predicted");
+        assert_eq!(s.options, ["x", "y"]);
+        assert!(
+            s.predicted.iter().all(|p| (0.0..=1.0).contains(p)),
+            "{:?}",
+            s.predicted
+        );
+        assert_eq!(s.predicted.iter().sum::<f64>(), 1.0);
+        // a's last word is a point mass on y, and that is the whole mean.
+        // 0 and 1 are the shares of that one row, which are exact in binary64.
+        assert_eq!(s.predicted, [0.0, 1.0]);
+        assert_eq!(
+            s.ignored,
+            [
+                "a: a share is negative",
+                "a: replaced by a later prediction",
+                "zed: cast no ballot",
+            ]
+        );
+    }
+
+    /// A voter's last row is the one that counts, and only when it is a
+    /// distribution. An earlier good row does not fill in for a last row
+    /// that sums to zero, a share that is not a number is named, and a
+    /// blank name is named.
+    #[test]
+    fn the_last_row_counts_only_when_it_is_a_distribution() {
+        let ballots = vec![ballot("a", "x"), ballot("b", "y")];
+        let predictions = predictions_from_json(
+            r#"[
+                {"agent":" ","expect":"x"},
+                {"agent":" a ","expect":{"x":1}},
+                {"agent":"a","expect":{"x":0,"y":0}},
+                {"agent":"b","expect":{"y":"many"}},
+                {"agent":"b","expect":{"x":0.25,"y":0.75}}
+            ]"#,
+        )
+        .unwrap();
+        let s = surprisingly_popular(&ballots, &predictions);
+        assert_eq!(s.predictors, 1);
+        assert_eq!(
+            s.ignored,
+            [
+                "a row has a blank agent",
+                "a: replaced by a later prediction",
+                "a: shares sum to zero",
+                "b: a share is not a finite number",
+                "b: replaced by a later prediction",
+            ]
+        );
+        // b's last row is already a distribution, so the mean is that row.
+        assert_eq!(s.predicted, [0.25, 0.75]);
     }
 
     /// Two options with the same surprise are a tie. Renaming them does

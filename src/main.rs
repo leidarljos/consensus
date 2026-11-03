@@ -255,6 +255,9 @@ fn run() -> Result<()> {
             let predictions = ljos_consensus::predictions_from_json(&predictions)
                 .map_err(|e| anyhow::anyhow!(e))?;
             let out = ljos_consensus::surprisingly_popular(&ballots, &predictions);
+            for line in &out.ignored {
+                eprintln!("{line}");
+            }
             println!("{}", serde_json::to_string_pretty(&out)?);
         }
         Cmd::Reputation {
