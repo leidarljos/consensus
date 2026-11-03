@@ -33,6 +33,19 @@ use ljos_consensus::correlation::{correlation, INDEPENDENCE_LEVEL};
 use ljos_consensus::record::{calibration_weights, shrunk_accuracy};
 use ljos_consensus::{settle_with, Ballot, Opts, SelfTrust};
 
+/// Seed `s` starts the generator at `SEED_STRIDE s + STREAM`.
+/// The stride is odd, so the map is one to one modulo 2^64 and no two seeds start on the same state.
+/// Each example draws with its own `STREAM`: 17 in `synthetic_voters`, 29 in `correlated_voters`, 31 in `correlation_history` and 43 in `correlation_gate`.
+/// Under a stride of one, `correlated_voters`' seed `s + 2` would start where `correlation_history`'s seed `s` does.
+/// Two examples' seeds start on the same state only when they differ by the gap of their streams times the inverse of the stride modulo 2^64.
+/// Under 7919 every such distance is past 2^60, beyond any seed count a run takes.
+/// Any odd stride with that property would serve; 7919, the thousandth prime, is the one the committed measurements were drawn with.
+const SEED_STRIDE: u64 = 7919;
+
+/// This example's stream.
+/// Any value no other example uses would serve.
+const STREAM: u64 = 31;
+
 struct Lcg(u64);
 
 impl Lcg {
@@ -136,7 +149,7 @@ fn main() {
     ];
     let mut right = vec![vec![0usize; arms.len()]; horizons.len()];
     for seed in 0..seeds {
-        let mut rng = Lcg(seed.wrapping_mul(7919).wrapping_add(31));
+        let mut rng = Lcg(seed.wrapping_mul(SEED_STRIDE).wrapping_add(STREAM));
         let solo_acc: Vec<f64> = (0..solos)
             .map(|_| lo + (hi - lo) * rng.next_f64())
             .collect();

@@ -11,6 +11,19 @@ impl Lcg {
     }
 }
 
+/// Trial `t` starts the generator at `SEED_STRIDE t + STREAM`.
+/// The stride is odd, so the map is one to one modulo 2^64 and no two seeds start on the same state.
+/// Each example draws with its own `STREAM`: 17 in `synthetic_voters`, 29 in `correlated_voters`, 31 in `correlation_history` and 43 in `correlation_gate`.
+/// Under a stride of one, `correlated_voters`' seed `s + 2` would start where `correlation_history`'s seed `s` does.
+/// Two examples' seeds start on the same state only when they differ by the gap of their streams times the inverse of the stride modulo 2^64.
+/// Under 7919 every such distance is past 2^60, beyond any seed count a run takes.
+/// Any odd stride with that property would serve; 7919, the thousandth prime, is the one the committed measurements were drawn with.
+const SEED_STRIDE: u64 = 7919;
+
+/// This example's stream.
+/// Any value no other example uses would serve.
+const STREAM: u64 = 43;
+
 /// The range `correlated_voters` and `correlation_history` seat independent
 /// voters in.
 pub const ACCURACY: (f64, f64) = (0.60, 0.75);
@@ -29,7 +42,7 @@ pub const RHO: [f64; 7] = [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0];
 /// of unequal accuracy cannot read a correlation of one, and passes the
 /// gate less often.
 pub fn pair(m: usize, rho: f64, t: u64) -> Vec<Vec<(String, String)>> {
-    let mut rng = Lcg(t.wrapping_mul(7919).wrapping_add(43));
+    let mut rng = Lcg(t.wrapping_mul(SEED_STRIDE).wrapping_add(STREAM));
     let p = ACCURACY.0 + (ACCURACY.1 - ACCURACY.0) * rng.next_f64();
     let ballot = |right: bool| if right { "a" } else { "b" }.to_string();
     (0..m)
