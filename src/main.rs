@@ -279,14 +279,82 @@ fn run() -> Result<()> {
                     names
                 }
             };
-            let standing = ljos_consensus::eigentrust(&names, &rows, alpha, 500, 1e-12);
-            let map: std::collections::BTreeMap<&str, f64> =
-                names.iter().map(String::as_str).zip(standing).collect();
+            // Clamping stays in the library. The printed alpha is the one
+            // the standing was computed with; an out-of-range flag is named
+            // and still run.
+            let flagged = alpha;
+            let alpha = flagged.clamp(0.0, 1.0);
+            if !(0.0..=1.0).contains(&flagged) {
+                eprintln!("alpha {flagged} is outside [0, 1]; using {alpha}");
+            }
+            // Each step is t' = (1 - alpha) C^T t + alpha p, with p the
+            // uniform pre-trust. C is nonnegative and each of its rows sums
+            // to one, so C^T is column-stochastic: for any x,
+            // ||C^T x||_1 = sum_j |sum_i C_ij x_i| <= sum_i |x_i| = ||x||_1.
+            // C^T does not expand L1 distance. The pre-trust term is the same
+            // on both standings and cancels in a difference, so the distance
+            // shrinks by (1 - alpha) each step. For alpha in (0, 1] that is
+            // a contraction. Two standings start at most two apart in L1, so
+            // half that distance starts at most one and shrinks by the same
+            // factor: ceil(ln(tol) / ln(1 - alpha)) rounds bring it under tol.
+            // fj_rounds_to_tol returns one more than that ceiling, counting
+            // the opening step the way the settle does. That count is the
+            // budget below.
+            //
+            // tol is Opts::default().tol. A standing is a share of one, and
+            // this is the tolerance the settle derives so truncation and
+            // binary64 rounding stay under the tie test on the largest panel
+            // it can decide: twice gamma(SUPPORTED_VOTERS + 2) divided by
+            // (1 - CONTRACTION_BOUND).
+            let tol = Opts::default().tol;
+            // A stop tolerance of zero runs every derived round. A positive
+            // one would return when the step is already small, and the
+            // printed count would not be the contraction count.
+            let run_every_round = 0.0;
+            let contraction_rounds = if alpha > 0.0 {
+                fj_rounds_to_tol(1.0 - alpha, tol)
+            } else {
+                None
+            };
+            let (max_iter, stop_tol, by_contraction) = if let Some(rounds) = contraction_rounds {
+                (rounds, run_every_round, true)
+            } else {
+                // fj_rounds_to_tol has no count when the factor is 0 or 1.
+                // At alpha 0, and when alpha is so small that 1 - alpha is
+                // 1 in binary64, the matrix does not have to shrink distance:
+                // two standings can swap for every step, and no round count
+                // reaches tol. The cap is the budget this binary already uses
+                // when a contraction argument gives none, and converged is
+                // false when that cap is what stops the run. At alpha 1 the
+                // factor is 0, so the trust term vanishes and the first step
+                // is the pre-trust: the iteration meets tol at once.
+                (UNBOUNDED_MAX_ITER, tol, false)
+            };
+            let run = ljos_consensus::eigentrust(&names, &rows, alpha, max_iter, stop_tol);
+            let converged = if by_contraction { true } else { run.converged };
+            let mentioned: std::collections::BTreeSet<&str> = rows
+                .iter()
+                .flat_map(|(from, to, _)| [from.as_str(), to.as_str()])
+                .collect();
+            let unrated: Vec<&str> = names
+                .iter()
+                .map(String::as_str)
+                .filter(|name| !mentioned.contains(name))
+                .collect();
+            let map: std::collections::BTreeMap<&str, f64> = names
+                .iter()
+                .map(String::as_str)
+                .zip(run.values.iter().copied())
+                .collect();
             println!(
                 "{}",
-                serde_json::to_string_pretty(
-                    &serde_json::json!({"alpha": alpha, "standing": map})
-                )?
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "alpha": alpha,
+                    "converged": converged,
+                    "rounds": run.rounds,
+                    "standing": map,
+                    "unrated": unrated,
+                }))?
             );
         }
         Cmd::Reliability {

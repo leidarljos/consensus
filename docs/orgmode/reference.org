@@ -119,8 +119,16 @@ predictors), =predictors=.
 EigenTrust (Kamvar, Schlosser and Garcia-Molina,
 doi:10.1145/775152.775242): a global standing per voter from the pairwise
 rows, the principal eigenvector of the row-normalised trust matrix pulled
-toward a uniform pre-trust by =alpha= (default 0.15). Output: =standing=
-as an object of voter to a share of one.
+toward a uniform pre-trust by =alpha= (default 0.15). =alpha= is clamped
+into =[0, 1]= and the printed value is the one the run used; a flag
+outside that range is named on stderr and still run. Each step multiplies
+L1 distance by =1 - alpha=, because the transpose of the trust matrix is
+column-stochastic and does not expand it, so the run takes
+=1 + ceil(ln(tol) / ln(1 - alpha))= rounds, =tol= being the settle's.
+=alpha= of 0 does not contract: the run stops on the same cap as an
+unbounded settle, and =converged= is false when that cap is what stopped
+it. Output: =alpha=, =standing= (voter to a share of one), =rounds=,
+=converged=, and =unrated=, the =--agents= names that no row mentions.
 
 =ljos-consensus reliability (--items JSON | --project P) [--rounds N]=
 

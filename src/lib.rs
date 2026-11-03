@@ -609,14 +609,34 @@ pub fn predictions_from_json(raw: &str) -> Result<Vec<Prediction>, String> {
         .collect()
 }
 
+/// The standing [`eigentrust`] computed, in the order of `agents`.
+#[derive(Debug, Clone)]
+pub struct EigenTrust {
+    /// Share of one per agent. The values sum to one.
+    pub values: Vec<f64>,
+    /// Steps the iteration ran. `max_iter` when no step fell under `tol`.
+    pub rounds: usize,
+    /// A step fell under `tol` before `max_iter` ran out.
+    pub converged: bool,
+}
+
+impl std::ops::Deref for EigenTrust {
+    type Target = [f64];
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+
 /// A global standing per voter from the pairwise rows, by EigenTrust
 /// (Kamvar, Schlosser and Garcia-Molina, doi:10.1145/775152.775242): the
-/// rows are normalised into a column-stochastic matrix and the standing is
+/// rows are normalised into a row-stochastic matrix and the standing is
 /// its principal left eigenvector, pulled toward a uniform pre-trust by
 /// `alpha` so a voter nobody weighs keeps a floor and the iteration
 /// converges. A voter trusted by trusted voters stands high; a row from a
-/// voter nobody trusts counts for little. Returns the standing per agent,
-/// summing to one.
+/// voter nobody trusts counts for little. The values sum to one.
+/// `rounds` counts the steps that ran, and `converged` says a step fell
+/// under `tol` before `max_iter` ran out.
 #[must_use]
 pub fn eigentrust(
     agents: &[String],
@@ -624,10 +644,14 @@ pub fn eigentrust(
     alpha: f64,
     max_iter: usize,
     tol: f64,
-) -> Vec<f64> {
+) -> EigenTrust {
     let n = agents.len();
     if n == 0 {
-        return Vec::new();
+        return EigenTrust {
+            values: Vec::new(),
+            rounds: 0,
+            converged: true,
+        };
     }
     let alpha = alpha.clamp(0.0, 1.0);
     // c[i][j]: how much i trusts j, rows normalised; a voter with no rows
@@ -658,6 +682,8 @@ pub fn eigentrust(
     }
     let uniform = 1.0 / n as f64;
     let mut t = vec![uniform; n];
+    let mut rounds = 0;
+    let mut converged = false;
     for _ in 0..max_iter {
         let mut next = vec![0.0; n];
         for (i, row) in c.iter().enumerate() {
@@ -674,11 +700,17 @@ pub fn eigentrust(
             .map(|(a, b)| (a - b).abs())
             .fold(0.0, f64::max);
         t = next;
+        rounds += 1;
         if diff < tol {
+            converged = true;
             break;
         }
     }
-    t
+    EigenTrust {
+        values: t,
+        rounds,
+        converged,
+    }
 }
 
 /// Parse anchors as `{"agent": susceptibility, ...}`, each in `[0, 1]`.
