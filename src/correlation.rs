@@ -101,19 +101,13 @@ fn answers(
             options
                 .into_iter()
                 .map(|o| {
+                    // The accuracies are the Laplace-smoothed estimate, in
+                    // (0, 1), so `ln` needs no clamp. A missing voter takes
+                    // the empty-record prior the estimator shares.
                     let log: f64 = it
                         .iter()
                         .map(|(v, c)| {
-                            let p = accuracy
-                                .get(v)
-                                .copied()
-                                .unwrap_or(0.5)
-                                .clamp(1e-3, 1.0 - 1e-3);
-                            if c == o {
-                                p.ln()
-                            } else {
-                                ((1.0 - p) / (k - 1.0)).ln()
-                            }
+                            crate::class_log(crate::voter_accuracy(&accuracy, v), c == o, k)
                         })
                         .sum();
                     (o, log)
@@ -350,6 +344,31 @@ pub fn correlation(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every voter agrees on every item. The estimator and the accuracy
+    /// `answers` scores a voter with are the same number, and the answer is
+    /// the agreed choice. A voter with no estimate scores as the shared
+    /// empty-record prior.
+    #[test]
+    fn a_unanimous_panel_scores_the_accuracy_the_estimator_found() {
+        let items = vec![
+            vec![("a".into(), "x".into()), ("b".into(), "x".into())],
+            vec![("a".into(), "y".into()), ("b".into(), "y".into())],
+        ];
+        let acc = crate::dawid_skene(&items, 20);
+        assert_eq!(crate::voter_accuracy(&acc, "a"), acc["a"]);
+        assert_eq!(crate::voter_accuracy(&acc, "b"), acc["b"]);
+        assert_eq!(acc["a"], acc["b"]);
+        assert!((acc["a"] - 0.75).abs() < 1e-12, "{acc:?}");
+        assert_eq!(
+            crate::voter_accuracy(&acc, "absent"),
+            crate::UNSEEN_ACCURACY
+        );
+        assert_eq!(
+            super::answers(&items, &[None, None], 20),
+            vec![Some("x".to_string()), Some("y".to_string())]
+        );
+    }
 
     /// Three clones of one judge beside two independent voters. The clones
     /// read correlated and keep about a third of their weight each.

@@ -408,73 +408,179 @@ fn clusters_of(agents: &[String], x: &[Vec<f64>], w: &[Vec<f64>]) -> Vec<Cluster
     out
 }
 
+/// Accuracy the M step gives a voter who cast no ballot.
+///
+/// The M step is Laplace's rule of succession, `(hits + 1) / (seen + 2)`.
+/// With nothing seen that is one half: one pseudo-count on a match and one
+/// on a miss. Dawid and Skene start from the majority vote, not from a
+/// numeric accuracy (doi:10.2307/2346806, section 3), so this is not the
+/// initial guess. It is the value used for a voter the estimate does not
+/// contain, and the correlation reading uses the same value.
+pub const UNSEEN_ACCURACY: f64 = 0.5;
+
+/// An EM step smaller than this has stopped moving the accuracies.
+///
+/// An accuracy is a binary64 number in `(0, 1)`. [`f64::EPSILON`] is the
+/// spacing of those numbers at one, and half of it is the unit roundoff:
+/// `1 + EPSILON / 2` rounds back to one. A step below that cannot move an
+/// accuracy by a full spacing at one.
+pub const EM_STEP_TOL: f64 = f64::EPSILON / 2.0;
+
+/// The accuracy the correlation reading scores `voter` with.
+///
+/// The estimate when it contains the voter, otherwise [`UNSEEN_ACCURACY`].
+#[must_use]
+pub(crate) fn voter_accuracy(
+    accuracy: &std::collections::BTreeMap<String, f64>,
+    voter: &str,
+) -> f64 {
+    accuracy.get(voter).copied().unwrap_or(UNSEEN_ACCURACY)
+}
+
+/// Log weight of one vote for or against a candidate answer.
+///
+/// `accuracy` is in `(0, 1)`. The M step writes `(hits + 1) / (seen + 2)`,
+/// which lies in `[1 / (n + 2), (n + 1) / (n + 2)]`, and a voter with no
+/// estimate is [`UNSEEN_ACCURACY`]. `ln` of either is finite. A clamp at
+/// `1e-3` would bind only once a voter is seen on 999 items, pulling a
+/// perfect record down from `(n + 1) / (n + 2)` to `0.999`. That is not the
+/// estimator, so nothing is clamped.
+pub(crate) fn class_log(accuracy: f64, matched: bool, classes: f64) -> f64 {
+    if matched {
+        accuracy.ln()
+    } else {
+        ((1.0 - accuracy) / (classes - 1.0)).ln()
+    }
+}
+
 /// Dawid and Skene's one-coin estimate of each voter's reliability from
 /// many settled items with no known truth (doi:10.2307/2346806): EM over the
 /// items' hidden answers and the voters' accuracies. `items` holds, per
 /// item, each voter's choice. Returns each voter's estimated accuracy in
 /// `(0, 1)`; a voter seen on no item is absent.
+///
+/// The start is the majority vote (section 3). The initial posterior on an
+/// item is 1 on its unique majority choice, and a tie splits that mass
+/// evenly, the uniform distribution on the tied choices. One M step of that
+/// posterior is the initial accuracy. `rounds` is a cap on the E-M steps
+/// after that start; a request for none still runs one, because the
+/// estimate is the update and not the bare majority. The loop stops earlier
+/// when a step moves every accuracy by less than [`EM_STEP_TOL`].
+/// [`dawid_skene_with_rounds`] returns that count.
 #[must_use]
 pub fn dawid_skene(
     items: &[Vec<(String, String)>],
     rounds: usize,
 ) -> std::collections::BTreeMap<String, f64> {
-    use std::collections::{BTreeMap, BTreeSet};
-    let voters: BTreeSet<&str> = items
-        .iter()
-        .flat_map(|it| it.iter().map(|(v, _)| v.as_str()))
-        .collect();
-    let mut accuracy: BTreeMap<&str, f64> = voters.iter().map(|v| (*v, 0.7)).collect();
-    let item_options: Vec<BTreeSet<&str>> = items
-        .iter()
-        .map(|it| it.iter().map(|(_, c)| c.as_str()).collect())
-        .collect();
-    for _ in 0..rounds.max(1) {
-        // E step: the posterior over each item's answer given accuracies.
-        let posteriors: Vec<BTreeMap<&str, f64>> = items
+    dawid_skene_with_rounds(items, rounds).0
+}
+
+/// [`dawid_skene`] and the E-M rounds that were actually run.
+#[must_use]
+pub fn dawid_skene_with_rounds(
+    items: &[Vec<(String, String)>],
+    rounds: usize,
+) -> (std::collections::BTreeMap<String, f64>, usize) {
+    use std::collections::BTreeMap;
+    let initial: Vec<BTreeMap<&str, f64>> =
+        items.iter().map(|item| majority_posterior(item)).collect();
+    let mut accuracy = em_m_step(items, &initial);
+    let cap = rounds.max(1);
+    let mut ran = 0;
+    for round in 1..=cap {
+        let next = em_m_step(items, &em_e_step(items, &accuracy));
+        let step = next
             .iter()
-            .zip(&item_options)
-            .map(|(it, opts)| {
-                let k = opts.len().max(2) as f64;
-                let mut post: BTreeMap<&str, f64> = opts
-                    .iter()
-                    .map(|o| {
-                        let mut log = 0.0f64;
-                        for (v, c) in it {
-                            let p = accuracy[v.as_str()].clamp(1e-3, 1.0 - 1e-3);
-                            log += if c == o {
-                                p.ln()
-                            } else {
-                                ((1.0 - p) / (k - 1.0)).ln()
-                            };
-                        }
-                        (*o, log)
-                    })
-                    .collect();
-                let top = post.values().cloned().fold(f64::NEG_INFINITY, f64::max);
-                let z: f64 = post.values().map(|l| (l - top).exp()).sum();
-                for v in post.values_mut() {
-                    *v = (*v - top).exp() / z;
-                }
-                post
+            .map(|(voter, value)| {
+                (value - accuracy.get(voter).copied().unwrap_or(UNSEEN_ACCURACY)).abs()
             })
-            .collect();
-        // M step: accuracy is the expected fraction of items a voter matched.
-        let mut hits: BTreeMap<&str, (f64, f64)> = BTreeMap::new();
-        for (it, post) in items.iter().zip(&posteriors) {
-            for (v, c) in it {
-                let e = hits.entry(v.as_str()).or_insert((0.0, 0.0));
-                e.0 += post.get(c.as_str()).copied().unwrap_or(0.0);
-                e.1 += 1.0;
-            }
-        }
-        for (v, (right, seen)) in hits {
-            // Laplace smoothing keeps a voter off the certainties.
-            accuracy.insert(v, (right + 1.0) / (seen + 2.0));
+            .fold(0.0_f64, f64::max);
+        accuracy = next;
+        ran = round;
+        if step < EM_STEP_TOL {
+            break;
         }
     }
-    accuracy
+    let accuracy = accuracy
         .into_iter()
-        .map(|(v, a)| (v.to_string(), a))
+        .map(|(voter, acc)| (voter.to_string(), acc))
+        .collect();
+    (accuracy, ran)
+}
+
+/// Initial posterior: 1 on the unique majority choice, shared evenly on a tie.
+fn majority_posterior(item: &[(String, String)]) -> std::collections::BTreeMap<&str, f64> {
+    use std::collections::BTreeMap;
+    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    for (_, choice) in item {
+        *counts.entry(choice.as_str()).or_insert(0) += 1;
+    }
+    if counts.is_empty() {
+        return BTreeMap::new();
+    }
+    let best = counts.values().copied().max().unwrap();
+    let tied = counts.values().filter(|n| **n == best).count();
+    let share = 1.0 / tied as f64;
+    counts
+        .into_iter()
+        .filter(|(_, n)| *n == best)
+        .map(|(choice, _)| (choice, share))
+        .collect()
+}
+
+/// E step: the posterior over each item's observed choices.
+fn em_e_step<'a>(
+    items: &'a [Vec<(String, String)>],
+    accuracy: &std::collections::BTreeMap<&'a str, f64>,
+) -> Vec<std::collections::BTreeMap<&'a str, f64>> {
+    use std::collections::{BTreeMap, BTreeSet};
+    items
+        .iter()
+        .map(|item| {
+            let options: BTreeSet<&str> = item.iter().map(|(_, choice)| choice.as_str()).collect();
+            let classes = options.len().max(2) as f64;
+            let mut post: BTreeMap<&str, f64> = options
+                .iter()
+                .map(|option| {
+                    let log = item
+                        .iter()
+                        .map(|(voter, choice)| {
+                            let p = accuracy
+                                .get(voter.as_str())
+                                .copied()
+                                .unwrap_or(UNSEEN_ACCURACY);
+                            class_log(p, choice == *option, classes)
+                        })
+                        .sum();
+                    (*option, log)
+                })
+                .collect();
+            let top = post.values().copied().fold(f64::NEG_INFINITY, f64::max);
+            let partition: f64 = post.values().map(|log| (log - top).exp()).sum();
+            for log in post.values_mut() {
+                *log = (*log - top).exp() / partition;
+            }
+            post
+        })
+        .collect()
+}
+
+/// M step: Laplace-smoothed expected hit rate, `(hits + 1) / (seen + 2)`.
+fn em_m_step<'a>(
+    items: &'a [Vec<(String, String)>],
+    posteriors: &[std::collections::BTreeMap<&'a str, f64>],
+) -> std::collections::BTreeMap<&'a str, f64> {
+    use std::collections::BTreeMap;
+    let mut hits: BTreeMap<&str, (f64, f64)> = BTreeMap::new();
+    for (item, post) in items.iter().zip(posteriors) {
+        for (voter, choice) in item {
+            let entry = hits.entry(voter.as_str()).or_insert((0.0, 0.0));
+            entry.0 += post.get(choice.as_str()).copied().unwrap_or(0.0);
+            entry.1 += 1.0;
+        }
+    }
+    hits.into_iter()
+        .map(|(voter, (right, seen))| (voter, (right + 1.0) / (seen + 2.0)))
         .collect()
 }
 
@@ -2518,6 +2624,28 @@ mod tests {
         assert!(acc["steady"] > acc["noisy"], "{acc:?}");
         assert!(acc["noisy"] > acc["coin"], "{acc:?}");
         assert!(acc["steady"] > 0.9, "{acc:?}");
+    }
+
+    /// Everyone agrees, so the majority start is already the fixed point.
+    /// One E-M round does not move it, and the accuracy the correlation
+    /// reading scores each voter with is that same number. A voter the
+    /// estimate does not contain scores as the empty-record prior.
+    #[test]
+    fn a_unanimous_panel_has_the_accuracy_both_readers_use() {
+        let items = vec![
+            vec![("a".into(), "x".into()), ("b".into(), "x".into())],
+            vec![("a".into(), "y".into()), ("b".into(), "y".into())],
+        ];
+        let (acc, ran) = dawid_skene_with_rounds(&items, 20);
+        assert_eq!(ran, 1, "the majority start does not move");
+        assert_eq!(acc["a"], acc["b"]);
+        assert!((acc["a"] - 0.75).abs() < 1e-12, "{acc:?}");
+        assert_eq!(voter_accuracy(&acc, "a"), acc["a"]);
+        assert_eq!(voter_accuracy(&acc, "b"), acc["b"]);
+        assert_eq!(voter_accuracy(&acc, "absent"), UNSEEN_ACCURACY);
+        let (one, ran_one) = dawid_skene_with_rounds(&items, 0);
+        assert_eq!(ran_one, 1);
+        assert_eq!(one, acc);
     }
 
     /// The exact solver against fixed points SymPy solved in rationals

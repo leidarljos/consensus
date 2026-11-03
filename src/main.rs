@@ -100,6 +100,14 @@ enum Cmd {
         /// reading.
         #[arg(long, default_value_t = ljos_consensus::correlation::INDEPENDENCE_LEVEL)]
         gate: f64,
+        // Twenty is the budget, not the round where the seeded panels stop.
+        // On the panels `examples/synthetic_voters.rs` builds (9 voters, 400
+        // questions, 20 seeds, both profiles) the step at round 20 is still
+        // as large as 3.8e-3, and an accuracy moves by up to 0.081 between
+        // round 20 and the round where the step falls under the unit
+        // roundoff, 1052 from the majority vote. CPU only, one pinned core
+        // of an 8-core 2.4 GHz Xeon (family 6, model 207), at b353e05.
+        // Raising the budget would rewrite the accuracies a board stores.
         /// Dawid-Skene rounds for an item that names no outcome.
         #[arg(long, default_value_t = 20)]
         rounds: usize,
@@ -148,6 +156,14 @@ enum Cmd {
         /// ballots, through `vissue list --json` and `vissue vote --json`.
         #[arg(long)]
         project: Option<String>,
+        // Twenty is the budget, not the round where the seeded panels stop.
+        // On the panels `examples/synthetic_voters.rs` builds (9 voters, 400
+        // questions, 20 seeds, both profiles) the step at round 20 is still
+        // as large as 3.8e-3, and an accuracy moves by up to 0.081 between
+        // round 20 and the round where the step falls under the unit
+        // roundoff, 1052 from the majority vote. CPU only, one pinned core
+        // of an 8-core 2.4 GHz Xeon (family 6, model 207), at b353e05.
+        // Raising the budget would rewrite the accuracies a board stores.
         /// EM rounds over the items' hidden answers and the voters' accuracies.
         #[arg(long, default_value_t = 20)]
         rounds: usize,
@@ -366,10 +382,10 @@ fn run() -> Result<()> {
             rounds,
         } => {
             let items = load_items(items.as_deref(), project.as_deref())?;
-            let accuracy = ljos_consensus::dawid_skene(&items, rounds);
+            let (accuracy, ran) = ljos_consensus::dawid_skene_with_rounds(&items, rounds);
             let out = serde_json::json!({
                 "items": items.len(),
-                "rounds": rounds,
+                "rounds": ran,
                 "accuracy": accuracy,
             });
             println!("{}", serde_json::to_string_pretty(&out)?);

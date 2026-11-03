@@ -45,7 +45,7 @@ fn repeated_spaced_name_is_one_voter() {
     assert_eq!(stderr(&out), "");
     assert_eq!(
         text(&out),
-        "{\n  \"accuracy\": {\n    \"a\": 0.6666666666666666\n  },\n  \"items\": 1,\n  \"rounds\": 20\n}\n"
+        "{\n  \"accuracy\": {\n    \"a\": 0.6666666666666666\n  },\n  \"items\": 1,\n  \"rounds\": 1\n}\n"
     );
 
     let out = run(&["correlation", "--items", items]);
@@ -70,7 +70,7 @@ fn blank_name_is_skipped() {
     );
     assert_eq!(
         text(&out),
-        "{\n  \"accuracy\": {},\n  \"items\": 0,\n  \"rounds\": 20\n}\n"
+        "{\n  \"accuracy\": {},\n  \"items\": 0,\n  \"rounds\": 1\n}\n"
     );
 }
 
@@ -85,7 +85,7 @@ fn two_choices_are_skipped() {
     );
     assert_eq!(
         text(&out),
-        "{\n  \"accuracy\": {},\n  \"items\": 0,\n  \"rounds\": 20\n}\n"
+        "{\n  \"accuracy\": {},\n  \"items\": 0,\n  \"rounds\": 1\n}\n"
     );
 }
 
@@ -103,7 +103,7 @@ fn a_refused_item_does_not_drop_the_next() {
     );
     assert_eq!(
         text(&out),
-        "{\n  \"accuracy\": {\n    \"a\": 0.6666666666666666\n  },\n  \"items\": 1,\n  \"rounds\": 20\n}\n"
+        "{\n  \"accuracy\": {\n    \"a\": 0.6666666666666666\n  },\n  \"items\": 1,\n  \"rounds\": 1\n}\n"
     );
 }
 
