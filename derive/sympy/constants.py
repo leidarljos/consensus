@@ -20,8 +20,7 @@ import sympy as sp
 R = sp.Rational
 EPS = R(1, 2**52)  # f64::EPSILON, the spacing of binary64 at one
 U = EPS / 2  # unit roundoff of binary64
-Z = R(1645, 1000)  # correlation::INDEPENDENCE_Z
-LEVEL = R(1, 20)  # the gate's one-sided level
+LEVEL = R(1, 20)  # correlation::INDEPENDENCE_LEVEL, Fisher's one in twenty
 
 
 def report(ok, label):
@@ -58,93 +57,56 @@ def trust_floor(results):
     return {"value": str(EPS), "log_odds_end": f"{end:.12f}", "log_odds_floor": str(U)}
 
 
-def independence_z(results):
-    # One-sided five percent point of N(0, 1), to the three decimals the gate
-    # keeps.
-    z = sp.sqrt(2) * sp.erfinv(1 - 2 * LEVEL)
-    near = abs(sp.N(z - Z, 30)) < R(1, 2000)
-    results.append(report(near, f"1.645 is z_0.95 = {sp.N(z, 9)} to three decimals"))
-    return {"level": str(LEVEL), "value": str(sp.N(Z, 4))}
-
-
-def gate_tables(m):
-    """The 2x2 tables of m shared items the gate passes, with their counts.
-
-    a: both right, b: only the first, c: only the second, d: neither. The
-    gate reads Pearson's rho = (ad - bc) / sqrt((a+b)(c+d)(a+c)(b+d)), needs
-    both voters to vary, and passes rho > 0 with sqrt(m) rho > Z, checked here
-    in integers as m (ad - bc)^2 > Z^2 (a+b)(c+d)(a+c)(b+d).
-    """
-    out = []
-    for a, b, c in itertools.product(range(m + 1), repeat=3):
-        d = m - a - b - c
-        if d < 0:
-            continue
-        va, vb = (a + b) * (c + d), (a + c) * (b + d)
-        cross = a * d - b * c
-        if va > 0 and vb > 0 and cross > 0 and m * cross**2 > Z**2 * va * vb:
-            ways = math.factorial(m) // (math.factorial(a) * math.factorial(b)
-                                         * math.factorial(c) * math.factorial(d))
-            out.append((ways, a, b, c, d))
-    return out
-
-
-def gate_rate(tables, p, q):
-    """How often the gate passes two independent voters right p and q of the time."""
-    return sum(w * (p * q)**a * (p * (1 - q))**b * ((1 - p) * q)**c * ((1 - p) * (1 - q))**d
-               for w, a, b, c, d in tables)
-
-
-def certify_rate(tables, m, level):
-    """Branch and bound: the gate passes independent voters at most `level`.
-
-    Each voter's m scores are independent coins, so the rate's derivative in
-    p (and in q) is a sum of m conditional differences, each within one: on a
-    square of half-width r about its centre the rate is within 2 m r of the
-    centre's. A square is cleared when the centre's rate plus that, plus a
-    margin over the float evaluation's own error, stays under the level.
-    """
-    squares, cleared, most = [(0.5, 0.5, 0.5)], 0, 0.0
-    while squares:
-        p, q, r = squares.pop()
-        at = gate_rate(tables, p, q)
-        most = max(most, at)
-        if at > level:
-            return False, most, cleared
-        if at + 2 * m * r + 1e-12 <= level:
-            cleared += 1
-            continue
-        h = r / 2
-        squares += [(p + dp * h, q + dq * h, h) for dp in (-1, 1) for dq in (-1, 1)]
-    return True, most, cleared
-
-
-def min_shared(results):
-    # The least count of shared items at which the gate passes two voters who
-    # err apart no more often than its level, whatever their accuracies. Below
-    # ceil(Z^2) = 3 items not even exact clones pass.
-    least = int(sp.ceiling(Z**2))
-    worst = {}
-    m = least
-    while True:
-        tables = gate_tables(m)
-        grid = [R(k, 200) for k in range(1, 200)]
-        p, q = max(itertools.product(grid, repeat=2), key=lambda pq: gate_rate(tables, *map(float, pq)))
-        exact = gate_rate(tables, p, q)
-        if exact > LEVEL:
-            worst[str(m)] = f"{float(exact):.4f}"
-            report(True, f"{m} shared items pass independent voters {float(exact):.4f} of the time "
-                         f"at p = {p}, q = {q}, over {LEVEL}")
-            m += 1
-            continue
-        ok, most, cleared = certify_rate(tables, m, float(LEVEL))
-        results.append(report(ok, f"{m} shared items pass independent voters at most {LEVEL} of the "
-                                  f"time ({cleared} squares cleared; the largest rate seen "
-                                  f"{most:.4f})"))
-        worst[str(m)] = f"{most:.4f}"
-        break
-    results.append(report(m == 5, f"the least such count is {m}, correlation's default min_shared"))
-    return {"level": str(LEVEL), "value": m, "worst_rate": worst}
+def independence_level(results, top=40):
+    # The gate is Fisher's one-sided exact test. Of m shared items the
+    # voters got r and c right; when they err apart, the count A they both
+    # got right is hypergeometric given r and c, whatever their accuracies.
+    # The test passes a table read a when P(A >= a) <= LEVEL. That tail falls
+    # as a rises, so the tables it passes are those from some a* on, and
+    # they turn up P(A >= a*) <= LEVEL of the time. Any accuracies mix the
+    # margins, so the rate stays under LEVEL too, at every count of items.
+    # Every margin up to `top` items is checked here in rationals.
+    sizes, least, holds, positive = {}, None, True, True
+    for m in range(2, top + 1):
+        worst, fewest = R(0), R(1)
+        for r, c in itertools.product(range(m + 1), repeat=2):
+            lo, hi = max(0, r + c - m), min(r, c)
+            den = math.comb(m, c)
+            tail, size = R(0), R(0)
+            for a in range(hi, lo - 1, -1):
+                at = R(math.comb(r, a) * math.comb(m - r, c - a), den)
+                tail += at
+                fewest = min(fewest, tail)
+                if tail <= LEVEL:
+                    size += at
+                    positive &= a * m > r * c
+            worst = max(worst, size)
+        holds &= worst <= LEVEL and fewest == R(1, math.comb(m, m // 2))
+        if least is None and worst > 0:
+            least = m
+        if 5 <= m <= 12:
+            sizes[str(m)] = str(worst)
+    results.append(report(holds, f"on every margin of 2 to {top} items the test passes voters who "
+                                 f"err apart at most {LEVEL} of the time, and its least tail is "
+                                 f"1 / C(m, m / 2)"))
+    results.append(report(positive, "every table it passes reads a positive correlation"))
+    only = [(r, c, a) for r, c in itertools.product(range(7), repeat=2)
+            for a in range(max(0, r + c - 6), min(r, c) + 1)
+            if sum(R(math.comb(r, x) * math.comb(6 - r, c - x), math.comb(6, c))
+                   for x in range(a, min(r, c) + 1)) <= LEVEL]
+    results.append(report(least == 6 and only == [(3, 3, 3)],
+                          f"it passes nothing below {least} items, and on six only clones right "
+                          f"on three"))
+    # The crate holds the level as a double, which the test meets exactly. A
+    # tail T / C(m, c) above 1/20 is above it by at least 1 / (20 C(m, c)),
+    # so below `exact` items no tail falls between 1/20 and the double.
+    above = R(float(LEVEL)) - LEVEL
+    exact = next(m for m in itertools.count(1) if R(1, 20 * math.comb(m, m // 2)) <= above)
+    results.append(report(0 < above < R(3, 10**18) and exact == 58,
+                          f"the double 0.05 is above 1/20 by {float(above):.3g}, which no tail "
+                          f"of fewer than {exact} items falls within"))
+    return {"value": str(LEVEL), "f64": repr(float(LEVEL)), "least_shared": least,
+            "exact_below": exact, "largest_size": sizes}
 
 
 def contraction_bound(results):
@@ -230,8 +192,7 @@ def main():
     results = []
     out = {
         "trust_floor": trust_floor(results),
-        "independence_z": independence_z(results),
-        "min_shared": min_shared(results),
+        "independence_level": independence_level(results),
         "contraction_bound": contraction_bound(results),
         "supported_voters": supported_voters(results),
     }

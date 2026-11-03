@@ -5,23 +5,20 @@
 //! pair it does not count is a miss. `grid.rs` draws the ballots; the test
 //! in `src/correlation.rs` re-runs cells of it against the committed table.
 //!
-//! The pair is read from two shared items, the fewest a correlation needs,
-//! so the rows below five show what the default `--min-shared` of five
-//! removes. Every pair shares exactly `m` items, so from five on the floor
-//! changes nothing.
+//! The pair is read from two shared items, the fewest a correlation needs.
+//! The command line's `--min-shared` is accepted and ignored, so no floor hides a row.
 //!
 //! ```console
 //! $ cargo run --release --example correlation_gate -- 20000
-//! $ cargo run --release --example correlation_gate -- 20000 1.96
 //! ```
-//! trials a cell, then the gate (`INDEPENDENCE_Z`). A five percent rate
+//! trials a cell, then the gate (`INDEPENDENCE_LEVEL`). A five percent rate
 //! over 20000 trials has a standard error of 0.15 points,
 //! `sqrt(0.05 * 0.95 / 20000)`.
 
 mod grid;
 
 use grid::{cell, ACCURACY, RHO};
-use ljos_consensus::correlation::{correlation, INDEPENDENCE_Z};
+use ljos_consensus::correlation::{correlation, INDEPENDENCE_LEVEL};
 
 /// Every count to eight, where the two-by-two table is coarsest and the
 /// floor sits, then on to the hundred outcomes `correlation_history` ends at.
@@ -33,16 +30,20 @@ fn main() {
     let gate: f64 = args
         .get(2)
         .and_then(|a| a.parse().ok())
-        .unwrap_or(INDEPENDENCE_Z);
+        .unwrap_or(INDEPENDENCE_LEVEL);
     // The weight a seat's reading leaves `v0`. Every outcome is named, so no
     // item falls to the Dawid-Skene answer and one round reads what twenty
     // would.
     let discount = |items: &[Vec<(String, String)>], truths: &[Option<String>]| {
-        correlation(items, truths, 1, 2, gate).discount["v0"]
+        correlation(items, truths, 1, gate).discount["v0"]
     };
     println!(
-        "Two voters right p of the time, p uniform in [{:.2}, {:.2}], share m items with named outcomes; with probability rho an item is one where both cast one judge's ballot. A pair counts when sqrt(m) rho passes {gate}, read from 2 shared items; {trials} trials a cell.\n",
+        "Two voters right p of the time, p uniform in [{:.2}, {:.2}], share m items with named outcomes.",
         ACCURACY.0, ACCURACY.1
+    );
+    println!("With probability rho an item is one where both cast one judge's ballot.");
+    println!(
+        "A pair counts when Fisher's one-sided exact test passes it at level {gate}; {trials} trials a cell.\n"
     );
     let misses: Vec<String> = RHO[1..].iter().map(|r| format!("miss, rho {r}")).collect();
     println!("| m | false alarm | {} |", misses.join(" | "));

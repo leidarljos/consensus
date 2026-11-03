@@ -131,29 +131,21 @@ def main():
 
     # 6. A gate for a short history. Two voters' correctness over m items
     # fills a 2x2 table: a both right, b only i, c only j, d neither.
-    # correlation.rs reads its Pearson correlation rho. The table's chi-square
-    # is m rho^2, so sqrt(m) rho is about N(0, 1) when the voters err apart,
-    # and a pair counts toward the discount only when it passes the one-sided
-    # five percent test, z = 1.645.
+    # correlation.rs reads their Pearson correlation off the table as
+    # (a m - (a + b)(a + c)) / sqrt((a + b)(c + d)(a + c)(b + d)), and a pair
+    # counts toward the discount only when Fisher's one-sided exact test on
+    # the table passes it (constants.py).
     a, b, c, d = sp.symbols("a b c d", positive=True)
     m = a + b + c + d
     xbar, ybar = (a + b) / m, (a + c) / m
     cov = (a * (1 - xbar) * (1 - ybar) - b * (1 - xbar) * ybar
            - c * xbar * (1 - ybar) + d * xbar * ybar) / m
-    rho_hat = cov / sp.sqrt(xbar * (1 - xbar) * ybar * (1 - ybar))
-    cells = [(a, a + b, a + c), (b, a + b, b + d), (c, c + d, a + c), (d, c + d, b + d)]
-    chi2 = sum((obs - row * col / m) ** 2 / (row * col / m) for obs, row, col in cells)
-    results.append(check("m rho^2 is Pearson's chi-square of the 2x2 table", sp.factor(m * rho_hat**2 - chi2)))
-    z95 = float(sp.sqrt(2) * sp.erfinv(sp.Rational(9, 10)))
-    near = abs(z95 - 1.645) < 1e-3
-    print(f"{'ok ' if near else 'FAIL'} the gate's 1.645 is the one-sided five percent point of N(0, 1), {z95:.6f}, to 1e-3")
-    results.append(near)
-    # Exact clones with both a hit and a miss among the shared items read
-    # rho = 1, so the gate alone would pass them from three shared items,
-    # where sqrt(m) > 1.645, but by default correlation's min_shared asks for
-    # five. Independent voters pass the gate about one time in twenty.
-    results.append(check("clones pass the gate from three shared items",
-                         sp.Integer(int(sp.ceiling(sp.Float(1.645) ** 2))) - 3))
+    results.append(check("m^2 times the covariance is a m - (a + b)(a + c)",
+                         m**2 * cov - (a * m - (a + b) * (a + c))))
+    results.append(check("m^2 times the first voter's variance is (a + b)(c + d)",
+                         m**2 * xbar * (1 - xbar) - (a + b) * (c + d)))
+    results.append(check("m^2 times the second voter's variance is (a + c)(b + d)",
+                         m**2 * ybar * (1 - ybar) - (a + c) * (b + d)))
 
     print()
     if all(results):

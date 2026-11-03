@@ -3,7 +3,7 @@
 
 use std::process::Command;
 
-use ljos_consensus::correlation::INDEPENDENCE_Z;
+use ljos_consensus::correlation::INDEPENDENCE_LEVEL;
 use ljos_consensus::record::{calibration_weights, TRUST_FLOOR};
 use ljos_consensus::{log_odds, Opts, CONTRACTION_BOUND, SUPPORTED_VOTERS};
 use serde_json::{json, Value};
@@ -150,14 +150,16 @@ fn the_round_cap_settles_the_slowest_panel_at_the_bound_and_says_so_above_it() {
 }
 
 #[test]
-fn the_gate_counts_clones_from_the_derived_number_of_shared_items() {
-    let d = derived();
-    assert_eq!(INDEPENDENCE_Z, number(&d["independence_z"]["value"]));
-    assert_eq!(default_of("correlation", "--gate"), INDEPENDENCE_Z);
-    let least = d["min_shared"]["value"].as_u64().unwrap() as usize;
-    assert_eq!(default_of("correlation", "--min-shared"), least as f64);
+fn the_gate_counts_clones_from_the_fewest_shared_items_its_level_allows() {
+    let d = &derived()["independence_level"];
+    assert_eq!(INDEPENDENCE_LEVEL, number(&d["value"]));
+    assert_eq!(INDEPENDENCE_LEVEL, number(&d["f64"]));
+    assert_eq!(default_of("correlation", "--gate"), INDEPENDENCE_LEVEL);
+    let least = d["least_shared"].as_u64().unwrap() as usize;
     // Two clones right on every other item beside a voter always right: the
-    // clones' correlation is one, read only from `least` shared items on.
+    // clones' correlation reads one on any count of items, and counts from
+    // `least` on, where clones right on three of six share their hits one
+    // time in twenty.
     for shared in [least - 1, least] {
         let items: Vec<Value> = (0..shared)
             .map(|k| {
@@ -174,6 +176,11 @@ fn the_gate_counts_clones_from_the_derived_number_of_shared_items() {
             &json!(truths).to_string(),
         ]))
         .unwrap();
+        assert_eq!(
+            out["rho"][0][1].as_f64(),
+            Some(1.0),
+            "{shared} shared: {out}"
+        );
         let clone = if shared < least { 1.0 } else { 0.5 };
         assert_eq!(
             out["discount"]["a"].as_f64(),
@@ -185,5 +192,30 @@ fn the_gate_counts_clones_from_the_derived_number_of_shared_items() {
             Some(1.0),
             "{shared} shared: {out}"
         );
+    }
+}
+
+#[test]
+fn an_old_min_shared_is_accepted_and_changes_nothing() {
+    let items: Vec<Value> = (0..6)
+        .map(|k| {
+            let c = if k % 2 == 0 { "x" } else { "y" };
+            json!([{"agent": "a", "choice": c}, {"agent": "b", "choice": c}, {"agent": "c", "choice": "x"}])
+        })
+        .collect();
+    let (items, truths) = (json!(items).to_string(), json!(vec!["x"; 6]).to_string());
+    let plain = cli(&["correlation", "--items", &items, "--truths", &truths]);
+    assert!(plain.contains("\"discount\""), "{plain}");
+    for floor in ["0", "5", "10"] {
+        let old = cli(&[
+            "correlation",
+            "--items",
+            &items,
+            "--truths",
+            &truths,
+            "--min-shared",
+            floor,
+        ]);
+        assert_eq!(old, plain, "--min-shared {floor}");
     }
 }

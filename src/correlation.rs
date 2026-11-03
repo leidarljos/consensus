@@ -25,40 +25,29 @@
 //! A seat's history is short. The correlation of two voters who err apart
 //! reads about `N(0, 1/m)` over `m` shared items, so counting every positive
 //! reading would discount independent voters by noise. A pair counts only
-//! when `sqrt(m) rho` passes the one-sided test of independence at `gate`;
-//! `m rho^2` is Pearson's chi-square for the pair's 2x2 table
-//! (derive/sympy/jury.py). On its own the gate would pass exact clones from
-//! three shared items when they have both a hit and a miss there, but over
-//! three or four it passes two voters who err apart up to 9.4% and 5.6% of
-//! the time, past its five percent. By default a pair needs five shared
-//! items (`min_shared`): the least count at which the exact rate stays
-//! within five percent whatever the two voters' accuracies, at most 3.9%
-//! (derive/sympy/constants.py).
+//! when Fisher's one-sided exact test (doi:10.2307/2342435) passes it at
+//! `gate`: given how many items each voter got right, the count both got
+//! right is hypergeometric when they err apart, whatever their accuracies,
+//! and the test asks how often it would reach the count read. It passes two
+//! voters who err apart at most `gate` of the time at every count of shared
+//! items (derive/sympy/constants.py). The least tail over `m` items is
+//! `1 / C(m, m / 2)`, so at five percent no pair passes on five items or
+//! fewer, and on six only clones right on three of them.
 //!
-//! `examples/correlation_gate` measures both where the truth is known, on
-//! pairs right 0.60 to 0.75 of the time whose correctness correlates `rho`
-//! (`measurements/correlation_gate-20000.txt`). The 2x2 table is coarse at a
-//! seat's lengths, so `sqrt(m) rho` is not yet normal and 1.645 does not
-//! hold its five percent: independent pairs pass 0.060 of the time at six
-//! shared items, 0.086 at seven, 0.072 at ten, 0.066 at twenty and still
-//! 0.054 at a hundred. The gate stays. A higher one cuts those false alarms
-//! only by missing more partly shared errors, and a point moved until this
-//! grid reads five percent would be fitted to these accuracies; Fisher's
-//! exact test on the table would hold the level at every length. Five holds
-//! up. Through five shared items the gate passes only identical records
-//! with a hit and a miss, which independent pairs show 0.082 of the time at
-//! three and 0.059 at four; five, at 0.039, is the one length from three to
-//! a hundred where false alarms fall under five percent. Exact clones are
-//! missed only when the judge is right, or wrong, on every shared item:
-//! 0.149 of the time at five, 0.024 at ten.
+//! The test replaced a rule that counted a pair when `sqrt(m) rho` passed the one-sided normal test of independence.
+//! `examples/correlation_gate` measures the test on simulated pairs with a known correlation `rho`, each right 0.60 to 0.75 of the time (`measurements/correlation_gate-20000.txt`).
+//! Pairs who err apart pass none of the time through five shared items, 0.008 of the time at seven, 0.018 at twenty and 0.035 at a hundred.
+//! Exact clones are missed every time through five shared items, 0.125 of the time at ten and 0.001 at twenty.
+//! Pairs whose correctness correlates 0.5 are missed 0.482 of the time at twenty shared items and 0.001 at a hundred.
 
 use std::collections::BTreeMap;
 
-/// The one-sided five percent point of the standard normal: the gate a
-/// pair's `sqrt(m) rho` must pass before its correlation is counted. Past
-/// five shared items it passes 0.054 to 0.086 of independent pairs, not
-/// 0.05; the module doc says why it stays.
-pub const INDEPENDENCE_Z: f64 = 1.645;
+/// The one-sided level of the test a pair must pass before its correlation
+/// is counted: Fisher's one in twenty (Statistical Methods for Research
+/// Workers, 1925). The test compares against this double exactly, and it
+/// is above 1/20 by under 3e-18. Below 58 shared items no tail falls
+/// between the two (derive/sympy/constants.py).
+pub const INDEPENDENCE_LEVEL: f64 = 0.05;
 
 use serde::{Deserialize, Serialize};
 
@@ -67,11 +56,11 @@ use serde::{Deserialize, Serialize};
 pub struct Correlation {
     pub agents: Vec<String>,
     /// `rho[i][j]`: the correlation of voters i and j being right, zero where
-    /// fewer than `min_shared` items or no variation leave it unknown.
+    /// no variation leaves it unknown.
     pub rho: Vec<Vec<f64>>,
     /// Items each pair both voted on.
     pub shared: Vec<Vec<usize>>,
-    /// The test a pair's `sqrt(shared) rho` passed to be counted; zero
+    /// The level a pair's one-sided exact test passed to be counted; one
     /// counts every positive reading.
     pub gate: f64,
     /// The weight each voter's ballot keeps once its correlated company is
@@ -135,16 +124,145 @@ fn answers(
         .collect()
 }
 
+/// A natural number in base 2^64, least limb first: the tail of Fisher's
+/// test in integers, so that it meets its level exactly.
+#[derive(Clone, Default)]
+struct Natural(Vec<u64>);
+
+impl Natural {
+    fn of(v: u64) -> Self {
+        Self(vec![v])
+    }
+
+    fn mul(&mut self, k: u64) {
+        let mut carry = 0u128;
+        for limb in &mut self.0 {
+            let t = u128::from(*limb) * u128::from(k) + carry;
+            *limb = t as u64;
+            carry = t >> 64;
+        }
+        if carry > 0 {
+            self.0.push(carry as u64);
+        }
+    }
+
+    /// Divides by `k`, which must divide it.
+    fn div(&mut self, k: u64) {
+        let mut rest = 0u128;
+        for limb in self.0.iter_mut().rev() {
+            let t = (rest << 64) | u128::from(*limb);
+            *limb = (t / u128::from(k)) as u64;
+            rest = t % u128::from(k);
+        }
+        debug_assert_eq!(rest, 0);
+        self.trim();
+    }
+
+    fn add(&mut self, other: &Self) {
+        self.0.resize(self.0.len().max(other.0.len()) + 1, 0);
+        let mut carry = false;
+        for (k, limb) in self.0.iter_mut().enumerate() {
+            let (s, c1) = limb.overflowing_add(other.0.get(k).copied().unwrap_or(0));
+            let (s, c2) = s.overflowing_add(u64::from(carry));
+            *limb = s;
+            carry = c1 || c2;
+        }
+        self.trim();
+    }
+
+    fn shl(&mut self, bits: u32) {
+        let (words, bits) = ((bits / 64) as usize, bits % 64);
+        if bits > 0 {
+            let mut carry = 0u64;
+            for limb in &mut self.0 {
+                let next = *limb >> (64 - bits);
+                *limb = (*limb << bits) | carry;
+                carry = next;
+            }
+            self.0.push(carry);
+        }
+        self.0.splice(0..0, std::iter::repeat_n(0, words));
+        self.trim();
+    }
+
+    fn trim(&mut self) {
+        while self.0.last() == Some(&0) {
+            self.0.pop();
+        }
+    }
+
+    fn le(&self, other: &Self) -> bool {
+        self.0.len() < other.0.len()
+            || (self.0.len() == other.0.len() && self.0.iter().rev().le(other.0.iter().rev()))
+    }
+}
+
+/// `C(n, k)`, each partial product `C(n - k + i, i)` an integer.
+fn binomial(n: u64, k: u64) -> Natural {
+    let k = k.min(n - k);
+    let mut v = Natural::of(1);
+    for i in 1..=k {
+        v.mul(n - k + i);
+        v.div(i);
+    }
+    v
+}
+
+/// Whether Fisher's one-sided exact test passes `both` shared hits at
+/// `level`, among `m` items of which the voters got `r` and `c` right. The
+/// tail `P(A >= both)` of the hypergeometric `A` sums `C(r, x) C(m - r,
+/// c - x)` over `C(m, c)`, and is held against the double `level` in
+/// integers.
+fn fisher_passes(m: u64, r: u64, c: u64, both: u64, level: f64) -> bool {
+    if level >= 1.0 {
+        return true;
+    }
+    if level.is_nan() || level <= 0.0 {
+        return false;
+    }
+    let (lo, hi) = ((r + c).saturating_sub(m), r.min(c));
+    let mut term = if r <= c {
+        binomial(m - r, c - r)
+    } else {
+        binomial(r, c)
+    };
+    let (mut tail, mut all) = (Natural::default(), Natural::default());
+    // Down from the top: C(r, x - 1) C(m - r, c - x + 1) is the term at x
+    // times x (m - r - c + x) over (r - x + 1) (c - x + 1), and each
+    // division leaves an integer.
+    for x in (lo..=hi).rev() {
+        all.add(&term);
+        if x == both {
+            tail = all.clone();
+        }
+        if x > lo {
+            term.mul(x);
+            term.mul(m - r - (c - x));
+            term.div(r - x + 1);
+            term.div(c - x + 1);
+        }
+    }
+    // Doubling a double is exact, and some number of doublings makes
+    // `level` an integer: level = scaled / 2^shift.
+    let (mut scaled, mut shift) = (level, 0);
+    while scaled.fract() != 0.0 {
+        scaled *= 2.0;
+        shift += 1;
+    }
+    tail.shl(shift);
+    all.mul(scaled as u64);
+    tail.le(&all)
+}
+
 /// The correlation of the voters' correctness over `items`, each a list of
 /// `(voter, choice)`, with `truths[t]` the outcome item `t` named, if any.
-/// A pair with fewer than `min_shared` items in common reads zero; a pair
-/// whose `sqrt(shared) rho` does not pass `gate` is not counted.
+/// A pair that does not pass Fisher's one-sided exact test at `gate` is
+/// not counted.
 #[must_use]
 pub fn correlation(
     items: &[Vec<(String, String)>],
     truths: &[Option<String>],
     rounds: usize,
-    min_shared: usize,
     gate: f64,
 ) -> Correlation {
     let mut agents: Vec<String> = items
@@ -155,8 +273,8 @@ pub fn correlation(
     agents.dedup();
     let n = agents.len();
     let truth = answers(items, truths, rounds);
-    // right[i][t]: Some(1.0 or 0.0) when voter i voted on item t.
-    let right: Vec<Vec<Option<f64>>> = agents
+    // right[i][t]: whether voter i was right on item t, when it voted.
+    let right: Vec<Vec<Option<bool>>> = agents
         .iter()
         .map(|a| {
             items
@@ -164,60 +282,53 @@ pub fn correlation(
                 .zip(&truth)
                 .map(|(it, ans)| {
                     let ans = ans.as_deref()?;
-                    it.iter()
-                        .find(|(v, _)| v == a)
-                        .map(|(_, c)| f64::from(u8::from(c == ans)))
+                    it.iter().find(|(v, _)| v == a).map(|(_, c)| c == ans)
                 })
                 .collect()
         })
         .collect();
     let mut rho = vec![vec![0.0; n]; n];
     let mut shared = vec![vec![0usize; n]; n];
+    // counted[i][j]: rho where the pair passed the gate, else zero.
+    let mut counted = vec![vec![0.0; n]; n];
     for i in 0..n {
         rho[i][i] = 1.0;
+        counted[i][i] = 1.0;
         for j in 0..n {
-            let pairs: Vec<(f64, f64)> = right[i]
-                .iter()
-                .zip(&right[j])
-                .filter_map(|(a, b)| Some(((*a)?, (*b)?)))
-                .collect();
-            shared[i][j] = pairs.len();
-            if i == j || pairs.len() < min_shared.max(2) {
+            let (mut m, mut r, mut c, mut both) = (0u64, 0u64, 0u64, 0u64);
+            for (a, b) in right[i].iter().zip(&right[j]) {
+                if let (Some(a), Some(b)) = (*a, *b) {
+                    m += 1;
+                    r += u64::from(a);
+                    c += u64::from(b);
+                    both += u64::from(a && b);
+                }
+            }
+            shared[i][j] = m as usize;
+            if i == j {
                 continue;
             }
-            let m = pairs.len() as f64;
-            let (ma, mb) = (
-                pairs.iter().map(|p| p.0).sum::<f64>() / m,
-                pairs.iter().map(|p| p.1).sum::<f64>() / m,
-            );
-            let cov: f64 = pairs.iter().map(|(a, b)| (a - ma) * (b - mb)).sum::<f64>() / m;
-            let va: f64 = pairs.iter().map(|(a, _)| (a - ma).powi(2)).sum::<f64>() / m;
-            let vb: f64 = pairs.iter().map(|(_, b)| (b - mb).powi(2)).sum::<f64>() / m;
-            if va > 0.0 && vb > 0.0 {
-                rho[i][j] = (cov / (va * vb).sqrt()).clamp(-1.0, 1.0);
+            // Pearson's correlation of two scores of 0 and 1, read off the
+            // pair's 2x2 table (derive/sympy/jury.py).
+            let (mf, rf, cf) = (m as f64, r as f64, c as f64);
+            let spread = rf * (mf - rf) * cf * (mf - cf);
+            if spread > 0.0 {
+                rho[i][j] = ((both as f64 * mf - rf * cf) / spread.sqrt()).clamp(-1.0, 1.0);
+            }
+            if rho[i][j] > 0.0 && fisher_passes(m, r, c, both, gate) {
+                counted[i][j] = rho[i][j];
             }
         }
     }
-    let counted = |i: usize, k: usize| {
-        let r = rho[i][k];
-        if i == k || (r > 0.0 && r * (shared[i][k] as f64).sqrt() > gate) {
-            r
-        } else {
-            0.0
-        }
-    };
     let discount: BTreeMap<String, f64> = agents
         .iter()
         .enumerate()
         .map(|(i, a)| {
-            let company: f64 = (0..n).filter(|&k| k != i).map(|k| counted(i, k)).sum();
+            let company: f64 = (0..n).filter(|&k| k != i).map(|k| counted[i][k]).sum();
             (a.clone(), 1.0 / (1.0 + company))
         })
         .collect();
-    let total: f64 = (0..n)
-        .flat_map(|i| (0..n).map(move |k| (i, k)))
-        .map(|(i, k)| counted(i, k))
-        .sum();
+    let total: f64 = counted.iter().flatten().sum();
     let independent_voters = discount.values().sum();
     Correlation {
         effective_voters: if total > 0.0 {
@@ -268,7 +379,7 @@ mod tests {
             ]);
             truths.push(Some(truth.to_string()));
         }
-        let c = correlation(&items, &truths, 20, 10, INDEPENDENCE_Z);
+        let c = correlation(&items, &truths, 20, INDEPENDENCE_LEVEL);
         let at = |a: &str| c.agents.iter().position(|x| x == a).unwrap();
         assert!((c.rho[at("clone1")][at("clone2")] - 1.0).abs() < 1e-9);
         assert!(c.rho[at("solo1")][at("solo2")].abs() < 0.2, "{:?}", c.rho);
@@ -292,12 +403,14 @@ mod tests {
         assert_eq!(c.named, 300);
     }
 
-    /// Six named outcomes: two clones always agree. An independent voter
-    /// whose misses each land on another voter's happens to read 0.25 against
-    /// the other independent voter and against each clone, noise that would
-    /// leave it 1/1.75 of its weight without the gate. The gate leaves that
-    /// voter whole, since `sqrt(6) 0.25 = 0.61 < 1.645`. Each clone is still
-    /// halved.
+    /// Six named outcomes, the fewest on which the gate passes anyone: two
+    /// clones right on the first three. An independent voter right there
+    /// and on the last reads `1 / sqrt(2)` against each clone and 0.25
+    /// against the other independent voter, noise that would leave it
+    /// `1 / (1.25 + sqrt(2))` of its weight without the gate. Voters who err
+    /// apart, right three and four times, share three hits one time in
+    /// five, so the gate leaves that voter whole. The clones share their
+    /// three one time in twenty, at the level, and each is halved.
     #[test]
     fn on_a_short_history_the_gate_counts_clones_and_not_noise() {
         let right = |who: &str, pattern: &[bool], items: &mut Vec<Vec<(String, String)>>| {
@@ -307,18 +420,18 @@ mod tests {
             }
         };
         let mut items = vec![Vec::new(); 6];
-        let judge = [true, true, false, true, false, true];
+        let judge = [true, true, true, false, false, false];
         right("clone1", &judge, &mut items);
         right("clone2", &judge, &mut items);
         right("solo1", &[true, true, true, false, false, true], &mut items);
         right("solo2", &[true, false, true, false, true, true], &mut items);
         let truths = vec![Some("a".to_string()); 6];
-        let gated = correlation(&items, &truths, 20, 5, INDEPENDENCE_Z);
+        let gated = correlation(&items, &truths, 20, INDEPENDENCE_LEVEL);
         let at = |a: &str| gated.agents.iter().position(|x| x == a).unwrap();
         let (s1, s2) = (at("solo1"), at("solo2"));
         assert!((gated.rho[s1][s2] - 0.25).abs() < 1e-9, "{:?}", gated.rho);
         assert!(
-            (gated.rho[s1][at("clone1")] - 0.25).abs() < 1e-9,
+            (gated.rho[s1][at("clone1")] - 0.5f64.sqrt()).abs() < 1e-9,
             "{:?}",
             gated.rho
         );
@@ -332,23 +445,20 @@ mod tests {
             "{:?}",
             gated.discount
         );
-        let ungated = correlation(&items, &truths, 20, 5, 0.0);
+        let ungated = correlation(&items, &truths, 20, 1.0);
         assert!(
-            (ungated.discount["solo1"] - 1.0 / 1.75).abs() < 1e-12,
+            (ungated.discount["solo1"] - 1.0 / (1.25 + 2f64.sqrt())).abs() < 1e-12,
             "{:?}",
             ungated.discount
         );
-        assert!(ungated.gate.abs() < f64::EPSILON);
+        assert_eq!(ungated.gate, 1.0);
     }
 
     mod gate_grid {
         include!("../examples/correlation_gate/grid.rs");
     }
 
-    /// The gate rates the module doc quotes re-run from their seeds and read
-    /// as `measurements/correlation_gate-20000.txt` records them: false
-    /// alarms either side of the floor of five and at their worst, partly
-    /// shared errors missed at twenty items, exact clones missed at five.
+    /// Rates the module doc quotes, re-run from their seeds and read as `measurements/correlation_gate-20000.txt` records them: false alarms at four, five and seven shared items, pairs correlated 0.5 missed at twenty, and exact clones missed at five.
     #[test]
     fn the_committed_gate_rates_re_run() {
         let table = include_str!("../measurements/correlation_gate-20000.txt");
@@ -359,7 +469,7 @@ mod tests {
             .and_then(|n| n.parse().ok())
             .expect("the run names its trials a cell");
         let read = |items: &[Vec<(String, String)>], truths: &[Option<String>]| {
-            correlation(items, truths, 1, 2, INDEPENDENCE_Z).discount["v0"]
+            correlation(items, truths, 1, INDEPENDENCE_LEVEL).discount["v0"]
         };
         for (m, k) in [(4, 0), (5, 0), (7, 0), (20, 4), (5, 6)] {
             let row = table

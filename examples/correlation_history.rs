@@ -11,9 +11,9 @@
 //! - `count`: one voter one vote.
 //! - `log-odds`: each voter's record as log-odds rows, earned self-trust.
 //! - `discount`: the same rows times the discount with every positive
-//!   correlation counted (`gate` 0).
-//! - `gated`: the discount counting a pair only when `sqrt(m) rho` passes
-//!   the one-sided test of independence, `INDEPENDENCE_Z`.
+//!   correlation counted (`gate` 1).
+//! - `gated`: the discount counting a pair only when Fisher's one-sided
+//!   exact test of independence passes it at `INDEPENDENCE_LEVEL`.
 //! - `shrunk`: log-odds rows from each record read by `shrunk_accuracy`,
 //!   which shrinks it toward the pooled accuracy by empirical Bayes, so a
 //!   short record weighs voters nearly alike.
@@ -25,11 +25,11 @@
 //! $ cargo run --release --example correlation_history -- 3 4 4000 0.55 0.90
 //! ```
 //! clones, independent voters, seeds, then the independent voters'
-//! accuracy range (0.60 to 0.75) and the items a pair must share (5).
+//! accuracy range (0.60 to 0.75).
 
 use std::collections::BTreeMap;
 
-use ljos_consensus::correlation::{correlation, INDEPENDENCE_Z};
+use ljos_consensus::correlation::{correlation, INDEPENDENCE_LEVEL};
 use ljos_consensus::record::{calibration_weights, shrunk_accuracy};
 use ljos_consensus::{settle_with, Ballot, Opts, SelfTrust};
 
@@ -121,7 +121,6 @@ fn main() {
     let hi: f64 = args.get(5).and_then(|a| a.parse().ok()).unwrap_or(0.75);
     let horizons = [1usize, 2, 3, 5, 8, 10, 15, 20, 30, 50, 100];
     let last = *horizons.last().unwrap();
-    let min_shared: usize = args.get(6).and_then(|a| a.parse().ok()).unwrap_or(5);
     let judge_acc = 0.70;
     let names: Vec<String> = (0..clones)
         .map(|i| format!("clone{i}"))
@@ -166,8 +165,8 @@ fn main() {
                 });
             }
             if let Some(slot) = horizons.iter().position(|&x| x == h) {
-                let every = correlation(&history, &truths, 20, min_shared, 0.0).discount;
-                let gate = correlation(&history, &truths, 20, min_shared, INDEPENDENCE_Z).discount;
+                let every = correlation(&history, &truths, 20, 1.0).discount;
+                let gate = correlation(&history, &truths, 20, INDEPENDENCE_LEVEL).discount;
                 let rows = rows_of(&record);
                 let shrunk = shrunk_rows(&record);
                 let decisions = [
@@ -202,7 +201,7 @@ fn main() {
         }
     }
     println!(
-        "{clones} clones of one judge right {judge_acc:.2} of the time beside {solos} independent voters in [{lo:.2}, {hi:.2}]; the decision after h named outcomes, {seeds} seeds each; pairs read from {min_shared} shared items, gate z = {INDEPENDENCE_Z}\n"
+        "{clones} clones of one judge right {judge_acc:.2} of the time beside {solos} independent voters in [{lo:.2}, {hi:.2}]; the decision after h named outcomes, {seeds} seeds each; gate at level {INDEPENDENCE_LEVEL}\n"
     );
     println!("| h | {} |", arms.join(" | "));
     println!("|---|{}", "---|".repeat(arms.len()));

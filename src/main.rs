@@ -92,16 +92,17 @@ enum Cmd {
         /// ballots.
         #[arg(long)]
         project: Option<String>,
-        /// Items a pair must share before its correlation is read.
-        #[arg(long, default_value_t = 5)]
-        min_shared: usize,
-        /// A pair counts only when sqrt(shared) times its correlation passes
-        /// this one-sided test of independence. 0 counts every positive
+        /// A pair counts only when Fisher's one-sided exact test of
+        /// independence passes it at this level. 1 counts every positive
         /// reading.
-        #[arg(long, default_value_t = ljos_consensus::correlation::INDEPENDENCE_Z)]
+        #[arg(long, default_value_t = ljos_consensus::correlation::INDEPENDENCE_LEVEL)]
         gate: f64,
         #[arg(long, default_value_t = 20)]
         rounds: usize,
+        /// Accepted and ignored, so calls that still pass it run: the exact
+        /// test holds its level on any count of shared items.
+        #[arg(long, hide = true)]
+        min_shared: Option<usize>,
     },
     /// The surprisingly popular answer (Prelec, Seung and McCoy,
     /// doi:10.1038/nature21054): ballots plus each voter's forecast of the
@@ -268,9 +269,9 @@ fn run() -> Result<()> {
             items,
             truths,
             project,
-            min_shared,
             gate,
             rounds,
+            min_shared: _,
         } => {
             let items = load_items(items.as_deref(), project.as_deref())?;
             let truths: Vec<Option<String>> = match truths.as_deref() {
@@ -279,8 +280,7 @@ fn run() -> Result<()> {
                 }
                 None => vec![None; items.len()],
             };
-            let reading =
-                ljos_consensus::correlation::correlation(&items, &truths, rounds, min_shared, gate);
+            let reading = ljos_consensus::correlation::correlation(&items, &truths, rounds, gate);
             println!("{}", serde_json::to_string_pretty(&reading)?);
         }
         Cmd::Rounds {

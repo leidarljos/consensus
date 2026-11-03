@@ -29,11 +29,11 @@
 //! independent against it and the discount falls on the independent
 //! voters instead: the discounted arm scores 0.706 under `infer`, below
 //! the 0.710 of the same rows undiscounted. On named outcomes it scores
-//! 0.797.
+//! 0.796.
 
 use std::collections::BTreeMap;
 
-use ljos_consensus::correlation::{correlation, INDEPENDENCE_Z};
+use ljos_consensus::correlation::{correlation, INDEPENDENCE_LEVEL};
 use ljos_consensus::record::{calibration_weights, TRUST_FLOOR};
 use ljos_consensus::{log_odds, settle_with, Ballot, Opts, SelfTrust};
 
@@ -164,7 +164,7 @@ fn main() {
                 } else {
                     truths.clone()
                 };
-                let reading = correlation(&history, &named, 20, 10, INDEPENDENCE_Z);
+                let reading = correlation(&history, &named, 20, INDEPENDENCE_LEVEL);
                 discount = reading.discount;
                 n_eff = reading.independent_voters;
             }

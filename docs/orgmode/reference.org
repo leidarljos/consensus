@@ -129,22 +129,22 @@ of a tracker project that holds two or more ballots. Output: =items=,
 =rounds=, and =accuracy= as an object of voter to a value in (0, 1),
 Laplace smoothed so no voter reaches a certainty.
 
-=ljos-consensus correlation (--items JSON [--truths JSON] | --project P) [--min-shared N] [--gate Z] [--rounds N]=
+=ljos-consensus correlation (--items JSON [--truths JSON] | --project P) [--gate LEVEL] [--rounds N]=
 
 How much the voters share their mistakes. A voter's correctness on each
 item is read against the item's named outcome, or else the Dawid-Skene
 answer. =--truths= names the outcomes, one string or null per item. =rho=
 is the Pearson correlation of those indicators for each pair, over the
-items both voted on; it is zero below =--min-shared=, which defaults to 5.
-A pair counts only when =sqrt(shared) rho= passes =--gate=, the one-sided
-test of independence. The gate defaults to 1.645, five percent, and 0
-counts every positive reading.
+items both voted on. A pair counts only when Fisher's one-sided exact test
+of independence passes it at =--gate=. The gate defaults to 0.05, and 1
+counts every positive reading. =--min-shared N= is accepted and ignored:
+the test holds its level on any count of shared items.
 
 | Field | Meaning |
 |---+---|
 | =agents= | the voters, in the order of the matrices |
 | =rho=, =shared= | the correlations, and the items each pair shares |
-| =gate= | the test a pair passed to count |
+| =gate= | the level a pair's test passed to count |
 | =discount= | voter to =1 / (1 + sum_{j != i} rho_ij)= over the counted pairs |
 | =effective_voters= | =n^2 / sum_ij rho_ij= over the counted pairs: what equal weights get |
 | =independent_voters= | the sum of the discounts |
@@ -191,6 +191,6 @@ and =influence_matrix_with=. Its settles are =settle=, =settle_anchored=,
 are =ballots_from_json=, =trust_from_json=, =anchors_from_json= and
 =predictions_from_json=. =exact= holds =fixed_point=, =social_power=,
 =effective_voters= and =Unsettled=, the reason a fixed point could not be
-read off. =correlation= holds the reading above and =INDEPENDENCE_Z=. The
+read off. =correlation= holds the reading above and =INDEPENDENCE_LEVEL=. The
 Seldon module writes and reads the engine's files and links nothing under
 a copyleft licence.

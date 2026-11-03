@@ -375,14 +375,14 @@ its =independent_voters= once discounted.
 of the time, beside four independent voters in [0.60, 0.75]. The discount
 is read again every 25 questions against the named outcomes. A count
 scores 0.701 and log-odds weights 0.710; the same weights with the
-discount score 0.797, and the true weights with the clones merged 0.805.
+discount score 0.796, and the true weights with the clones merged 0.805.
 
 The reading needs those outcomes. The clone bloc makes up most of the
 Dawid-Skene answer (the example's =infer= argument), and read against it,
 its members look right on every item. Their correctness never varies.
 Their correlation reads zero: the reading holds 8.51 independent voices
 where there are five, and the discount leaves the group at 0.706. It does
-little harm on seven voters with no clones: 0.831 on named outcomes and
+little harm on seven voters with no clones: 0.832 on named outcomes and
 0.833 under =infer=, against 0.834. Without named outcomes it buys
 nothing. The seat records one each time =ljos learn= names the option an
 issue closed on, and applies the discount once five exist.
@@ -393,13 +393,16 @@ A seat decides a handful of issues, then tens, so the correlations and the
 voters' records it learns from are both short. The correlation of two
 voters who err apart reads about =N(0, 1/m)= over =m= shared items, so
 counting every positive reading would discount independent voters by
-noise. =correlation= counts a pair only when =sqrt(m) rho= passes the
-one-sided test of independence at five percent, 1.645 (=--gate=);
-=m rho^2= is Pearson's chi-square for the pair's two-by-two table of right
-and wrong, which =derive/sympy/jury.py= checks. Exact clones with both a
-hit and a miss among the shared items read one, and would pass the gate
-from three shared items, though by default =--min-shared= skips any pair
-with fewer than five. Voters who err apart pass about one time in twenty.
+noise. =correlation= counts a pair only when Fisher's one-sided exact
+test (doi:10.2307/2342435) passes its two-by-two table of right and wrong
+at five percent (=--gate=). Given how many items each voter got right,
+the count both got right is hypergeometric when they err apart, whatever
+their accuracies. The test passes such voters at most one time in twenty
+on every count of shared items, which =derive/sympy/constants.py= checks
+on every margin up to forty items. Exact clones right on =k= of =m=
+items share their hits one time in =C(m, k)=, so they pass once that
+reaches twenty: on six items only at three hits, on ten at two to eight.
+No pair passes on five items or fewer.
 
 A voter's record is as short. The plug-in log odds of a record of five
 drop a good voter who started unlucky to the floor, and lose to a plain
@@ -418,29 +421,32 @@ outcomes, 4000 seeds a cell:
 | Panel | =h= | Count | Log odds | Log odds, gated discount | Shrunk, gated discount |
 |---+---+---+---+---+---|
 | 5 clones, 4 voters in [0.60, 0.75] | 3 | 0.698 | 0.730 | 0.730 | 0.701 |
-| | 5 | 0.700 | 0.719 | 0.735 | 0.780 |
-| | 100 | 0.700 | 0.708 | 0.805 | 0.813 |
+| | 5 | 0.700 | 0.719 | 0.719 | 0.703 |
+| | 8 | 0.699 | 0.727 | 0.744 | 0.775 |
+| | 100 | 0.700 | 0.708 | 0.805 | 0.814 |
 | 7 voters in [0.60, 0.75] | 1 | 0.837 | 0.798 | 0.798 | 0.837 |
 | | 3 | 0.836 | 0.770 | 0.770 | 0.827 |
-| | 5 | 0.843 | 0.779 | 0.772 | 0.829 |
+| | 5 | 0.843 | 0.779 | 0.779 | 0.837 |
 | | 100 | 0.836 | 0.824 | 0.821 | 0.834 |
-| 7 voters in [0.55, 0.90] | 5 | 0.904 | 0.882 | 0.876 | 0.896 |
-| | 30 | 0.888 | 0.909 | 0.906 | 0.902 |
-| | 100 | 0.900 | 0.920 | 0.919 | 0.918 |
-| 3 clones, 4 voters in [0.55, 0.90] | 5 | 0.780 | 0.788 | 0.807 | 0.833 |
-| | 100 | 0.774 | 0.830 | 0.876 | 0.879 |
+| 7 voters in [0.55, 0.90] | 5 | 0.904 | 0.882 | 0.882 | 0.904 |
+| | 30 | 0.888 | 0.909 | 0.907 | 0.905 |
+| | 100 | 0.900 | 0.920 | 0.919 | 0.919 |
+| 3 clones, 4 voters in [0.55, 0.90] | 5 | 0.780 | 0.788 | 0.788 | 0.786 |
+| | 8 | 0.778 | 0.801 | 0.808 | 0.835 |
+| | 100 | 0.774 | 0.830 | 0.877 | 0.879 |
 
 The ungated discount costs the panel of seven similar voters three points
-at five outcomes (0.749 against 0.779); the gated one costs less than one
-(0.772). Shrinking with the gated discount beats plug-in log odds in every
-panel but one from five outcomes on, by up to ten and a half points where
-clones sit. The exception is the panel of widely differing voters, where
-the shrunk rows trail plug-in log odds by under a point from twenty
-outcomes on. The discount reads no pair before five outcomes. The shrunk
-rows then trail by up to three points where clones sit, because plug-in
-log odds floor the clones that start unlucky, which breaks the bloc. They
-trail a count by 1.6 points at worst where a count is best (0.824 against
-0.840 at eight outcomes), and on the first outcome they are the count.
+at five outcomes (0.749 against 0.779). The gated one costs nothing there,
+since no pair passes on five outcomes, and under a point later. Shrinking
+with the gated discount beats plug-in log odds in every panel but one from
+eight outcomes on, by up to 10.6 points where clones sit. The exception is
+the panel of widely differing voters, where the shrunk rows trail plug-in
+log odds by under half a point from thirty outcomes on. Before six
+outcomes the gate passes no pair, and the shrunk rows trail by up to three
+points where clones sit, because plug-in log odds floor the clones that
+start unlucky, which breaks the bloc. They trail a count by 1.3 points at
+worst where a count is best (0.822 against 0.835 at ten outcomes), and on
+the first outcome they are the count.
 =ljos learn= shrinks for that reason.
 
 * The geometric median of the ballots
@@ -586,7 +592,7 @@ One command runs each check:
 | Tool | Run | What it shows |
 |---+---+---|
 | SymPy | =python3 derive/sympy/fj.py= | =P= is row-stochastic; the social power; the =w_j (S + sw - w_j)= weights a constant self-weight gives; earned self-trust as the weighted vote; the mixture under one anchor; the second eigenvalue |
-| SymPy | =python3 derive/sympy/jury.py= | =n_eff=; the cluster discount; the beta-binomial ceiling; extremizing; =rho= from agreement; =m rho^2= as the two-by-two chi-square behind the gate |
+| SymPy | =python3 derive/sympy/jury.py= | =n_eff=; the cluster discount; the beta-binomial ceiling; extremizing; =rho= from agreement; =rho= off the two-by-two table the gate tests |
 | SymPy | =python3 derive/sympy/golden.py= | four settles solved in rationals, which the Rust tests match to 1e-12 |
 | Lean 4 and Mathlib | =cd derive/lean && lake exe cache get && lake build= | the step is a contraction with one fixed point the iteration reaches; Banach's stopping bound; rows stay distributions; Nitzan and Paroush's theorem; idempotent earned rows; the stationary weights of constant ones |
 | Sollya | =sollya derive/sollya/rounding.sollya= | in interval arithmetic: the rounding floor of the bound, the rounds it needs, the tie allowance, the log-odds range of calibrate's smoothed accuracies |
