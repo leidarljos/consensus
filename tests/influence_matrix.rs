@@ -5,10 +5,19 @@
 use ljos_consensus::{influence_matrix_with, SelfTrust};
 use std::collections::BTreeMap;
 
-/// Past the nine voters the examples settle.
-const MAX_VOTERS: usize = 16;
-/// Panels per run: they take 0.2 s in a debug build on an 8-core Intel Xeon.
-const SEEDS: u64 = 2000;
+/// The nine voters `examples/synthetic_voters.rs` and
+/// `examples/correlated_voters.rs` seat by default. Nothing in the lookup
+/// branches on the panel's size.
+const MAX_VOTERS: usize = 9;
+/// The fewest panels in which every size from two voters up shows a row
+/// naming a name listed twice, but for a chance under 5%. A panel has size
+/// n one time in nine, and some name repeats with probability
+/// 1 - (1 - 1/n)^(n - 1), at least 1/2. A row names it in more than 7 of 8
+/// of those panels, fewest at two voters, whose up to eight rows draw from
+/// three names. Each size then comes in at least 7/144 of the panels, and
+/// 8 (137/144)^102 < 0.05 < 8 (137/144)^101. The test checks that none is
+/// missed.
+const SEEDS: u64 = 102;
 
 /// splitmix64: java.util.SplittableRandom's `GOLDEN_GAMMA` step and
 /// `mix64variant13` finaliser (Steele, Lea and Flood,
@@ -159,8 +168,17 @@ fn panel(seed: u64) -> Panel {
     }
 }
 
+/// Whether a row of the panel names a name the panel lists twice.
+fn names_a_repeat(agents: &[String], trust: &[(String, String, f64)]) -> bool {
+    let repeated = |name: &String| agents.iter().filter(|a| *a == name).count() > 1;
+    trust
+        .iter()
+        .any(|(from, to, _)| repeated(from) || repeated(to))
+}
+
 #[test]
 fn the_indexed_build_matches_the_scan_bit_for_bit() {
+    let mut repeats = [false; MAX_VOTERS + 1];
     for seed in 0..SEEDS {
         let p = panel(seed);
         let built = influence_matrix_with(&p.agents, &p.trust, p.self_trust, &p.discount);
@@ -171,5 +189,7 @@ fn the_indexed_build_matches_the_scan_bit_for_bit() {
             let want: Vec<u64> = want.iter().map(|x| x.to_bits()).collect();
             assert_eq!(bits, want, "seed {seed}, row {i}: {row:?}");
         }
+        repeats[p.agents.len()] |= names_a_repeat(&p.agents, &p.trust);
     }
+    assert!(repeats[2..].iter().all(|&r| r), "{repeats:?}");
 }
