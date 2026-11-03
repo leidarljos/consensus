@@ -1,0 +1,29 @@
+# c71e993dfe4b77efd45c5fe1762bfdb874e7acdd cargo run --release --example settle_budget
+# Built from that commit with examples/settle_budget.rs added as git blob af61bd35d1c40f8c141b1ac05228871ed0c0ef0c, by rustc 1.89.0, and run CPU only, with no GPU and no model call, on one thread pinned to one core of an Intel(R) Xeon(R) Processor, family 6 model 207, 8 cores at 2.4 GHz. The sweep took 136 s.
+# Seed rule: panel k of n voters starts the generator at state n 2^32 + k, for k from 0 to 199, so no two panels share a state.
+
+Rounds to stop at tol 1.490116169344802e-8, 200 panels a size, limit 8192
+
+| engine | voters | median | 99th percentile | most | at the limit |
+|---|---|---|---|---|---|
+| bounded confidence | 2 | 1 | 10 | 10 | 0 |
+| bounded confidence | 4 | 5 | 32 | 33 | 0 |
+| bounded confidence | 8 | 19 | 87 | 106 | 0 |
+| bounded confidence | 16 | 58 | 177 | 249 | 0 |
+| bounded confidence | 32 | 81 | 376 | 419 | 0 |
+| bounded confidence | 64 | 72 | 323 | 481 | 0 |
+| bounded confidence | 128 | 67 | 168 | 193 | 0 |
+| energy | 2 | 9 | 22 | 22 | 0 |
+| energy | 4 | 18 | 95 | 101 | 0 |
+| energy | 8 | 37 | 727 | 732 | 0 |
+| energy | 16 | 50 | 1019 | 1345 | 0 |
+| energy | 32 | 65 | 319 | 421 | 0 |
+| energy | 64 | 78 | 417 | 640 | 0 |
+| energy | 128 | 161 | 701 | 735 | 0 |
+| seldon degroot | 2 | 8 | 38 | 44 | 0 |
+| seldon degroot | 4 | 12 | 28 | 31 | 0 |
+| seldon degroot | 8 | 12 | 15 | 16 | 0 |
+| seldon degroot | 16 | 11 | 12 | 12 | 0 |
+| seldon degroot | 32 | 9 | 10 | 10 | 0 |
+| seldon degroot | 64 | 8 | 9 | 9 | 0 |
+| seldon degroot | 128 | 8 | 8 | 8 | 0 |
