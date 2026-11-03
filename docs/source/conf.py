@@ -10,8 +10,16 @@ _ROOT = _DOCS.parent.parent
 project = "consensus"
 copyright = "2026, Rohit Goswami"
 author = "Rohit Goswami"
-release = "0.1.0"
-version = "0.1"
+# The crate version is written in Cargo.toml. These two lines are the copy
+# Sphinx publishes. Edit the manifest, then run `cog -r @cogfiles.txt`.
+# [[[cog
+# import crate_version
+# cog.outl(f'release = "{crate_version.version()}"')
+# cog.outl(f'version = "{crate_version.short_version()}"')
+# ]]]
+release = "0.9.0"
+version = "0.9"
+# [[[end]]]
 
 extensions = [
     "sphinx.ext.mathjax",

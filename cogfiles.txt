@@ -1,0 +1,4 @@
+# Version copies cogapp generates from Cargo.toml's package version.
+# `cog -r @cogfiles.txt` rewrites them. CI runs `cog --check @cogfiles.txt`.
+# cogapp, not cocogitto: both install a command named cog.
+docs/source/conf.py -I scripts

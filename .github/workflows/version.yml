@@ -1,0 +1,30 @@
+name: version
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cog:
+    name: cog --check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # cogapp, not cocogitto: both install a command named cog. 3.6.0 is the
+      # release the other leiðarljós crates check with, so the markers parse
+      # the same way. Cargo.toml's package version is the only one written by
+      # hand. Every copy cogfiles.txt lists has to be what cogapp would write.
+      - name: cog --check
+        run: |
+          set -euo pipefail
+          python -m pip install -q 'cogapp==3.6.0'
+          cog --check --diff --check-fail-msg='run cog -r @cogfiles.txt' @cogfiles.txt
