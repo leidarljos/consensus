@@ -1461,9 +1461,13 @@ pub fn settle_energy(
     // step is one. rgmin opens each line search at half the step it last
     // accepted, and a search that can only shrink then collapses the step
     // geometrically; the Wolfe search can grow it again.
+    // rgmin stops on `||g||_2 < gtol`.
+    // The point counts as settled once its largest gradient component is under `bar`.
+    // The largest component is at most the 2-norm, so stopping at `bar` stops on a settled point and not after it.
+    let bar = tol.max(1e-12) * (n as f64).sqrt();
     let control = rgmin::Control {
         maxiter: max_iter.max(1),
-        gtol: tol.max(1e-12),
+        gtol: bar,
         istep: 1.0,
         maxmove: Some(4.0),
     };
@@ -1497,7 +1501,7 @@ pub fn settle_energy(
     // accept a step, and the point is as settled as the arithmetic allows.
     let value = energy.energy_gradient(coords.view()).0;
     let floor = (f64::EPSILON * (1.0 + value.abs())).sqrt();
-    let settled = residual <= (control.gtol * (n as f64).sqrt()).max(floor);
+    let settled = residual <= bar.max(floor);
     let x = energy.opinions(coords.view());
     let mut shares = vec![0.0; m];
     for row in &x {

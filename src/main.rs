@@ -181,7 +181,7 @@ enum Cmd {
 /// `measurements/settle_budget.txt` runs all three on random panels of 2 to 128 voters.
 /// No panel took more than 1345 rounds, the fewest steps after which one 16-voter energy settle counts as settled.
 /// The cap is the next power of two, since the 99th percentiles move by hundreds of rounds from one size to the next and the largest count carries no more digits than that.
-/// The energy keeps stepping past a settled point until rgmin's own test or the cap, so the cap is also what an energy settle whose test stays out of reach costs.
+/// The energy stops on its first settled point, except where the point settles only on the rounding floor and rgmin's test stays out of reach: 2 of the 1400 panels, both of 128 voters, ran to the cap.
 const UNBOUNDED_MAX_ITER: usize = 2048;
 
 /// The help line of the round cap, whose default depends on the engine.
