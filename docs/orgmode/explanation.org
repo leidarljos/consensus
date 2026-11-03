@@ -77,6 +77,22 @@ Both engines solve the same linear system.
 It then adds its rounds, each a pass over the =n^2= weights for each option, where =exact= takes one step to check its point.
 The solve is cubic in the voters.
 
+The solve starts by finding the DeGroot classes: the strongly connected groups of the trust graph that no edge leaves and whose voters all listen fully.
+It searches among the voters that listen fully alone, and finds the groups a search of the whole graph would.
+Every voter on a path between two voters of one strongly connected group belongs to that group, so the paths within a class run among full listeners, and the class is a group of theirs too.
+A group of full listeners that no edge leaves holds everything its voters reach, so it is a group of the whole graph too.
+A panel where every voter keeps part of its ballot has no class, and the solve skips the search.
+A test in =src/exact.rs= checks both searches against each other on every panel of up to four voters.
+
+=measurements/retime_3d067f7/= times the settle at =3d067f7b677a99fac14d9c338d6aa26b3e1951f3=, where the build began to look names up once and the search to keep to full listeners, against its parent =c71e993dfe4b77efd45c5fe1762bfdb874e7acdd=.
+The panel has two options, and every voter names every other and keeps half its ballot, so it has no class.
+Six runs of each commit ran in a shuffled order on one pinned core of an Intel Xeon (family 6, model 207, eight cores at 2.4 GHz, 320 MiB of L3).
+At 4096 voters the medians are 148 s against 0.73 s for the build, 116 s against 39 s for the solve, and 264 s against 40 s for a settle under either engine; =summary.txt= there has the quartiles.
+The figures in that commit's message, a 43 s settle and a solve that went from 114 s to 45 s, are the best of three runs with and without the change on =7360645=, before =b02c35b= derived the tolerance and the 27-round cap.
+The build and the solve are the same on =7360645= as on =c71e993=.
+At =3d067f7= a settle is the solve but for 0.7 s of building and, under =iterate=, five rounds, while the solve's quartiles lie 2 s apart.
+So a solve timed on its own can take longer than a whole settle: it took longer than the =exact= settle in one run of six timed before the settles, and in three of six timed after them.
+
 =examples/settle_scaling.rs= times both from two voters to 4096 on one thread of an Intel Xeon (family 6, model 207, eight cores at 2.4 GHz).
 Each time is the median of seven draws, each draw a fresh process that times every cell, so a cell's draws are spread over the whole sweep.
 Every panel has two options and, where it does not say otherwise, the CLI's defaults; =measurements/settle_scaling.txt= has the output, with the interquartile range of every figure and every draw.
