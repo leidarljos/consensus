@@ -1,4 +1,4 @@
-# cargo run --release --example replay_history -- --write measurements/replay_panel.json
+# c71e993dfe4b77efd45c5fe1762bfdb874e7acdd cargo run --release --example replay_history -- --write measurements/replay_panel.json
 {
   "ballots": [
     {
