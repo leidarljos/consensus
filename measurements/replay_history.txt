@@ -1,5 +1,5 @@
-# 042b4217798793cadf3f12dba4c6948b7cb10f8d cargo run --release --example replay_history -- measurements/replay_panel.json
-# Built from that commit by rustc 1.89.0, and run on one thread of an Intel(R) Xeon(R) Processor, family 6 model 207, 8 cores at 2.4 GHz.
+# c71e993dfe4b77efd45c5fe1762bfdb874e7acdd cargo run --release --example replay_history -- measurements/replay_panel.json
+# Built from that commit by rustc 1.89.0, and run CPU only, with no GPU and no model call, on one thread pinned to one core of an Intel(R) Xeon(R) Processor, family 6 model 207, 8 cores at 2.4 GHz.
 # The panel is three clones of model:alpha, right 0.60 of the time and always in agreement, beside three independent voters at 0.72, 0.68 and 0.66. It has forty eight two-way questions, seed 7, and no trust rows.
 
 | method | scored | brier | log | unbounded |
