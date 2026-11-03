@@ -17,7 +17,8 @@
 //! Its count is the fewest L-BFGS steps whose point the energy reports settled, found by doubling the cap and then bisecting it.
 //! A count at [`LIMIT`] is a panel that never stopped or never settled, and the column `at the limit` says how many there were.
 //!
-//! The cap the CLI sets for these settles is the most rounds in the table rounded up to a power of two, and the example derives it the same way.
+//! The cap the CLI sets for these settles is a measured budget: the most rounds in the table rounded up to a power of two.
+//! The example reads that budget the same way.
 //! The last column counts the panels that take the whole cap.
 //! For bounded confidence and DeGroot that is a count at or above it.
 //! The energy runs again under the cap, and a panel counts when rgmin's own test does not stop it first, even where its point already counts as settled.

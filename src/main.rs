@@ -212,19 +212,29 @@ enum SelfTrustArg {
 /// That is 3.7e-9 at [`ljos_consensus::SUPPORTED_VOTERS`], and the default tolerance, `4 gamma(2^25 + 1)`, clears it fourfold, so a still panel always stops.
 /// The energy counts as settled at a gradient of `sqrt(EPSILON (1 + |E|))`, at least 2^-26, so a smaller `gtol` adds rounds without settling any more points.
 ///
-/// None of the three has a round bound.
-/// That bounded confidence with one bound per voter stops at all is a conjecture (Mirtabatabaei and Bullo, doi:10.1137/11082751X), and even a shared bound can need rounds quadratic in `n` (Wedin and Hegarty, doi:10.1007/s00454-014-9657-7).
-/// DeGroot has `q` one, and the energy stops on rgmin's own gradient test.
-/// So the cap is a budget: past it a settle reports `converged: false`.
-/// The cap is [`MOST_MEASURED_ROUNDS`] rounded up to a power of two, 1.52 times it.
-/// The energy stops on its first settled point, except where the point settles only on the rounding floor and rgmin's test stays out of reach: the column `run to the cap` of `measurements/settle_budget.txt` counts 2 of its 1400 energy panels, both of 128 voters.
+/// None of the three has a convergence bound that sets a round count, so this cap is a measured budget: past it a settle reports `converged: false`.
+/// That bounded confidence with one bound per voter stops at all is a conjecture (Mirtabatabaei and Bullo, doi:10.1137/11082751X).
+/// Wedin and Hegarty (doi:10.1007/s00454-014-9657-7) show that the one-dimensional model with one shared bound can take rounds quadratic in `n`.
+/// That count is a lower bound for that model.
+/// This engine gives each voter its own bound and measures L1 distance over the options.
+/// Seldon's DeGroot runs at susceptibility one, so the step is not a contraction.
+/// A legal weight matrix can mix arbitrarily slowly, and a periodic class never reaches the tolerance (Berger, doi:10.1080/01621459.1981.10477662).
+/// The energy is L-BFGS under rgmin.
+/// The anchor weight `(1 - s) / s` runs over the whole positive line as susceptibility runs over `(0, 1)`, so the condition of the energy has no uniform bound and neither does the number of steps.
+/// rgmin stops on its own gradient test, which can stay out of reach after the point already counts as settled on the rounding floor.
+///
+/// `examples/settle_budget.rs` measures the budget and `measurements/settle_budget.txt` records the sweep.
+/// It runs all three engines at the default tolerance on 200 random panels at each of 2, 4, 8, 16, 32, 64 and 128 voters, 1400 panels an engine.
+/// Panel `k` of `n` voters draws from the generator at state `n 2^32 + k`.
+/// The most rounds any panel took before its point counted as settled is [`MOST_MEASURED_ROUNDS`], the fewest L-BFGS steps after which one 16-voter energy panel counts as settled.
+/// The budget is that count rounded up to a power of two.
+/// The column `run to the cap` counts panels that still take the whole budget: 2 of the 1400 energy panels, both of 128 voters.
+/// Bounded confidence and DeGroot contribute none.
 const UNBOUNDED_MAX_ITER: usize = MOST_MEASURED_ROUNDS.next_power_of_two();
 
-/// The most rounds any settle took in `measurements/settle_budget.txt`, which runs all three on random panels of 2 to 128 voters: the fewest steps after which one 16-voter energy settle counts as settled.
+/// The most rounds any settle in `measurements/settle_budget.txt` took before its point counted as settled.
+/// The sweep behind the file is `examples/settle_budget.rs`: 200 random panels at each size from 2 to 128 voters, for all three engines.
 /// A test holds the cap to the table.
-///
-/// At one size the most a panel took is up to 1.53 times that size's 99th percentile (the energy at 64 voters, 640 against 417).
-/// So 200 panels a size pin the tail only to about that factor, and the margin rounding up to a power of two leaves is about that factor again.
 const MOST_MEASURED_ROUNDS: usize = 1345;
 
 /// Why [`finite_alpha`] refused a token.

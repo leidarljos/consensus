@@ -100,10 +100,11 @@ fn the_round_cap_and_tolerance_are_the_derived_ones() {
     assert_eq!(rounds["predicted_rounds"].as_u64(), Some(cap), "{rounds}");
 }
 
-/// `--epsilon`, `--seldon` and `--engine energy` have no round bound, and their cap is the next power of two above every count `measurements/settle_budget.txt` records.
+/// `--epsilon`, `--seldon` and `--engine energy` have no round bound.
+/// Their cap is a measured budget: the next power of two above the largest count `measurements/settle_budget.txt` records.
 /// Their tolerance is the derived one.
 #[test]
-fn the_cap_without_a_round_bound_clears_every_measured_settle() {
+fn the_cap_without_a_round_bound_is_the_measured_budget() {
     let table = include_str!("../measurements/settle_budget.txt");
     let most = table
         .lines()
