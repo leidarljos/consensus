@@ -4,6 +4,113 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 <!-- towncrier release notes start -->
 
+## 0.10.0 (2026-11-04)
+
+### Features
+
+- The release workflow publishes `consensus-<tag>-<target>.tar.gz` and a `.sha256` for aarch64-apple-darwin, x86_64-apple-darwin, aarch64-unknown-linux-gnu and x86_64-unknown-linux-gnu.
+  It publishes only after every workflow that runs on each push to main has succeeded on the tagged commit.
+  `cargo binstall --locked ljos-consensus` installs the binary from that archive.
+  The crates.io publish uses that same gate, so a red CI run does not publish.
+- `correlation` checks each pair with Fisher's one-sided exact test.
+  Voters who err apart pass at most 5% of the time at every count of shared items.
+  `--gate` takes the test's level, 0.05 by default, and 1 counts every positive reading.
+  `--gate 0` now counts no pair, where it used to count every positive reading.
+  `--min-shared` is accepted and ignored, since no pair can pass on five shared items or fewer.
+- `settle --epsilon` prints clusters, each group of voters that ends together, with its mean final opinion.
+- `settle --seldon --out` writes the seldon input files and prints the command to run them.
+  It does so even when seldon is not installed.
+- `shrunk_accuracy` reads a record of h hits in n as (h + 1) / (n + 2).
+  No record is then a certainty.
+  The trust floor is `f64::EPSILON`, kept only as a clamp for bare accuracies of zero or one.
+  The settle's tolerance is about 1.49e-8 and its round cap 27, both derived from binary64.
+  The settle command line's `--max-iter` and `--tol` default to `Opts::default` for two engines.
+  Those are the iterate and exact engines.
+  A settle that runs out of rounds above contraction 1/2 says so in `note`.
+  The energy engine drops its softmax gauge penalty.
+
+### Fixes
+
+- A non-finite `--alpha` (`NaN` or an infinity) is a usage error and does not run.
+- A settle whose trust rows name every pair of voters no longer builds its influence matrix in time cubic in the voters.
+  The exact solve looks for DeGroot classes only among voters that listen fully.
+  A panel where every voter keeps some of its ballot skips that search.
+- The exact engine no longer loses digits for a voter with susceptibility just under 1.
+- When the tracker read fails, `surprising --issue` now exits like `settle --issue`.
+  It gives the same `sysexits.h` status and the same stderr line.
+  A missing `vissue` is 69, a run that does not finish is 74, text that is not ballot JSON is 65, and an empty list is 66.
+- `reliability --project` and `correlation --project` skip an issue whose ballots cannot be read and read the rest.
+  Each skipped issue gets one line on stderr naming it and why.
+  One hand-edited issue used to end the whole read with an error that said to pass `--ballots`.
+- `reliability` and `correlation` read `--items` the way `settle` reads ballots.
+  Names are trimmed, and a voter who repeats one choice counts once.
+  An item `settle` would refuse is skipped, with one `items[N]: skipped:` line on stderr, and the run continues.
+  `correlation` drops that item's `--truths` entry with it and reports when `--truths` and `--items` differ in length.
+  It counts in `named` only the items that have a name.
+- `reputation` no longer takes time cubic in the voters on trust rows that name every pair of voters.
+  The standing it prints is the same bit for bit.
+- `reputation` prints the alpha the run used.
+  It lists agents no trust row mentions under `unrated`, and sizes its rounds by the pre-trust contraction.
+  An `--alpha` outside `[0, 1]` is named on stderr and still run at the clamped value.
+  `eigentrust` reports the rounds it ran and whether the step fell under tolerance.
+- `settle --issue` now prints one line naming why it found no ballots and exits with a sysexits.h status.
+  The line says to pass `--ballots` JSON instead.
+- `settle` rejects a misspelt `--engine` or `--self-trust` on every path.
+  That includes `--epsilon`, `--seldon` and `--engine energy`.
+- `surprising` averages one distribution per voter and names each forecast it left out.
+- `surprising` reports `margin` and `tie`.
+  Equal surprises leave `answer` null.
+
+### Documentation
+
+- A new example, `examples/settle_scaling.rs`, times both engines from two voters to 4096.
+  Run `exact` wherever a closed form exists and `iterate` on a panel that can cycle, as the explanation page now says.
+- The README and getting-started samples, and the reference flag list, are the output of the binary itself.
+- The explanation page says why the exact solve finds the same DeGroot classes when it searches among the voters that listen fully alone.
+  It gives the settle's cost at 4096 voters before and after the indexed build as medians of six runs.
+- The reference for `surprising` puts one sentence on each line.
+  Each output field is its own sentence.
+- The round cap of `settle --epsilon`, `--seldon` and `--engine energy` is a measured budget.
+  It is the largest count in `measurements/settle_budget.txt` rounded up to a power of two.
+  `examples/settle_budget.rs` runs each engine on 200 random panels at each size from 2 to 128 voters.
+  2 of the 1400 energy panels, both of 128 voters, still take the whole cap.
+- `AGENTS.md` lists the checks a change must pass.
+  It names the generated pages and samples that must not be edited by hand.
+  The rst pages under `docs/source` are no longer committed.
+  A checkout cannot show a flag list the org sources have already changed.
+
+### Miscellaneous
+
+- CI reruns the command at the top of each measurement file and fails when its output changes.
+- CI runs `cargo deny check` on every push to main and every pull request and once a week.
+  The license allow list now lists only what the tree uses.
+  The check workflow runs `cargo test --locked`.
+  The derive rust job and the measurements workflow install the toolchain named in `rust-toolchain.toml` instead of stable.
+- Dawid-Skene starts from the majority vote, and a round that no longer moves an accuracy stops the iteration.
+  `reliability` prints the rounds that ran, so `--rounds 0` reports 1.
+- News fragments live in `changelog.d/` and `towncrier build` collects them into `CHANGELOG.md`.
+  CI drafts them with the version from `Cargo.toml`.
+  A fragment whose name has no configured type fails the draft.
+- Release actions are pinned to a commit, and the version is named beside each pin.
+  The release build takes dtolnay/rust-toolchain at the v1 tag, where it took master.
+  Writing a release and signing its archives is allowed on the release job alone.
+  The jobs that wait for CI time out after half an hour.
+- The Sphinx version is generated from `Cargo.toml`, and CI fails a copy that has drifted.
+- The correlation check now documents its measured false alarm rate and keeps its threshold and floor.
+- The energy engine stops at a gradient tolerance of `sqrt(EPSILON)`, about 1.49e-8, when the asked tolerance scaled by `sqrt(voters)` is finer than that.
+  A finer bar kept stepping after the point was as settled as the energy's rounding allows.
+  The default tolerance sits just above the floor and is unchanged.
+- `settle --engine energy` keeps its stop bar at a gradient of 2^-26 or above, which it already counts as settled.
+  A `--tol` far under the default no longer keeps it stepping past settled points.
+  `measurements/settle_scaling.txt` reports medians and interquartile ranges over seven fresh-process draws.
+  `measurements/settle_budget.txt` counts the settles that take the whole cap.
+- `settle --epsilon`, `--seldon` and `--engine energy` now stop at the derived tolerance, about 1.49e-8, in place of 1e-9.
+  Their round cap is 2048 in place of 200, the next power of two above every settle `measurements/settle_budget.txt` measured.
+  Every measurement file cites a published commit, and the correlation measurements state their seed rule and that they ran CPU only.
+  `settle --engine energy` now stops on its first settled point.
+  A larger cap no longer adds steps once a settle has settled.
+
+
 ## 0.9.0 (2026-10-27)
 
 - The DeGroot forecast in `record::replay` runs with earned self weight,

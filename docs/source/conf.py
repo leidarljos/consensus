@@ -17,8 +17,8 @@ author = "Rohit Goswami"
 # cog.outl(f'release = "{crate_version.version()}"')
 # cog.outl(f'version = "{crate_version.short_version()}"')
 # ]]]
-release = "0.9.0"
-version = "0.9"
+release = "0.10.0"
+version = "0.10"
 # [[[end]]]
 
 extensions = [
