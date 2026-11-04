@@ -72,8 +72,13 @@ fn the_release_uploads_what_binstall_fetches() {
         release.contains("needs: [ci, build]"),
         "the release job waits for CI and the archives"
     );
-    assert!(release.contains("gh run watch"));
-    assert!(release.contains("--commit"));
+    let gate = fs::read_to_string(root().join("scripts/ci_green.sh")).unwrap();
+    assert_eq!(gate.matches("gh run watch").count(), 1);
+    assert!(gate.contains("--commit"));
+    assert!(
+        !release.contains("gh run watch"),
+        "the watch lives in the shared gate"
+    );
 
     let readme = fs::read_to_string(root().join("README.md")).unwrap();
     assert!(
@@ -82,4 +87,33 @@ fn the_release_uploads_what_binstall_fetches() {
             .any(|l| l.trim() == "$ cargo binstall --locked ljos-consensus"),
         "README install line"
     );
+}
+
+/// crates.io publish and the GitHub release share one gate, and that gate
+/// is the only copy of the CI watch.
+#[test]
+fn publish_waits_for_the_same_ci_as_release() {
+    let root = root();
+    let release = fs::read_to_string(root.join(".github/workflows/release.yml")).unwrap();
+    let publish = fs::read_to_string(root.join(".github/workflows/publish.yml")).unwrap();
+    let action = fs::read_to_string(root.join(".github/actions/ci-green/action.yml")).unwrap();
+    let step = "uses: ./.github/actions/ci-green";
+    assert!(release.contains(step), "release calls the shared gate");
+    assert!(publish.contains(step), "publish calls the shared gate");
+    assert_eq!(
+        release.matches(step).count(),
+        1,
+        "release calls the gate once"
+    );
+    assert_eq!(
+        publish.matches(step).count(),
+        1,
+        "publish calls the gate once"
+    );
+    assert!(action.contains("bash scripts/ci_green.sh"));
+    assert!(!publish.contains("gh run watch"));
+    assert!(publish.contains("actions: read"));
+    let gate_at = publish.find(step).unwrap();
+    let publish_at = publish.find("run: cargo publish").unwrap();
+    assert!(gate_at < publish_at, "the gate runs before cargo publish");
 }

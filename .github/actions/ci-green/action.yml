@@ -1,0 +1,33 @@
+name: CI on this sha is green
+description: >
+  Wait until every workflow that runs on each push to main has succeeded
+  on the tagged commit. release.yml and publish.yml share this step.
+inputs:
+  tag:
+    description: Existing tag, such as v0.9.0
+    required: true
+outputs:
+  sha:
+    description: The commit the tag names
+    value: ${{ steps.green.outputs.sha }}
+runs:
+  using: composite
+  steps:
+    - name: The tag names a release
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -eu
+        echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ inputs.tag }}
+    - name: The workflows on this commit succeeded
+      id: green
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      run: bash scripts/ci_green.sh
