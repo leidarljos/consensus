@@ -8,12 +8,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to release, such as v0.7.0"
+        description: "Existing tag to release, such as v0.9.0"
         required: true
         type: string
 
 permissions:
   contents: write
+  # The CI job lists workflow runs for the tagged commit.
+  actions: read
   # The build attestations: a signed statement that this workflow built
   # each archive, which `gh attestation verify` and the ljos installer check.
   id-token: write
@@ -23,7 +25,96 @@ env:
   TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
+  ci:
+    name: CI on this sha is green
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.green.outputs.sha }}
+    steps:
+      - name: The tag names a release
+        run: |
+          set -eu
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+      - name: The workflows on this commit succeeded
+        id: green
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          # ISO-8601 timestamps sort in byte order in the C locale.
+          export LC_ALL=C
+          sha=$(git rev-parse HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "tag $TAG is $sha"
+          # binstall asks for v{version}. The tag has to be that version
+          # or the archive name and the metadata name a different file.
+          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)
+          test -n "$crate"
+          test "v$crate" = "$TAG"
+
+          # A workflow that pushes to main with no paths filter runs on
+          # every commit, so the tag can wait for it. A paths filter skips
+          # commits that do not touch those paths. release.yml and
+          # publish.yml run on the tag, not as CI for the commit.
+          ci_files=()
+          for f in .github/workflows/*.yml; do
+            block=$(awk '
+              /^on:/ { on=1 }
+              on && /^[^[:space:]#]/ && !/^on:/ { exit }
+              on { print }
+            ' "$f")
+            if [[ "$block" =~ (^|$'\n')[[:space:]]*paths: ]]; then
+              continue
+            fi
+            [[ "$block" == *push:* ]] || continue
+            [[ "$block" == *branches:* ]] || continue
+            [[ "$block" =~ (^|[^[:alnum:]_])main([^[:alnum:]_]|$) ]] || continue
+            ci_files+=("$(basename "$f")")
+          done
+          if [ "${#ci_files[@]}" -eq 0 ]; then
+            echo "no workflow runs on every push to main" >&2
+            exit 1
+          fi
+          echo "CI: ${ci_files[*]}"
+
+          for wf in "${ci_files[@]}"; do
+            best_id=
+            best_at=
+            # The newest push, pull request, or manual run on this commit.
+            # A scheduled re-run is a later advisory check, not that CI.
+            # --limit 1 is the newest run of that event, which is what
+            # `gh run list` returns first.
+            for event in push pull_request workflow_dispatch; do
+              row=$(gh run list --workflow "$wf" --commit "$sha" --event "$event" --limit 1 \
+                --json databaseId,createdAt --jq '.[0] // empty')
+              if [ -z "$row" ]; then
+                continue
+              fi
+              at=$(printf '%s\n' "$row" | jq -r '.createdAt')
+              rid=$(printf '%s\n' "$row" | jq -r '.databaseId')
+              if [ -z "$best_at" ] || [[ "$at" > "$best_at" ]]; then
+                best_at=$at
+                best_id=$rid
+              fi
+            done
+            if [ -z "$best_id" ]; then
+              echo "$wf has no run on $sha" >&2
+              exit 1
+            fi
+            echo "watch $wf $best_id"
+            # gh waits out a run that is still going and returns at once
+            # when it has finished. --exit-status stops the release when
+            # that run did not succeed. The interval is gh's own.
+            gh run watch "$best_id" --exit-status --compact
+          done
+
   build:
+    needs: ci
     strategy:
       fail-fast: false
       matrix:
@@ -37,6 +128,9 @@ jobs:
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
+    env:
+      TARGET: ${{ matrix.target }}
+      CI_SHA: ${{ needs.ci.outputs.sha }}
     steps:
       - name: The tag names a release
         run: |
@@ -45,6 +139,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: refs/tags/${{ env.TAG }}
+      - name: The tag is the crate version
+        run: |
+          set -eu
+          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)
+          test -n "$crate"
+          test "v$crate" = "$TAG"
+      - name: This is the commit CI passed
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$CI_SHA"
       # rust-toolchain.toml pins the compiler, and cargo builds with the pin
       # whatever the action sets as default. The target goes on the pin.
       - name: The pinned toolchain
@@ -59,13 +163,13 @@ jobs:
           toolchain: ${{ steps.pin.outputs.channel }}
           targets: ${{ matrix.target }}
       - name: The target is installed for the pin
-        run: rustup target list --installed | grep -qx '${{ matrix.target }}'
-      - run: cargo build --locked --release --target ${{ matrix.target }} -p ljos-consensus
+        run: rustup target list --installed | grep -qx "$TARGET"
+      - run: cargo build --locked --release --target "$TARGET" -p ljos-consensus
       - run: |
           set -eu
-          name="consensus-${TAG}-${{ matrix.target }}"
+          name="consensus-${TAG}-${TARGET}"
           mkdir -p "dist/$name"
-          cp target/${{ matrix.target }}/release/ljos-consensus "dist/$name/"
+          cp "target/${TARGET}/release/ljos-consensus" "dist/$name/"
           cp README.md CHANGELOG.md LICENSE* "dist/$name/" 2>/dev/null || true
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           (cd dist && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256")
@@ -74,12 +178,18 @@ jobs:
           name: ${{ matrix.target }}
           path: dist/*.tar.gz*
   release:
-    needs: build
+    needs: [ci, build]
     runs-on: ubuntu-latest
+    env:
+      CI_SHA: ${{ needs.ci.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: refs/tags/${{ env.TAG }}
+      - name: This is the commit CI passed
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$CI_SHA"
       - uses: actions/download-artifact@v4
         with:
           path: dist

@@ -17,6 +17,14 @@ Docs: https://leidarljos.github.io/consensus/
 
 The seat that settles through this crate is documented at https://leidarljos.github.io.
 
+## Install
+
+```console
+$ cargo binstall --locked ljos-consensus
+```
+
+The crate is on crates.io as `ljos-consensus`. The name `consensus` is already a Bitcoin crate. A tag publishes `consensus-v<version>-<target>.tar.gz` and a `.sha256` file, with the `ljos-consensus` binary inside.
+
 ## First minute
 
 <!-- [[[cog
