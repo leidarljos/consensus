@@ -13,13 +13,9 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   # The CI job lists workflow runs for the tagged commit.
   actions: read
-  # The build attestations: a signed statement that this workflow built
-  # each archive, which `gh attestation verify` and the ljos installer check.
-  id-token: write
-  attestations: write
 
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
@@ -27,6 +23,10 @@ env:
 jobs:
   ci:
     name: CI on this sha is green
+    # A cold check on two hosts is fmt, clippy and the suite.
+    # Half an hour covers that and the queue.
+    # A finished run returns at once.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.green.outputs.sha }}
@@ -60,7 +60,7 @@ jobs:
         run: |
           set -eu
           echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: refs/tags/${{ env.TAG }}
       - name: The tag is the crate version
@@ -82,7 +82,7 @@ jobs:
           channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
           test -n "$channel"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: ${{ steps.pin.outputs.channel }}
           targets: ${{ matrix.target }}
@@ -97,24 +97,30 @@ jobs:
           cp README.md CHANGELOG.md LICENSE* "dist/$name/" 2>/dev/null || true
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           (cd dist && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256")
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.target }}
           path: dist/*.tar.gz*
   release:
     needs: [ci, build]
+    # Writing the release and signing the archives.
+    # The build jobs only read.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     runs-on: ubuntu-latest
     env:
       CI_SHA: ${{ needs.ci.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: refs/tags/${{ env.TAG }}
       - name: This is the commit CI passed
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$CI_SHA"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           merge-multiple: true
@@ -127,7 +133,7 @@ jobs:
         run: |
           awk -v v="${TAG#v}" '$0 ~ "^## "v {p=1; next} /^## /{if(p) exit} p' CHANGELOG.md > notes.md
           test -s notes.md || echo "See CHANGELOG.md." > notes.md
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ env.TAG }}
           body_path: notes.md
