@@ -4,6 +4,14 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 <!-- towncrier release notes start -->
 
+## 0.10.1 (2026-11-04)
+
+### Fixes
+
+- The release and publish workflows check out the repository before they run the local ci-green action.
+  A local action is a file in the workspace, and the gate was starting from an empty one.
+
+
 ## 0.10.0 (2026-11-04)
 
 ### Features
