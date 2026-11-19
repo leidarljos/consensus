@@ -134,7 +134,8 @@ program that is not there, =EX_IOERR= a read that did not finish,
 =EX_NOINPUT= a read that succeeded and held nothing, the code =sysexits=
 gives an empty message. Any other failure of a parsed =settle= exits 1.
 That line is =Error:= plus the reason. A stack is not added when
-=RUST_BACKTRACE= is set.
+=RUST_BACKTRACE= is set. A =--ballots= value that is not JSON names
+that flag and the array of ={"agent", "choice"}= it expects.
 
 =ljos-consensus surprising (--issue ID | --ballots JSON) --predictions JSON=
 

@@ -779,7 +779,17 @@ fn load_ballots(ballots: Option<&str>) -> Result<Vec<Ballot>> {
     let Some(raw) = ballots else {
         bail!("pass --ballots JSON or --issue");
     };
-    ballots_from_json(raw).map_err(|e| anyhow::anyhow!(e))
+    ballots_from_json(raw).map_err(|e| anyhow::anyhow!(ballot_flag_line(&e)))
+}
+
+/// `--ballots` on stderr. A byte the JSON parser refused is not the
+/// message: the line names the flag and the array it expects.
+fn ballot_flag_line(err: &str) -> String {
+    if err.contains("at line ") {
+        return "--ballots: expected a JSON array of {\"agent\", \"choice\"}".to_string();
+    }
+    let reason = err.strip_prefix("vote json: ").unwrap_or(err);
+    format!("--ballots: {reason}")
 }
 
 /// An `--issue` read that did not yield ballots. `code` is the `sysexits.h`
