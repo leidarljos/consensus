@@ -607,6 +607,9 @@ fn run() -> Result<()> {
             if names.is_empty() {
                 bail!("rounds: --agents names no voter");
             }
+            if !(0.0..=1.0).contains(&susceptibility) {
+                bail!("--susceptibility must be in [0, 1], got {susceptibility}");
+            }
             let anchors = match susceptibility_of.as_deref() {
                 Some(raw) => anchors_from_json(raw)
                     .map_err(|e| flag_json("--susceptibility-of", ANCHORS_SHAPE, &e))?,

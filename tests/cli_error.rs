@@ -217,3 +217,38 @@ fn a_negative_number_reaches_its_range_check() {
         );
     }
 }
+
+#[test]
+fn rounds_refuses_a_susceptibility_outside_zero_to_one() {
+    for raw in ["3", "-0.5", "NaN"] {
+        let out = Command::new(bin())
+            .args(["rounds", "--agents", "a", "--susceptibility", raw])
+            .output()
+            .expect("spawn");
+        assert_eq!(out.status.code(), Some(1), "{raw}");
+        assert!(out.stdout.is_empty(), "{raw}");
+        let err = String::from_utf8(out.stderr).expect("utf-8");
+        let got = raw.parse::<f64>().unwrap();
+        assert_eq!(
+            err,
+            format!("Error: --susceptibility must be in [0, 1], got {got}\n")
+        );
+    }
+    let out = Command::new(bin())
+        .args(["rounds", "--agents", "a", "--susceptibility", "0.5"])
+        .output()
+        .expect("spawn");
+    assert_eq!(out.status.code(), Some(0));
+}
+
+#[test]
+fn the_reference_says_rounds_checks_its_susceptibility() {
+    let text = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/orgmode/reference.org"),
+    )
+    .unwrap();
+    assert!(
+        text.contains("=--susceptibility= must be in [0, 1], as it must for =settle="),
+        "{text}"
+    );
+}

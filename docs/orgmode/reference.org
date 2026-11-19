@@ -246,6 +246,8 @@ guarantees: =bound= is the largest susceptibility, and
 a null count with the reason, since convergence there is asymptotic;
 size =--max-iter= by judgement. One unanchored voter voids the
 guarantee for the whole panel, which is what the maximum says.
+=--susceptibility= must be in [0, 1], as it must for =settle=, and a value
+outside that range is refused.
 
 * The step
 
