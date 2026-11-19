@@ -4,6 +4,56 @@ Versions follow semver at 0.x: a minor bump is a feature, a patch is a fix.
 
 <!-- towncrier release notes start -->
 
+## 0.10.2 (2026-11-18)
+
+### Fixes
+
+- A JSON flag whose value is not JSON prints `Error: FLAG: expected` and the shape it takes.
+  This covers `--trust`, `--susceptibility-of`, `--discount-of`, `--epsilon-of`, `--predictions`, `--items` and `--truths`.
+  The parser's line and column and the `Caused by` lines are gone.
+- A `--ballots` value that is not JSON names the flag and the array of `{"agent", "choice"}` it expects.
+  The parser's byte message stays off that line.
+- A command given none of its inputs is a usage error: `settle` and `surprising` without `--ballots` or `--issue`, and `reliability` and `correlation` without `--items` or `--project`.
+  It prints the `error:` line and a usage line and exits 2, not 1.
+- A negative number after a flag is read as its value.
+  `settle --self-weight -1` now prints the range error for that flag, where it printed an unexpected argument named `-1`.
+  `reputation --alpha -inf` is refused as not finite, as `--alpha=-inf` is.
+- A normal build no longer warns about a missing `~/Git/Github/seldon`.
+  `SELDON_SRC` still links `src/capi.cpp` when that file is there.
+- A usage error is one `error:` line and one usage line, and exits 2.
+  The extra hint line, the suggestion paragraph and the list under a missing flag are folded into that line.
+- A usage error is one line, `Error:` plus the reason.
+  `RUST_BACKTRACE` does not append a stack to that line.
+- The command list gives each command one line, including `settle`.
+  Trust help names the `[from, to, weight]` tuples the tutorial passes.
+- `--help settle` and `-h settle` print that command's flags.
+  `--help` on its own still lists the commands.
+- `reliability --project` and `correlation --project` print one line when vissue cannot be read.
+  The line names the command, says whether vissue is missing, does not know the project or exited non-zero, and gives the next step.
+  Only the first line vissue wrote is kept, after `vissue said:`.
+- `reputation --alpha` rejects NaN and the infinities as one usage line and exits 2.
+- `rounds --susceptibility` outside [0, 1] is refused with the range, as `settle --susceptibility` is.
+  It used to print a bound of one and a note about no contraction.
+- `settle --seldon` writes its files only under `--out`.
+  Without `--out` it prints `pass --out DIR` and leaves the working directory alone.
+
+### Documentation
+
+- The derivation page writes the round-count formula with `\le` and `\ge`, so the export keeps it in one piece.
+- The explanation page says `settled: false` follows from a spent round budget and from a tie.
+  A spent budget is `converged: false`.
+- The explanation page writes the cap bound as `q \le 1/2`, so the export keeps it in one literal.
+- The getting-started and how-to pages say a missing `seldon` prints the command that runs the files it wrote.
+  The getting-started seldon command uses the tutorial ballots, so it can be copied.
+- The home page's first minute shows `settled: false` for a tie, as the binary does.
+  The sample is generated from that command, and the page says a tie is unsettled.
+- The how-to page says a tie is `settled: false` even when the run converged.
+  A spent round budget is `converged: false`.
+- The install pages say to build this checkout with `cargo install --locked --path .`.
+  They also say `cargo binstall` needs the cargo-binstall program and installs the crates.io release, which can be a different version from this checkout.
+  The compact sample says it uses `jq`.
+
+
 ## 0.10.1 (2026-11-04)
 
 ### Fixes
