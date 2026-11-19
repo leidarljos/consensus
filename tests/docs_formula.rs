@@ -1,4 +1,4 @@
-//! The round-count formula survives the org export as one formula.
+//! The round-count formula and the page bound survive the org export as one literal each.
 
 use std::fs;
 use std::path::PathBuf;
@@ -65,4 +65,54 @@ fn the_round_count_formula_is_one_piece() {
         "export split the formula\n{rst}"
     );
     assert!(!rst.contains("``err(t) <``"), "{rst}");
+}
+
+fn pages() -> Vec<PathBuf> {
+    let mut pages: Vec<PathBuf> = fs::read_dir(root().join("docs/orgmode"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "org"))
+        .collect();
+    pages.sort();
+    pages
+}
+
+#[test]
+fn no_page_writes_an_inequality_with_an_equals_sign() {
+    for page in pages() {
+        let org = fs::read_to_string(&page).unwrap();
+        for line in prose(&org).lines() {
+            if line.starts_with('#') {
+                continue;
+            }
+            assert!(
+                !line.contains("<=") && !line.contains(">="),
+                "{} writes an inequality with `=`, which closes a verbatim span there: {line}",
+                page.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn the_explanation_bound_exports_as_one_literal() {
+    let out = Command::new("pandoc")
+        .args([
+            "-f",
+            "org",
+            "-t",
+            "rst",
+            "--wrap=preserve",
+            "--columns=400",
+            "docs/orgmode/explanation.org",
+        ])
+        .current_dir(root())
+        .output();
+    let Ok(out) = out else {
+        return;
+    };
+    assert!(out.status.success());
+    let rst = String::from_utf8(out.stdout).unwrap();
+    assert!(rst.contains("``q \\le 1/2``"), "{rst}");
+    assert!(!rst.contains("``q <``"), "{rst}");
 }

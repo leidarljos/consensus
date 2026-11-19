@@ -64,7 +64,7 @@ A panel with neither a contraction nor a closed form still stops on the step, wh
 
 Binary64 adds at most =gamma(n + 2) / (1 - q)= to the bound: Higham's gamma for the =n=-term dot product, the product with =s_i= and the anchor term.
 The default tolerance is twice that floor at =q = 1/2= and =2^25 - 1= voters, the largest panel whose one-ballot margin the tie test can read, about 1.49e-8.
-The default cap of 27 rounds puts the bound under it on every panel with =q <= 1/2=.
+The default cap of 27 rounds puts the bound under it on every panel with =q \le 1/2=.
 Past that the settle measures the distance to the closed-form point when the rounds run out, and =note= names the rounds =q= needs.
 
 =tie= says the two leading shares lie within twice the residual plus rounding of each other: the settle cannot order them.
