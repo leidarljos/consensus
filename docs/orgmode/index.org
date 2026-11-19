@@ -33,7 +33,18 @@ the inputs for the Seldon opinion-dynamics engine and read its output.
 
 * Install
 
+From this checkout:
+
 #+begin_src console
+$ cargo install --locked --path .
+#+end_src
+
+Cargo puts the binary in =~/.cargo/bin=. =--version= matches =version= in
+=Cargo.toml=. The crates.io release needs cargo-binstall, which is not a
+cargo built-in, and it can be a different version from this checkout:
+
+#+begin_src console
+$ cargo install --locked cargo-binstall
 $ cargo binstall --locked ljos-consensus
 $ ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
 #+end_src

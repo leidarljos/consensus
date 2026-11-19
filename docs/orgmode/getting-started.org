@@ -5,13 +5,28 @@ Three voters, two options, and a trust graph that changes the answer.
 
 * 0. Install
 
+From this checkout:
+
 #+begin_src console
-$ cargo binstall --locked ljos-consensus
+$ cargo install --locked --path .
 $ ljos-consensus --help
 #+end_src
 
-The crate is on crates.io as =ljos-consensus=. The name =consensus= is
-already a Bitcoin crate. =ljos-consensus --help= lists the commands.
+Cargo puts the binary in =~/.cargo/bin=. Add that directory to =PATH=
+when the shell cannot find =ljos-consensus=. =--version= matches =version=
+in =Cargo.toml=.
+
+The crates.io release needs cargo-binstall, which is not a cargo built-in:
+
+#+begin_src console
+$ cargo install --locked cargo-binstall
+$ cargo binstall --locked ljos-consensus
+#+end_src
+
+That fetches the current crates.io release. The release can be a different
+version from this checkout, so =--version= may not match these pages.
+The name =consensus= is already a Bitcoin crate, which is why this one is
+=ljos-consensus=. =ljos-consensus --help= lists the commands.
 =ljos-consensus --help settle= prints that command's flags, the same page
 as =ljos-consensus settle --help=.
 

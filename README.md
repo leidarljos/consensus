@@ -19,15 +19,33 @@ The seat that settles through this crate is documented at https://leidarljos.git
 
 ## Install
 
+From this checkout, which is the binary these pages describe:
+
 ```console
+$ cargo install --locked --path .
+```
+
+Cargo puts that binary in `~/.cargo/bin`.
+Add that directory to `PATH` when the shell cannot find `ljos-consensus`.
+`--version` matches `version` in `Cargo.toml`.
+
+The crates.io release is a separate install.
+`cargo binstall` is not a cargo built-in.
+Install that program, then the release:
+
+```console
+$ cargo install --locked cargo-binstall
 $ cargo binstall --locked ljos-consensus
 ```
 
-The crate is on crates.io as `ljos-consensus`.
-The name `consensus` is already a Bitcoin crate.
+`cargo binstall` fetches the current crates.io release.
+That release can be a different version from this checkout, so `--version` may not match these pages.
+The name `consensus` is already a Bitcoin crate, which is why this one is `ljos-consensus`.
 A tag publishes `consensus-v<version>-<target>.tar.gz` and a `.sha256` file, with the `ljos-consensus` binary inside.
 
 ## First minute
+
+The compact sample uses `jq`.
 
 <!-- [[[cog
 import pathlib, sys

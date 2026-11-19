@@ -89,6 +89,33 @@ fn the_release_uploads_what_binstall_fetches() {
     );
 }
 
+/// A reader of this checkout can install it without cargo-binstall.
+#[test]
+fn the_checkout_install_is_written_down() {
+    let root = root();
+    for rel in [
+        "README.md",
+        "docs/orgmode/getting-started.org",
+        "docs/orgmode/index.org",
+    ] {
+        let text = fs::read_to_string(root.join(rel)).unwrap();
+        assert!(
+            text.contains("cargo install --locked --path ."),
+            "{rel} has no checkout install"
+        );
+        assert!(
+            text.contains("cargo install --locked cargo-binstall"),
+            "{rel} does not say how to get cargo-binstall"
+        );
+        assert!(
+            text.contains("$ cargo binstall --locked ljos-consensus"),
+            "{rel} dropped the crates.io install"
+        );
+    }
+    let readme = fs::read_to_string(root.join("README.md")).unwrap();
+    assert!(readme.contains("uses `jq`"), "the compact sample needs jq");
+}
+
 /// crates.io publish and the GitHub release share one gate, and that gate
 /// is the only copy of the CI watch.
 #[test]
