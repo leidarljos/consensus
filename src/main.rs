@@ -319,6 +319,21 @@ fn main() -> ExitCode {
     }
 }
 
+/// A value clap already refused. NaN and the infinities on `--alpha` are
+/// one line and exit 2: the extra hint clap appends is a second step the
+/// line itself does not need.
+fn usage_exit(err: clap::Error) -> ! {
+    let rendered = err.to_string();
+    let first = rendered.lines().next().unwrap_or(rendered.as_str());
+    if err.kind() == clap::error::ErrorKind::ValueValidation
+        && first.contains("not a finite number")
+    {
+        eprintln!("{first}");
+        std::process::exit(2);
+    }
+    err.exit()
+}
+
 /// `prog --help settle` and `prog -h settle` ask for that command's page.
 /// Clap treats the flag as the page for whatever it has parsed so far, which
 /// at that point is the top-level list, so the command name moves in front
@@ -334,7 +349,7 @@ fn command_help_argv(mut args: Vec<String>) -> Vec<String> {
 fn run() -> Result<()> {
     let cli = match Cli::try_parse_from(command_help_argv(std::env::args().collect())) {
         Ok(cli) => cli,
-        Err(err) => err.exit(),
+        Err(err) => usage_exit(err),
     };
     match cli.cmd {
         Cmd::Surprising {

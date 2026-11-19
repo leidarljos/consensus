@@ -93,12 +93,10 @@ fn alpha_nan_is_a_usage_error() {
         let stderr = String::from_utf8(out.stderr).expect("stderr utf-8");
         assert_eq!(out.status.code(), Some(2), "{raw}\n{stdout}\n{stderr}");
         assert!(stdout.is_empty(), "{raw}\n{stdout}");
-        let want = format!(
-            "error: invalid value '{raw}' for '--alpha <ALPHA>': not a finite number\n\
-             \n\
-             For more information, try '--help'.\n"
-        );
+        let want =
+            format!("error: invalid value '{raw}' for '--alpha <ALPHA>': not a finite number\n");
         assert_eq!(stderr, want);
+        assert_eq!(stderr.lines().count(), 1, "{raw}\n{stderr}");
     }
 }
 
