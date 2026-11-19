@@ -301,8 +301,24 @@ fn main() -> ExitCode {
     }
 }
 
+/// `prog --help settle` and `prog -h settle` ask for that command's page.
+/// Clap treats the flag as the page for whatever it has parsed so far, which
+/// at that point is the top-level list, so the command name moves in front
+/// of the flag before clap sees the arguments.
+fn command_help_argv(mut args: Vec<String>) -> Vec<String> {
+    if args.len() >= 3 && (args[1] == "--help" || args[1] == "-h") && !args[2].starts_with('-') {
+        let cmd = args.remove(2);
+        args.insert(1, cmd);
+    }
+    args
+}
+
 fn run() -> Result<()> {
-    match Cli::parse().cmd {
+    let cli = match Cli::try_parse_from(command_help_argv(std::env::args().collect())) {
+        Ok(cli) => cli,
+        Err(err) => err.exit(),
+    };
+    match cli.cmd {
         Cmd::Surprising {
             issue,
             ballots,
@@ -1017,6 +1033,40 @@ mod tests {
         assert!((out["bound"].as_f64().unwrap() - 0.5).abs() < 1e-12);
         assert_eq!(out["predicted_rounds"], 31);
         assert!(out["note"].is_null());
+    }
+
+    #[test]
+    fn help_flag_before_a_command_names_that_command() {
+        let args: Vec<String> = ["ljos-consensus", "--help", "settle"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            command_help_argv(args),
+            vec!["ljos-consensus", "settle", "--help"]
+        );
+        let short: Vec<String> = ["ljos-consensus", "-h", "correlation"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            command_help_argv(short),
+            vec!["ljos-consensus", "correlation", "-h"]
+        );
+    }
+
+    #[test]
+    fn help_flag_after_a_command_stays_put() {
+        let args: Vec<String> = ["ljos-consensus", "settle", "--help"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(command_help_argv(args.clone()), args);
+        let alone: Vec<String> = ["ljos-consensus", "--help"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(command_help_argv(alone.clone()), alone);
     }
 
     #[test]

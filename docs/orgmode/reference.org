@@ -4,6 +4,8 @@
 * Command line
 
 The flags are what =ljos-consensus settle --help= prints.
+=ljos-consensus --help settle= prints that same page.
+=ljos-consensus --help= on its own lists the commands.
 
 # [[[cog
 # import pathlib, sys

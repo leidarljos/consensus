@@ -11,7 +11,9 @@ $ ljos-consensus --help
 #+end_src
 
 The crate is on crates.io as =ljos-consensus=. The name =consensus= is
-already a Bitcoin crate.
+already a Bitcoin crate. =ljos-consensus --help= lists the commands.
+=ljos-consensus --help settle= prints that command's flags, the same page
+as =ljos-consensus settle --help=.
 
 * 1. Settle with equal trust
 
