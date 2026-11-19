@@ -37,10 +37,10 @@ Options:
           JSON array of `{from, to, weight}` objects or `[from, to, weight]` tuples
 
       --seldon
-          If set, write Seldon inputs and exec `seldon`. When `seldon` is not on PATH, the files are still written and the command that runs them is printed
+          Write Seldon inputs under `--out` and exec `seldon`. When `seldon` is not on PATH, the files are still written and the command that runs them is printed. Without `--out`, nothing is written
 
       --out <OUT>
-          Directory for the files `--seldon` writes. Absent, that is the working directory
+          Directory for the files `--seldon` writes. Required with `--seldon`
 
       --self-weight <SELF_WEIGHT>
           A voter's weight on its own ballot when its row does not say: the fallback under `--self-trust earned`, every voter's under `constant`

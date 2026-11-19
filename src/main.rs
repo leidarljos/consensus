@@ -38,12 +38,12 @@ enum Cmd {
         /// JSON array of `{from, to, weight}` objects or `[from, to, weight]` tuples.
         #[arg(long)]
         trust: Option<String>,
-        /// If set, write Seldon inputs and exec `seldon`. When `seldon` is
-        /// not on PATH, the files are still written and the command that
-        /// runs them is printed.
+        /// Write Seldon inputs under `--out` and exec `seldon`. When `seldon`
+        /// is not on PATH, the files are still written and the command that
+        /// runs them is printed. Without `--out`, nothing is written.
         #[arg(long)]
         seldon: bool,
-        /// Directory for the files `--seldon` writes. Absent, that is the working directory.
+        /// Directory for the files `--seldon` writes. Required with `--seldon`.
         #[arg(long)]
         out: Option<PathBuf>,
         /// A voter's weight on its own ballot when its row does not say:
@@ -579,6 +579,11 @@ fn run() -> Result<()> {
                 );
             }
             if use_seldon {
+                let Some(dir) = out else {
+                    bail!(
+                        "pass --out DIR; --seldon writes config.toml, network.txt and opinions.txt there"
+                    );
+                };
                 // Seldon writes its own DeGroot files from `--self-weight`.
                 note_ignored(
                     "--seldon",
@@ -591,7 +596,7 @@ fn run() -> Result<()> {
                     susceptibility,
                     max_iter,
                     tol,
-                    out,
+                    &dir,
                 )? {
                     println!("{}", serde_json::to_string_pretty(&outcome)?);
                 }
@@ -974,13 +979,12 @@ fn settle_seldon(
     susceptibility: f64,
     max_iter: usize,
     tol: f64,
-    out: Option<PathBuf>,
+    dir: &std::path::Path,
 ) -> Result<Option<ljos_consensus::Outcome>> {
     if (susceptibility - 1.0).abs() > f64::EPSILON {
         bail!("seldon DeGroot has no Friedkin–Johnsen anchor; omit --seldon or set --susceptibility 1");
     }
-    let dir = out.unwrap_or_else(|| PathBuf::from("."));
-    let job = write_seldon_inputs(&dir, ballots, trust, self_weight, max_iter, tol)?;
+    let job = write_seldon_inputs(dir, ballots, trust, self_weight, max_iter, tol)?;
     if !which_ok("seldon") {
         println!("{}", seldon_absent_line(&dir));
         return Ok(None);

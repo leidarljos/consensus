@@ -79,7 +79,8 @@ seldon config.toml -o dir -n network.txt -a opinions.txt
 ```
 
 The last `opinions_i.txt` is parsed back into the same `Outcome` the discrete stepper prints. Friedkin-Johnsen (`--susceptibility` below 1) stays on the native `settle()`; Seldon DeGroot has no anchor.
-When `seldon` is not on PATH the files are still written and the command that runs them is printed.
+Without `--out`, nothing is written and the line says to pass `--out DIR`.
+When `seldon` is not on PATH and `--out` is set, the files are still written and the command that runs them is printed.
 The discrete settle is the same command without `--seldon`.
 
 Native `settle()` is the test path. It does not need `seldon` on PATH.

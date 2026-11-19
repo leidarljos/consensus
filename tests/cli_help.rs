@@ -64,7 +64,7 @@ fn settle_help_names_the_flags_a_tutorial_needs() {
     for needle in [
         "vissue vote",
         "[from, to, weight]",
-        "working directory",
+        "nothing is written",
         "moves off its ballot",
         "unconverged settle stops",
         "distance a settle stops within",

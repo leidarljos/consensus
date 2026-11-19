@@ -49,8 +49,9 @@ answered.
 $ ljos-consensus settle --issue proj-1a2b --seldon --out run/
 #+end_src
 
-Writes =config.toml=, =network.txt= and =opinions.txt= under =--out=, runs
-=seldon= when it is on =PATH=, and reads the final opinions back. The parse
-path does not print a residual. When =seldon= is not on =PATH= the files
-are still written and the command that runs them is printed. The discrete
-settle is the same command without =--seldon=.
+=--out= names the directory for =config.toml=, =network.txt= and
+=opinions.txt=. Without =--out=, nothing is written and the line says to
+pass =--out DIR=. When =seldon= is not on =PATH= and =--out= is set, the
+files are still written and the command that runs them is printed. The
+parse path does not print a residual. The discrete settle is the same
+command without =--seldon=.

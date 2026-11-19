@@ -28,6 +28,10 @@ fn seldon_pages_do_not_promise_a_discrete_fallback() {
             text.contains("not on PATH") || text.contains("not on =PATH="),
             "{rel} does not say what a missing seldon prints"
         );
+        assert!(
+            text.contains("nothing is written"),
+            "{rel} does not say that a missing --out writes nothing"
+        );
     }
     let started = page("docs/orgmode/getting-started.org");
     assert!(

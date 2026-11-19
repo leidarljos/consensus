@@ -186,9 +186,10 @@ Runs =vissue vote proj-1a2b --json= and settles those ballots. The seat's
 $ ljos-consensus settle --ballots '[{"agent":"alice","choice":"ship"},{"agent":"bob","choice":"ship"},{"agent":"carol","choice":"hold"}]' --trust '[["alice","carol",1.0],["bob","carol",1.0],["carol","carol",4.0],["carol","alice",1.0]]' --seldon --out run/
 #+end_src
 
-Writes =config.toml=, =network.txt= and =opinions.txt= in Seldon's format
-under =--out=, runs =seldon= when it is on =PATH=, and parses the final
-opinions back into the same JSON shape. The parse path does not print a
-residual. When =seldon= is not on =PATH= the files are still written and
-the command that runs them is printed. The discrete settle is the same
-command without =--seldon=.
+=--out= names the directory for =config.toml=, =network.txt= and
+=opinions.txt=. Without =--out=, nothing is written and the line says to
+pass =--out DIR=. When =seldon= is not on =PATH= and =--out= is set, the
+files are still written and the command that runs them is printed. With
+=seldon= on =PATH=, the final opinions are parsed back into the same JSON
+shape. The parse path does not print a residual. The discrete settle is
+the same command without =--seldon=.
