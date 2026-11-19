@@ -476,7 +476,7 @@ fn run() -> Result<()> {
             project,
             rounds,
         } => {
-            let items = load_items(items.as_deref(), project.as_deref())?;
+            let items = load_items("reliability", items.as_deref(), project.as_deref())?;
             let (accuracy, ran) = ljos_consensus::dawid_skene_with_rounds(&items, rounds);
             let out = serde_json::json!({
                 "items": items.len(),
@@ -503,7 +503,7 @@ fn run() -> Result<()> {
                     (read.items, truths)
                 }
                 None => {
-                    let items = load_items(None, project.as_deref())?;
+                    let items = load_items("correlation", None, project.as_deref())?;
                     let kept: Vec<usize> = (0..items.len()).collect();
                     let truths = align_truths(truths.as_deref(), items.len(), &kept)?;
                     (items, truths)
@@ -935,29 +935,68 @@ fn truths_length_line(entries: usize, items: usize) -> String {
 }
 
 /// Items for the reliability estimate: `--items` JSON, else every issue of
-/// a tracker project holding two or more ballots.
-fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(String, String)>>> {
+/// a tracker project with two or more ballots. `command` names the
+/// subcommand in every refusal, so a seat that ran one of several can tell
+/// which one stopped.
+fn load_items(
+    command: &str,
+    items: Option<&str>,
+    project: Option<&str>,
+) -> Result<Vec<Vec<(String, String)>>> {
     if let Some(raw) = items {
         return Ok(items_from_json(raw)?.items);
     }
     let Some(project) = project else {
         bail!("pass --items JSON or --project");
     };
+    let refuse = |what: &str, next: &str, said: &str| {
+        anyhow::anyhow!("{command} --project {project}: {what}; {next}{said}")
+    };
     if !which_ok("vissue") {
-        bail!("vissue not on PATH; pass --items JSON");
+        return Err(refuse(
+            "vissue is not on PATH",
+            "install vissue or pass --items JSON",
+            "",
+        ));
     }
     let out = Command::new("vissue")
         .args(["list", "-p", project, "--json"])
+        .stderr(Stdio::piped())
         .output()
-        .context("run vissue list --json")?;
+        .map_err(|_| {
+            refuse(
+                "vissue could not run",
+                "check that it starts, or pass --items JSON",
+                "",
+            )
+        })?;
     if !out.status.success() {
-        bail!(
-            "vissue list -p {project} --json failed\n{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
+        let said = vissue_said(&out.stderr);
+        return Err(if project_not_found(&out.stderr) {
+            refuse(
+                "vissue has no such project",
+                "check the name or pass --items JSON",
+                &said,
+            )
+        } else {
+            let what = match out.status.code() {
+                Some(code) => format!("vissue list exited {code}"),
+                None => "vissue list exited on a signal".to_string(),
+            };
+            refuse(
+                &what,
+                "run vissue list -p by hand, or pass --items JSON",
+                &said,
+            )
+        });
     }
-    let rows: Vec<serde_json::Value> =
-        serde_json::from_slice(&out.stdout).context("vissue list --json: not a JSON array")?;
+    let Ok(rows) = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout) else {
+        return Err(refuse(
+            "vissue list did not print a JSON array",
+            "run vissue list -p by hand, or pass --items JSON",
+            "",
+        ));
+    };
     let mut items = Vec::new();
     for row in rows {
         let Some(id) = row.get("id").and_then(serde_json::Value::as_str) else {
@@ -973,23 +1012,57 @@ fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(Str
         }
     }
     if items.is_empty() {
-        bail!("reliability: no issue in {project} holds two or more ballots");
+        return Err(refuse(
+            "no issue has two or more ballots",
+            "check the project or pass --items JSON",
+            "",
+        ));
     }
     Ok(items)
 }
 
+/// The longest `vissue said:` text kept, in characters.
+const VISSUE_SAID_MAX: usize = 120;
+
+/// ` vissue said: ...` with the first line of the tracker's stderr, or
+/// nothing when it wrote none. The rest of what it wrote is dropped, so a
+/// long trace cannot bury the line that names the next step.
+fn vissue_said(stderr: &[u8]) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let Some(line) = text.lines().map(str::trim).find(|line| !line.is_empty()) else {
+        return String::new();
+    };
+    let mut kept: String = line.chars().take(VISSUE_SAID_MAX).collect();
+    if line.chars().count() > VISSUE_SAID_MAX {
+        kept.push_str("...");
+    }
+    format!(". vissue said: {kept}")
+}
+
+/// Whether the tracker's stderr says the project is unknown. Its wording
+/// is not fixed, so this reads for the project and a word that denies it.
+fn project_not_found(stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stderr).to_lowercase();
+    text.contains("project")
+        && ["not found", "no such", "unknown", "does not exist"]
+            .iter()
+            .any(|denial| text.contains(denial))
+}
+
 /// The ballots `vissue vote ID --json` prints, or one line saying why
-/// there are none. vissue's own stderr passes through as it writes it.
+/// there are none. The tracker's stderr is read here, not passed on: its
+/// first line follows `vissue said:` when the read fails.
 fn vote_json(id: &str) -> Result<Vec<Ballot>, String> {
     let out = Command::new("vissue")
         .args(["vote", id, "--json"])
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::piped())
         .output()
-        .map_err(|e| format!("vissue vote {id} --json could not run: {e}"))?;
+        .map_err(|_| format!("vissue vote {id} --json could not run"))?;
     if !out.status.success() {
+        let said = vissue_said(&out.stderr);
         return Err(match out.status.code() {
-            Some(code) => format!("vissue vote {id} --json exited {code}"),
-            None => format!("vissue vote {id} --json exited on a signal"),
+            Some(code) => format!("vissue vote {id} --json exited {code}{said}"),
+            None => format!("vissue vote {id} --json exited on a signal{said}"),
         });
     }
     let raw = String::from_utf8(out.stdout)

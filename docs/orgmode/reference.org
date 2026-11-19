@@ -191,6 +191,15 @@ why, and the rest are read. Output: =items=,
 =rounds=, and =accuracy= as an object of voter to a value in (0, 1),
 Laplace smoothed so no voter reaches a certainty.
 
+When =--project= cannot be read at all, the command writes one line to
+stderr and exits 1. The line names the command and says what failed:
+=vissue= is missing, does not know the project, or exited non-zero. It
+ends with the next step, which is to fix that or pass =--items JSON=. The
+first line =vissue= wrote follows =vissue said:=, cut to 120 characters,
+and the rest is dropped. =correlation --project= reads the project the
+same way. The line for a missing tracker is
+=Error: reliability --project P: vissue is not on PATH; install vissue or pass --items JSON=.
+
 =ljos-consensus correlation (--items JSON [--truths JSON] | --project P) [--gate LEVEL] [--rounds N]=
 
 How much the voters share their mistakes. A voter's correctness on each
