@@ -24,6 +24,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Weigh ballots on a trust graph and print the shares.
+    ///
+    /// `--ballots` is JSON. `--issue` reads `vissue vote ID --json` when
+    /// `--ballots` is absent.
     Settle {
         /// Tracker issue id. Ballots come from `vissue vote ID --json` when `--ballots` is absent.
         #[arg(long)]
@@ -31,7 +35,7 @@ enum Cmd {
         /// JSON array of {agent, choice}
         #[arg(long)]
         ballots: Option<String>,
-        /// JSON array of {from, to, weight}
+        /// JSON array of `{from, to, weight}` objects or `[from, to, weight]` tuples.
         #[arg(long)]
         trust: Option<String>,
         /// If set, write Seldon inputs and exec `seldon`. When `seldon` is
@@ -79,11 +83,12 @@ enum Cmd {
         #[arg(long, value_enum, default_value_t = Engine::Iterate)]
         engine: Engine,
     },
-    /// How much the voters share their mistakes: the correlation of
-    /// whether each was right, over a project's history. Truth is the
-    /// named outcome, else the Dawid-Skene answer. Prints each voter's
-    /// discount for `settle --discount-of`, and how many independent
-    /// voices the panel holds.
+    /// How much the voters share their mistakes.
+    ///
+    /// The correlation of whether each was right, over a project's history.
+    /// Truth is the named outcome, else the Dawid-Skene answer. Prints each
+    /// voter's discount for `settle --discount-of`, and the count of
+    /// independent voices.
     Correlation {
         /// JSON array of items, each an array of {agent, choice}.
         #[arg(long)]
@@ -116,10 +121,11 @@ enum Cmd {
         #[arg(long, hide = true)]
         min_shared: Option<usize>,
     },
-    /// The surprisingly popular answer (Prelec, Seung and McCoy,
-    /// doi:10.1038/nature21054): ballots plus each voter's forecast of the
-    /// others' shares; the answer is the option whose actual share most
-    /// exceeds its predicted share.
+    /// The surprisingly popular answer.
+    ///
+    /// Prelec, Seung and McCoy (doi:10.1038/nature21054): ballots plus each
+    /// voter's forecast of the others' shares. The answer is the option whose
+    /// actual share most exceeds its predicted share.
     Surprising {
         /// Tracker issue id. Ballots come from `vissue vote ID --json` when `--ballots` is absent.
         #[arg(long)]
@@ -131,10 +137,11 @@ enum Cmd {
         #[arg(long)]
         predictions: String,
     },
-    /// A global standing per voter from the trust rows, by EigenTrust
-    /// (Kamvar, Schlosser and Garcia-Molina, doi:10.1145/775152.775242).
+    /// A global standing per voter from the trust rows.
+    ///
+    /// EigenTrust (Kamvar, Schlosser and Garcia-Molina, doi:10.1145/775152.775242).
     Reputation {
-        /// JSON array of {from, to, weight}
+        /// JSON array of `{from, to, weight}` objects or `[from, to, weight]` tuples.
         #[arg(long)]
         trust: String,
         /// Agents to stand; the rows' names when absent.
@@ -144,10 +151,11 @@ enum Cmd {
         #[arg(long, default_value_t = 0.15, value_parser = finite_alpha)]
         alpha: f64,
     },
-    /// Estimate each voter's reliability from many settled items with no
-    /// known truth (Dawid and Skene, doi:10.2307/2346806): EM over the
-    /// items' hidden answers and the voters' accuracies. Prints a JSON
-    /// object of voter to accuracy, plus the number of items used.
+    /// Estimate each voter's reliability from many items with no known truth.
+    ///
+    /// Dawid and Skene (doi:10.2307/2346806): EM over the items' hidden
+    /// answers and the voters' accuracies. Prints a JSON object of voter to
+    /// accuracy, plus the number of items used.
     Reliability {
         /// JSON array of items, each an array of {agent, choice}.
         #[arg(long)]
@@ -168,11 +176,12 @@ enum Cmd {
         #[arg(long, default_value_t = 20)]
         rounds: usize,
     },
-    /// The contraction bound of an anchored settle and the round count it
-    /// guarantees: `max s_i` over the voters, and `1 + ceil(ln(tol) /
-    /// ln(bound))` rounds to reach `tol`. A pure DeGroot panel reports no
-    /// count, only the bound of one: size `--max-iter` by judgement, since
-    /// convergence there is asymptotic. See `docs/orgmode/derivation.org`.
+    /// The contraction bound of an anchored settle, and the round count it guarantees.
+    ///
+    /// `max s_i` over the voters, and `1 + ceil(ln(tol) / ln(bound))` rounds
+    /// to reach `tol`. A pure DeGroot panel reports no count, only the bound
+    /// of one: size `--max-iter` by judgement, since convergence there is
+    /// asymptotic. See `docs/orgmode/derivation.org`.
     Rounds {
         /// Comma-separated voters the bound covers. This command reads no trust rows, so the names are given here.
         #[arg(long)]
