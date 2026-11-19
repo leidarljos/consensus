@@ -40,8 +40,9 @@ settles; the shares report where the group's weight ended up.
 $ ljos-consensus settle --issue proj-1a2b | jq -r '.options[.shares | index(max)]'
 #+end_src
 
-=settled= is false when the budget ran out; =engine= says which model
-answered.
+=settled= is false when the leading options are tied or the budget ran
+out. =converged= is false when the budget ran out. =engine= says which
+model answered.
 
 * Cross-check with Seldon
 
