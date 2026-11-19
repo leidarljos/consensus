@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use ljos_consensus::seldon::{parse_opinions_dir, seldon_absent_line, write_seldon_inputs};
 use ljos_consensus::{
     anchors_from_json, ballots_from_json, fj_contraction_bound, fj_rounds_to_tol, one_ballot_each,
@@ -319,19 +319,71 @@ fn main() -> ExitCode {
     }
 }
 
-/// A value clap already refused. NaN and the infinities on `--alpha` are
-/// one line and exit 2: the extra hint clap appends is a second step the
-/// line itself does not need.
-fn usage_exit(err: clap::Error) -> ! {
-    let rendered = err.to_string();
-    let first = rendered.lines().next().unwrap_or(rendered.as_str());
-    if err.kind() == clap::error::ErrorKind::ValueValidation
-        && first.contains("not a finite number")
-    {
-        eprintln!("{first}");
-        std::process::exit(2);
+/// A usage clap refused: one `error:` line, then one usage line, exit 2.
+///
+/// Clap's own text adds a hint line, a suggestion paragraph and, for a
+/// required flag, a list under the message. [`usage_message`] folds those
+/// into the one line, and [`usage_line`] names the command the seat typed.
+/// Help and version are not errors and print as clap prints them, and so
+/// does the page a bare `ljos-consensus` prints.
+fn usage_exit(err: clap::Error, args: &[String]) -> ! {
+    use clap::error::ErrorKind;
+    if !err.use_stderr() || err.kind() == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand {
+        err.exit()
     }
-    err.exit()
+    eprintln!("{}\n{}", usage_message(&err.to_string()), usage_line(args));
+    std::process::exit(2)
+}
+
+/// The first paragraph of clap's text as one line, with the first
+/// suggestion appended. The hint paragraph is dropped.
+fn usage_message(rendered: &str) -> String {
+    let mut paragraphs = rendered.trim().split("\n\n");
+    let mut lines = paragraphs
+        .next()
+        .unwrap_or("")
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty());
+    let mut message = lines
+        .next()
+        .unwrap_or("error: the arguments were not understood")
+        .to_string();
+    let rest: Vec<&str> = lines.collect();
+    if !rest.is_empty() {
+        let sep = if message.ends_with(':') { ", " } else { " " };
+        message = format!("{message} {}", rest.join(sep));
+    }
+    let tip = paragraphs.find_map(|paragraph| {
+        paragraph
+            .trim()
+            .lines()
+            .next()
+            .and_then(|line| line.trim().strip_prefix("tip: "))
+    });
+    if let Some(tip) = tip {
+        message = format!("{message}; {tip}");
+    }
+    message
+}
+
+/// The usage line of the command the seat typed, from the command itself.
+/// Clap's own line follows the error: for a near miss it lists the flag it
+/// guessed, and for a bad value it has none.
+fn usage_line(args: &[String]) -> String {
+    let mut root = Cli::command();
+    root.build();
+    let named = args
+        .iter()
+        .skip(1)
+        .find(|arg| !arg.starts_with('-'))
+        .and_then(|name| root.find_subcommand_mut(name));
+    let usage = match named {
+        Some(sub) => sub.render_usage(),
+        None => root.render_usage(),
+    };
+    let text = usage.to_string();
+    text.lines().next().unwrap_or("").to_string()
 }
 
 /// `prog --help settle` and `prog -h settle` ask for that command's page.
@@ -347,9 +399,10 @@ fn command_help_argv(mut args: Vec<String>) -> Vec<String> {
 }
 
 fn run() -> Result<()> {
-    let cli = match Cli::try_parse_from(command_help_argv(std::env::args().collect())) {
+    let args = command_help_argv(std::env::args().collect());
+    let cli = match Cli::try_parse_from(&args) {
         Ok(cli) => cli,
-        Err(err) => usage_exit(err),
+        Err(err) => usage_exit(err, &args),
     };
     match cli.cmd {
         Cmd::Surprising {

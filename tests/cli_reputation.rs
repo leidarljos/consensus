@@ -95,8 +95,9 @@ fn alpha_nan_is_a_usage_error() {
         assert!(stdout.is_empty(), "{raw}\n{stdout}");
         let want =
             format!("error: invalid value '{raw}' for '--alpha <ALPHA>': not a finite number\n");
+        let want = format!("{want}Usage: ljos-consensus reputation [OPTIONS] --trust <TRUST>\n");
         assert_eq!(stderr, want);
-        assert_eq!(stderr.lines().count(), 1, "{raw}\n{stderr}");
+        assert_eq!(stderr.lines().count(), 2, "{raw}\n{stderr}");
     }
 }
 

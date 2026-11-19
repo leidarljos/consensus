@@ -137,6 +137,13 @@ That line is =Error:= plus the reason. A stack is not added when
 =RUST_BACKTRACE= is set. A =--ballots= value that is not JSON names
 that flag and the array of ={"agent", "choice"}= it expects.
 
+A usage error from the argument parser is two lines on stderr and exit 2.
+The first starts with =error:= and says what was wrong, with any
+suggestion on the same line.
+The second is the usage line of the command that was typed.
+There is no hint line after it, so a missing flag, an unknown flag and a
+bad value read alike.
+
 =ljos-consensus surprising (--issue ID | --ballots JSON) --predictions JSON=
 
 The surprisingly popular answer (Prelec, Seung and McCoy, doi:10.1038/nature21054).
