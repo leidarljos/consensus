@@ -191,3 +191,15 @@ fn the_reference_names_the_missing_input_case() {
         "{text}"
     );
 }
+
+#[test]
+fn the_reference_says_a_negative_number_is_a_value() {
+    let text = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/orgmode/reference.org"),
+    )
+    .unwrap();
+    assert!(
+        text.contains("A negative number after a flag is that flag's value"),
+        "{text}"
+    );
+}

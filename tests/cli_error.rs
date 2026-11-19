@@ -170,3 +170,50 @@ fn the_reference_lists_the_other_json_flags() {
         "{text}"
     );
 }
+
+#[test]
+fn a_negative_number_reaches_its_range_check() {
+    let cases: [(&[&str], i32, &str); 5] = [
+        (
+            &["settle", "--ballots", BALLOTS, "--self-weight", "-1"],
+            1,
+            "Error: --self-weight must be finite and not negative, got -1\n",
+        ),
+        (
+            &["settle", "--ballots", BALLOTS, "--tol", "-1"],
+            1,
+            "Error: --tol must be positive, got -1\n",
+        ),
+        (
+            &["settle", "--ballots", BALLOTS, "--susceptibility", "-0.5"],
+            1,
+            "Error: --susceptibility must be in [0, 1], got -0.5\n",
+        ),
+        (
+            &["reputation", "--trust", r#"[["a","b",1]]"#, "--alpha", "-3"],
+            0,
+            "alpha -3 is outside [0, 1]; using 0\n",
+        ),
+        (
+            &[
+                "reputation",
+                "--trust",
+                r#"[["a","b",1]]"#,
+                "--alpha",
+                "-inf",
+            ],
+            2,
+            "error: invalid value '-inf' for '--alpha <ALPHA>': not a finite number\n\
+             Usage: ljos-consensus reputation [OPTIONS] --trust <TRUST>\n",
+        ),
+    ];
+    for (args, code, want) in cases {
+        let out = Command::new(bin()).args(args).output().expect("spawn");
+        assert_eq!(out.status.code(), Some(code), "{args:?}");
+        assert_eq!(
+            String::from_utf8(out.stderr).expect("utf-8"),
+            want,
+            "{args:?}"
+        );
+    }
+}

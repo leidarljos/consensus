@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{bail, Context, Result};
-use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use ljos_consensus::seldon::{parse_opinions_dir, seldon_absent_line, write_seldon_inputs};
 use ljos_consensus::{
     anchors_from_json, ballots_from_json, fj_contraction_bound, fj_rounds_to_tol, one_ballot_each,
@@ -148,7 +148,7 @@ enum Cmd {
         #[arg(long)]
         agents: Option<String>,
         /// Pull toward a uniform pre-trust; the floor a voter nobody weighs keeps.
-        #[arg(long, default_value_t = 0.15, value_parser = finite_alpha)]
+        #[arg(long, default_value_t = 0.15, value_parser = finite_alpha, allow_hyphen_values = true)]
         alpha: f64,
     },
     /// Estimate each voter's reliability from many items with no known truth.
@@ -323,6 +323,13 @@ fn main() -> ExitCode {
     }
 }
 
+/// The command line, with each subcommand taking a negative number as a
+/// value. Clap otherwise reads `--self-weight -1` as a flag named `-1`, and
+/// the range check that says what is wrong with the number never runs.
+fn command() -> clap::Command {
+    Cli::command().mut_subcommands(|sub| sub.allow_negative_numbers(true))
+}
+
 /// A command that needs one of two flags and got neither. It is a usage
 /// error, so it is printed and exits as clap's are: [`usage_exit`].
 #[derive(Debug)]
@@ -388,7 +395,7 @@ fn usage_message(rendered: &str) -> String {
 /// Clap's own line follows the error: for a near miss it lists the flag it
 /// guessed, and for a bad value it has none.
 fn usage_line(args: &[String]) -> String {
-    let mut root = Cli::command();
+    let mut root = command();
     root.build();
     let named = args
         .iter()
@@ -417,7 +424,10 @@ fn command_help_argv(mut args: Vec<String>) -> Vec<String> {
 
 fn run() -> Result<()> {
     let args = command_help_argv(std::env::args().collect());
-    let cli = match Cli::try_parse_from(&args) {
+    let parsed = command()
+        .try_get_matches_from(&args)
+        .and_then(|matches| Cli::from_arg_matches(&matches));
+    let cli = match parsed {
         Ok(cli) => cli,
         Err(err) => usage_exit(err, &args),
     };

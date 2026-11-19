@@ -149,6 +149,9 @@ There is no hint line after it, so a missing flag, an unknown flag and a
 bad value read alike.
 Giving none of =--ballots= and =--issue=, or none of =--items= and
 =--project=, is a usage error of the same shape.
+A negative number after a flag is that flag's value, so
+=--self-weight -1= gets the range message for the flag, not a complaint
+about an argument named =-1=.
 
 =ljos-consensus surprising (--issue ID | --ballots JSON) --predictions JSON=
 
