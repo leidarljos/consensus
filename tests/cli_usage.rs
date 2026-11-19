@@ -150,3 +150,44 @@ fn the_reference_describes_the_two_lines() {
         "{text}"
     );
 }
+
+#[test]
+fn a_command_given_none_of_its_inputs_is_a_usage_error() {
+    let cases = [
+        (
+            &["settle"][..],
+            "error: pass --ballots JSON or --issue",
+            "Usage: ljos-consensus settle [OPTIONS]",
+        ),
+        (
+            &["surprising", "--predictions", "[]"][..],
+            "error: pass --ballots JSON or --issue",
+            "Usage: ljos-consensus surprising [OPTIONS] --predictions <PREDICTIONS>",
+        ),
+        (
+            &["reliability"][..],
+            "error: pass --items JSON or --project",
+            "Usage: ljos-consensus reliability [OPTIONS]",
+        ),
+        (
+            &["correlation"][..],
+            "error: pass --items JSON or --project",
+            "Usage: ljos-consensus correlation [OPTIONS]",
+        ),
+    ];
+    for (args, line, usage) in cases {
+        assert_eq!(fail(args), format!("{line}\n{usage}\n"), "{args:?}");
+    }
+}
+
+#[test]
+fn the_reference_names_the_missing_input_case() {
+    let text = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/orgmode/reference.org"),
+    )
+    .unwrap();
+    assert!(
+        text.contains("is a usage error of the same shape."),
+        "{text}"
+    );
+}

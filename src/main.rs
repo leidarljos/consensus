@@ -301,6 +301,10 @@ fn main() -> ExitCode {
             if let Some(read) = err.downcast_ref::<IssueRead>() {
                 eprintln!("{}", read.line);
                 ExitCode::from(read.code)
+            } else if let Some(missing) = err.downcast_ref::<MissingInput>() {
+                let args: Vec<String> = std::env::args().collect();
+                eprintln!("error: {missing}\n{}", usage_line(&args));
+                ExitCode::from(2)
             } else {
                 // One line for a usage error. `Debug` would append a stack
                 // when `RUST_BACKTRACE` is set, which buries the reason.
@@ -318,6 +322,19 @@ fn main() -> ExitCode {
         }
     }
 }
+
+/// A command that needs one of two flags and got neither. It is a usage
+/// error, so it is printed and exits as clap's are: [`usage_exit`].
+#[derive(Debug)]
+struct MissingInput(&'static str);
+
+impl std::fmt::Display for MissingInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl std::error::Error for MissingInput {}
 
 /// A usage clap refused: one `error:` line, then one usage line, exit 2.
 ///
@@ -835,7 +852,7 @@ fn discount_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f6
 /// reports the sysexits status documented for that read.
 fn load_ballots(ballots: Option<&str>) -> Result<Vec<Ballot>> {
     let Some(raw) = ballots else {
-        bail!("pass --ballots JSON or --issue");
+        return Err(MissingInput("pass --ballots JSON or --issue").into());
     };
     ballots_from_json(raw).map_err(|e| anyhow::anyhow!(ballot_flag_line(&e)))
 }
@@ -1028,7 +1045,7 @@ fn load_items(
         return Ok(items_from_json(raw)?.items);
     }
     let Some(project) = project else {
-        bail!("pass --items JSON or --project");
+        return Err(MissingInput("pass --items JSON or --project").into());
     };
     let refuse = |what: &str, next: &str, said: &str| {
         anyhow::anyhow!("{command} --project {project}: {what}; {next}{said}")
