@@ -302,8 +302,17 @@ fn main() -> ExitCode {
                 eprintln!("{}", read.line);
                 ExitCode::from(read.code)
             } else {
-                // The line `Termination` prints for `Result`, including a caused-by chain.
-                eprintln!("Error: {err:?}");
+                // One line for a usage error. `Debug` would append a stack
+                // when `RUST_BACKTRACE` is set, which buries the reason.
+                eprintln!("Error: {err}");
+                let mut cause = err.source();
+                if cause.is_some() {
+                    eprintln!("Caused by:");
+                }
+                while let Some(src) = cause {
+                    eprintln!("    {src}");
+                    cause = src.source();
+                }
                 ExitCode::FAILURE
             }
         }
