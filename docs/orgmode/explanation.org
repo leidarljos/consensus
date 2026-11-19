@@ -24,7 +24,7 @@ A settle with =effective_voters= near one is one voter's opinion, however many b
 A closed group that listens fully gets its stationary distribution; the voters outside it solve against that.
 The iteration stays the default.
 Where it converges within its default 27 rounds it ends within =--tol= of the same point.
-A panel slow to agree runs out of rounds first and reports =settled: false=, as a ring of four voters does when each names only the next.
+A panel slow to agree runs out of rounds first and reports =converged: false=, so =settled: false= too, as a ring of four voters does when each names only the next.
 
 * Whose own voice counts
 
@@ -51,9 +51,10 @@ One voter at 0.92 among eight in [0.52, 0.62] takes calibrate from 0.887 to 0.90
 
 The iteration converges to agreement exactly when the trust graph has one closed group every voter reaches, and that group is aperiodic (Berger, doi:10.1080/01621459.1981.10477662).
 Two teams that cite only each other never converge, and that is a fact about the team worth reporting rather than a number worth averaging.
-The tracker's own =consensus= verb reports the split; this crate reports =settled: false= when the budget runs out.
+The tracker's own =consensus= verb reports the split; this crate reports =converged: false= when the budget runs out.
+=settled: false= follows from that, and also from a tie between the leading options.
 
-=settled= means within =--tol= of the fixed point wherever the distance can be bounded, not that the last step was small.
+=settled= means within =--tol= of the fixed point wherever the distance can be bounded, not that the last step was small, and the two leading shares are not tied.
 The step is a =q=-contraction in the largest-entry norm when every voter is anchored, with =q= the largest susceptibility; Banach's estimate then puts the fixed point within =q / (1 - q)= times the last step's length.
 The iteration stops when that bound falls under the tolerance; =residual= is the bound.
 A small step alone said little: at =q = 0.99= the opinions could sit a hundred times the step away.
