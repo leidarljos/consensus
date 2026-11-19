@@ -986,7 +986,7 @@ fn settle_seldon(
     }
     let job = write_seldon_inputs(dir, ballots, trust, self_weight, max_iter, tol)?;
     if !which_ok("seldon") {
-        println!("{}", seldon_absent_line(&dir));
+        println!("{}", seldon_absent_line(dir));
         return Ok(None);
     }
     let config = dir.join("config.toml");
@@ -995,7 +995,7 @@ fn settle_seldon(
     let st = Command::new("seldon")
         .arg(&config)
         .arg("-o")
-        .arg(&dir)
+        .arg(dir)
         .arg("-n")
         .arg(&network)
         .arg("-a")
@@ -1005,7 +1005,7 @@ fn settle_seldon(
     if !st.success() {
         bail!("seldon exited {st}");
     }
-    parse_opinions_dir(&dir, &job.options, max_iter, tol)
+    parse_opinions_dir(dir, &job.options, max_iter, tol)
         .map(Some)
         .map_err(Into::into)
 }
