@@ -60,3 +60,113 @@ fn the_reference_names_the_ballots_shape() {
     );
     assert!(text.contains("={\"agent\", \"choice\"}="), "{text}");
 }
+
+const BALLOTS: &str = r#"[{"agent":"a","choice":"x"},{"agent":"b","choice":"y"}]"#;
+
+#[test]
+fn every_json_flag_names_itself_and_its_shape() {
+    let cases: [(&[&str], &str); 8] = [
+        (
+            &["settle", "--ballots", BALLOTS, "--trust", "x"],
+            "--trust: expected a JSON array of {from, to, weight} objects or [from, to, weight] tuples",
+        ),
+        (
+            &["reputation", "--trust", "{"],
+            "--trust: expected a JSON array of {from, to, weight} objects or [from, to, weight] tuples",
+        ),
+        (
+            &["settle", "--ballots", BALLOTS, "--susceptibility-of", "x"],
+            "--susceptibility-of: expected a JSON object of agent to susceptibility",
+        ),
+        (
+            &["rounds", "--agents", "a", "--susceptibility-of", "x"],
+            "--susceptibility-of: expected a JSON object of agent to susceptibility",
+        ),
+        (
+            &["settle", "--ballots", BALLOTS, "--discount-of", "x"],
+            "--discount-of: expected a JSON object of agent to share",
+        ),
+        (
+            &["settle", "--ballots", BALLOTS, "--epsilon", "1", "--epsilon-of", "x"],
+            "--epsilon-of: expected a JSON object of agent to bound",
+        ),
+        (
+            &["surprising", "--ballots", BALLOTS, "--predictions", "x"],
+            "--predictions: expected a JSON array of {agent, expect}",
+        ),
+        (
+            &["reliability", "--items", "{}"],
+            "--items: expected a JSON array of ballot arrays",
+        ),
+    ];
+    for (args, want) in cases {
+        let out = Command::new(bin())
+            .args(args)
+            .env("RUST_BACKTRACE", "1")
+            .output()
+            .expect("spawn");
+        assert_eq!(out.status.code(), Some(1), "{args:?}");
+        assert!(out.stdout.is_empty(), "{args:?}");
+        let err = String::from_utf8(out.stderr).expect("utf-8");
+        assert_eq!(err, format!("Error: {want}\n"), "{args:?}");
+        assert!(!err.contains("at line"), "{args:?}\n{err}");
+        assert!(!err.contains("Caused by"), "{args:?}\n{err}");
+    }
+}
+
+#[test]
+fn truths_that_are_not_json_name_the_flag() {
+    let out = Command::new(bin())
+        .args([
+            "correlation",
+            "--items",
+            r#"[[{"agent":"a","choice":"x"}]]"#,
+            "--truths",
+            "x",
+        ])
+        .output()
+        .expect("spawn");
+    assert_eq!(out.status.code(), Some(1));
+    let err = String::from_utf8(out.stderr).expect("utf-8");
+    assert_eq!(
+        err,
+        "Error: --truths: expected a JSON array of strings or nulls\n"
+    );
+}
+
+#[test]
+fn a_json_value_out_of_range_keeps_its_reason_under_the_flag() {
+    let cases: [(&[&str], &str); 2] = [
+        (
+            &[
+                "settle",
+                "--ballots",
+                BALLOTS,
+                "--susceptibility-of",
+                r#"{"a":2}"#,
+            ],
+            "Error: --susceptibility-of: a must be in [0, 1], got 2\n",
+        ),
+        (
+            &["reputation", "--trust", r#"[["a","b"]]"#],
+            "Error: --trust: tuple must be [from, to, weight]\n",
+        ),
+    ];
+    for (args, want) in cases {
+        let out = Command::new(bin()).args(args).output().expect("spawn");
+        assert_eq!(out.status.code(), Some(1), "{args:?}");
+        assert_eq!(String::from_utf8(out.stderr).expect("utf-8"), want);
+    }
+}
+
+#[test]
+fn the_reference_lists_the_other_json_flags() {
+    let text = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/orgmode/reference.org"),
+    )
+    .unwrap();
+    assert!(
+        text.contains("The other JSON flags do the same: =--trust="),
+        "{text}"
+    );
+}

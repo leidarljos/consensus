@@ -136,6 +136,10 @@ gives an empty message. Any other failure of a parsed =settle= exits 1.
 That line is =Error:= plus the reason. A stack is not added when
 =RUST_BACKTRACE= is set. A =--ballots= value that is not JSON names
 that flag and the array of ={"agent", "choice"}= it expects.
+The other JSON flags do the same: =--trust=, =--susceptibility-of=,
+=--discount-of=, =--epsilon-of=, =--predictions=, =--items= and
+=--truths=. The line is =Error: FLAG: expected= and the shape the flag
+takes. The parser's line and column are not printed.
 
 A usage error from the argument parser is two lines on stderr and exit 2.
 The first starts with =error:= and says what was wrong, with any

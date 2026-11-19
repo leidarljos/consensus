@@ -416,7 +416,7 @@ fn run() -> Result<()> {
                 load_ballots(ballots.as_deref())?
             };
             let predictions = ljos_consensus::predictions_from_json(&predictions)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                .map_err(|e| flag_json("--predictions", PREDICTIONS_SHAPE, &e))?;
             let out = ljos_consensus::surprisingly_popular(&ballots, &predictions);
             for line in &out.ignored {
                 eprintln!("{line}");
@@ -428,7 +428,8 @@ fn run() -> Result<()> {
             agents,
             alpha,
         } => {
-            let rows = trust_from_json(&trust).map_err(|e| anyhow::anyhow!(e))?;
+            let rows =
+                trust_from_json(&trust).map_err(|e| flag_json("--trust", TRUST_SHAPE, &e))?;
             let names: Vec<String> = match agents {
                 Some(raw) => raw
                     .split(',')
@@ -580,7 +581,8 @@ fn run() -> Result<()> {
                 bail!("rounds: --agents names no voter");
             }
             let anchors = match susceptibility_of.as_deref() {
-                Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                Some(raw) => anchors_from_json(raw)
+                    .map_err(|e| flag_json("--susceptibility-of", ANCHORS_SHAPE, &e))?,
                 None => std::collections::BTreeMap::new(),
             };
             let out = rounds_report(&names, susceptibility, &anchors, tol);
@@ -620,11 +622,14 @@ fn run() -> Result<()> {
             let (max_iter, tol) = (max_iter.unwrap_or(cap), tol.unwrap_or(derived.tol));
             check_settle_args(self_weight, susceptibility, epsilon, tol)?;
             let anchors = match susceptibility_of.as_deref() {
-                Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                Some(raw) => anchors_from_json(raw)
+                    .map_err(|e| flag_json("--susceptibility-of", ANCHORS_SHAPE, &e))?,
                 None => std::collections::BTreeMap::new(),
             };
             let trust = match trust.as_deref() {
-                Some(raw) => trust_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                Some(raw) => {
+                    trust_from_json(raw).map_err(|e| flag_json("--trust", TRUST_SHAPE, &e))?
+                }
                 None => Vec::new(),
             };
             if let Some(eps) = epsilon {
@@ -808,8 +813,8 @@ fn check_settle_args(
 /// A confidence bound per agent, each an L1 distance in `[0, 2]`: two
 /// opposite ballots are 2 apart.
 fn bounds_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>> {
-    let map: std::collections::BTreeMap<String, f64> =
-        serde_json::from_str(raw).context("--epsilon-of: a JSON object of agent to bound")?;
+    let map: std::collections::BTreeMap<String, f64> = serde_json::from_str(raw)
+        .map_err(|e| flag_json("--epsilon-of", BOUNDS_SHAPE, &e.to_string()))?;
     if let Some((a, e)) = map.iter().find(|(_, e)| !(0.0..=2.0).contains(*e)) {
         bail!("--epsilon-of: {a} must be in [0, 2], got {e}");
     }
@@ -818,8 +823,8 @@ fn bounds_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>
 
 /// A discount per agent, each a share in `[0, 1]`.
 fn discount_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>> {
-    let map: std::collections::BTreeMap<String, f64> =
-        serde_json::from_str(raw).context("--discount-of: a JSON object of agent to share")?;
+    let map: std::collections::BTreeMap<String, f64> = serde_json::from_str(raw)
+        .map_err(|e| flag_json("--discount-of", DISCOUNT_SHAPE, &e.to_string()))?;
     if let Some((a, d)) = map.iter().find(|(_, d)| !(0.0..=1.0).contains(*d)) {
         bail!("--discount-of: {a} must be in [0, 1], got {d}");
     }
@@ -838,11 +843,34 @@ fn load_ballots(ballots: Option<&str>) -> Result<Vec<Ballot>> {
 /// `--ballots` on stderr. A byte the JSON parser refused is not the
 /// message: the line names the flag and the array it expects.
 fn ballot_flag_line(err: &str) -> String {
+    flag_json_line("--ballots", BALLOTS_SHAPE, err)
+}
+
+const BALLOTS_SHAPE: &str = "a JSON array of {\"agent\", \"choice\"}";
+const TRUST_SHAPE: &str = "a JSON array of {from, to, weight} objects or [from, to, weight] tuples";
+const ANCHORS_SHAPE: &str = "a JSON object of agent to susceptibility";
+const BOUNDS_SHAPE: &str = "a JSON object of agent to bound";
+const DISCOUNT_SHAPE: &str = "a JSON object of agent to share";
+const PREDICTIONS_SHAPE: &str = "a JSON array of {agent, expect}";
+const ITEMS_SHAPE: &str = "a JSON array of ballot arrays";
+const TRUTHS_SHAPE: &str = "a JSON array of strings or nulls";
+
+/// One stderr line for a flag whose value is not the JSON it takes.
+///
+/// A parser message carries a line and column of the value, which says
+/// nothing about the flag. When `err` has one, the line says what the flag
+/// expects. Any other reason, such as a weight out of range, is kept
+/// without the library's `trust json:` style prefix.
+fn flag_json_line(flag: &str, shape: &str, err: &str) -> String {
     if err.contains("at line ") {
-        return "--ballots: expected a JSON array of {\"agent\", \"choice\"}".to_string();
+        return format!("{flag}: expected {shape}");
     }
-    let reason = err.strip_prefix("vote json: ").unwrap_or(err);
-    format!("--ballots: {reason}")
+    let reason = err.split_once(": ").map_or(err, |(_, rest)| rest);
+    format!("{flag}: {reason}")
+}
+
+fn flag_json(flag: &str, shape: &str, err: &str) -> anyhow::Error {
+    anyhow::anyhow!(flag_json_line(flag, shape, err))
 }
 
 /// An `--issue` read that did not yield ballots. `code` is the `sysexits.h`
@@ -940,7 +968,7 @@ struct ItemRows {
 /// item does not drop the rest.
 fn items_from_json(raw: &str) -> Result<ItemRows> {
     let rows: Vec<Vec<Ballot>> =
-        serde_json::from_str(raw).context("items: not a JSON array of ballot arrays")?;
+        serde_json::from_str(raw).map_err(|e| flag_json("--items", ITEMS_SHAPE, &e.to_string()))?;
     let len = rows.len();
     let mut items = Vec::new();
     let mut kept = Vec::new();
@@ -969,8 +997,8 @@ fn align_truths(
     let Some(raw) = truths else {
         return Ok(vec![None; kept.len()]);
     };
-    let parsed: Vec<Option<String>> =
-        serde_json::from_str(raw).context("truths: a JSON array of strings or nulls")?;
+    let parsed: Vec<Option<String>> = serde_json::from_str(raw)
+        .map_err(|e| flag_json("--truths", TRUTHS_SHAPE, &e.to_string()))?;
     if parsed.len() != items_len {
         eprintln!("{}", truths_length_line(parsed.len(), items_len));
     }
