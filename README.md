@@ -51,7 +51,7 @@ The [tutorial](https://leidarljos.github.io/consensus/getting-started.html) adds
 ```
 ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
 ljos-consensus settle --issue ID
-ljos-consensus settle --ballots '[...]' --trust '[{"from":"a","to":"b","weight":1.0}]' --seldon --out dir
+ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]' --trust '[{"from":"a","to":"b","weight":1.0}]' --seldon --out dir
 ```
 
 `--issue` reads `vissue vote ID --json` when that works. Otherwise pass `--ballots`.
@@ -79,5 +79,7 @@ seldon config.toml -o dir -n network.txt -a opinions.txt
 ```
 
 The last `opinions_i.txt` is parsed back into the same `Outcome` the discrete stepper prints. Friedkin-Johnsen (`--susceptibility` below 1) stays on the native `settle()`; Seldon DeGroot has no anchor.
+When `seldon` is not on PATH the files are still written and the command that runs them is printed.
+The discrete settle is the same command without `--seldon`.
 
 Native `settle()` is the test path. It does not need `seldon` on PATH.
