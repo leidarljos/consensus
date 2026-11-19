@@ -302,3 +302,25 @@ fn empty_path_writes_files_and_prints_one_line() {
     assert_eq!(opinions, OPINIONS);
     assert_seldon_shape(&config, &network, &opinions);
 }
+
+#[test]
+fn seldon_without_out_writes_nothing() {
+    let root = Scratch::new("no-out");
+    let cwd = root.path().join("cwd");
+    fs::create_dir_all(&cwd).unwrap();
+    let output = Command::new(consensus_bin())
+        .env("PATH", "")
+        .current_dir(&cwd)
+        .args(["settle", "--ballots", BALLOTS_JSON, "--seldon"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Error: pass --out DIR; --seldon writes config.toml, network.txt and opinions.txt there\n"
+    );
+    assert!(!cwd.join("config.toml").exists());
+    assert!(!cwd.join("network.txt").exists());
+    assert!(!cwd.join("opinions.txt").exists());
+}

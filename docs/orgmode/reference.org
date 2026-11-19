@@ -4,6 +4,8 @@
 * Command line
 
 The flags are what =ljos-consensus settle --help= prints.
+=ljos-consensus --help settle= prints that same page.
+=ljos-consensus --help= on its own lists the commands.
 
 # [[[cog
 # import pathlib, sys
@@ -18,41 +20,70 @@ The flags are what =ljos-consensus settle --help= prints.
 # ]]]
 #+begin_src console
 $ ljos-consensus settle --help
+Weigh ballots on a trust graph and print the shares.
+
+`--ballots` is JSON. `--issue` reads `vissue vote ID --json` when `--ballots` is absent.
+
 Usage: ljos-consensus settle [OPTIONS]
 
 Options:
       --issue <ISSUE>
           Tracker issue id. Ballots come from `vissue vote ID --json` when `--ballots` is absent
+
       --ballots <BALLOTS>
           JSON array of {agent, choice}
+
       --trust <TRUST>
-          JSON array of {from, to, weight}
+          JSON array of `{from, to, weight}` objects or `[from, to, weight]` tuples
+
       --seldon
-          If set, write Seldon inputs and exec `seldon`. When `seldon` is not on PATH, the files are still written and the command that runs them is printed
+          Write Seldon inputs under `--out` and exec `seldon`. When `seldon` is not on PATH, the files are still written and the command that runs them is printed. Without `--out`, nothing is written
+
       --out <OUT>
-          Directory for the files `--seldon` writes. Absent, that is the working directory
+          Directory for the files `--seldon` writes. Required with `--seldon`
+
       --self-weight <SELF_WEIGHT>
-          A voter's weight on its own ballot when its row does not say: the fallback under `--self-trust earned`, every voter's under `constant` [default: 0.5]
+          A voter's weight on its own ballot when its row does not say: the fallback under `--self-trust earned`, every voter's under `constant`
+          
+          [default: 0.5]
+
       --self-trust <SELF_TRUST>
-          `earned` (the default): a voter weighs itself as the others weigh it. With no voter anchored and no discount, the rows `learn` and `calibrate` write then settle as the weighted vote they describe. `constant`: `--self-weight` for every voter [default: earned] [possible values: earned, constant]
+          `earned` (the default): a voter weighs itself as the others weigh it. With no voter anchored and no discount, the rows `learn` and `calibrate` write then settle as the weighted vote they describe. `constant`: `--self-weight` for every voter
+          
+          [default: earned]
+          [possible values: earned, constant]
+
       --discount-of <DISCOUNT_OF>
           JSON object of agent to the share of its inbound weight it keeps: `correlation`'s `discount`, under which exact clones count as one voice
+
       --susceptibility <SUSCEPTIBILITY>
-          How far a voter not named in `--susceptibility-of` moves off its ballot, in [0, 1] [default: 1]
+          How far a voter not named in `--susceptibility-of` moves off its ballot, in [0, 1]
+          
+          [default: 1]
+
       --susceptibility-of <SUSCEPTIBILITY_OF>
           JSON object of agent to susceptibility: a persona's own anchor
+
       --epsilon <EPSILON>
           Bounded confidence instead of the trust graph: each voter averages only voters within this L1 distance of its own opinion
+
       --epsilon-of <EPSILON_OF>
           JSON object of agent to its own confidence bound
+
       --max-iter <MAX_ITER>
           Rounds before an unconverged settle stops. Default: 27, as Opts::default derives it, for --engine iterate and exact; 2048 for --epsilon, --seldon and --engine energy
+
       --tol <TOL>
           The distance a settle stops within. Default: 1.490116169344802e-8, as Opts::default derives it, for every engine
+
       --engine <ENGINE>
-          `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised [default: iterate] [possible values: iterate, exact, energy]
+          `iterate` (the default): the DeGroot / Friedkin-Johnsen fixed point by iteration, stopped on a bound. `exact`: the closed-form fixed point. `energy`: the minimum of the Friedkin-Johnsen energy under a constant `--self-weight` and no discount, found by rgmin; the influence is symmetrised
+          
+          [default: iterate]
+          [possible values: iterate, exact, energy]
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 #+end_src
 # [[[end]]]
 
@@ -102,6 +133,25 @@ program that is not there, =EX_IOERR= a read that did not finish,
 =EX_DATAERR= stdout that is not ballot JSON this program accepts, and
 =EX_NOINPUT= a read that succeeded and held nothing, the code =sysexits=
 gives an empty message. Any other failure of a parsed =settle= exits 1.
+That line is =Error:= plus the reason. A stack is not added when
+=RUST_BACKTRACE= is set. A =--ballots= value that is not JSON names
+that flag and the array of ={"agent", "choice"}= it expects.
+The other JSON flags do the same: =--trust=, =--susceptibility-of=,
+=--discount-of=, =--epsilon-of=, =--predictions=, =--items= and
+=--truths=. The line is =Error: FLAG: expected= and the shape the flag
+takes. The parser's line and column are not printed.
+
+A usage error from the argument parser is two lines on stderr and exit 2.
+The first starts with =error:= and says what was wrong, with any
+suggestion on the same line.
+The second is the usage line of the command that was typed.
+There is no hint line after it, so a missing flag, an unknown flag and a
+bad value read alike.
+Giving none of =--ballots= and =--issue=, or none of =--items= and
+=--project=, is a usage error of the same shape.
+A negative number after a flag is that flag's value, so
+=--self-weight -1= gets the range message for the flag, not a complaint
+about an argument named =-1=.
 
 =ljos-consensus surprising (--issue ID | --ballots JSON) --predictions JSON=
 
@@ -157,6 +207,15 @@ why, and the rest are read. Output: =items=,
 =rounds=, and =accuracy= as an object of voter to a value in (0, 1),
 Laplace smoothed so no voter reaches a certainty.
 
+When =--project= cannot be read at all, the command writes one line to
+stderr and exits 1. The line names the command and says what failed:
+=vissue= is missing, does not know the project, or exited non-zero. It
+ends with the next step, which is to fix that or pass =--items JSON=. The
+first line =vissue= wrote follows =vissue said:=, cut to 120 characters,
+and the rest is dropped. =correlation --project= reads the project the
+same way. The line for a missing tracker is
+=Error: reliability --project P: vissue is not on PATH; install vissue or pass --items JSON=.
+
 =ljos-consensus correlation (--items JSON [--truths JSON] | --project P) [--gate LEVEL] [--rounds N]=
 
 How much the voters share their mistakes. A voter's correctness on each
@@ -187,6 +246,8 @@ guarantees: =bound= is the largest susceptibility, and
 a null count with the reason, since convergence there is asymptotic;
 size =--max-iter= by judgement. One unanchored voter voids the
 guarantee for the whole panel, which is what the maximum says.
+=--susceptibility= must be in [0, 1], as it must for =settle=, and a value
+outside that range is refused.
 
 * The step
 

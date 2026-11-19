@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use ljos_consensus::seldon::{parse_opinions_dir, seldon_absent_line, write_seldon_inputs};
 use ljos_consensus::{
     anchors_from_json, ballots_from_json, fj_contraction_bound, fj_rounds_to_tol, one_ballot_each,
@@ -24,6 +24,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Weigh ballots on a trust graph and print the shares.
+    ///
+    /// `--ballots` is JSON. `--issue` reads `vissue vote ID --json` when
+    /// `--ballots` is absent.
     Settle {
         /// Tracker issue id. Ballots come from `vissue vote ID --json` when `--ballots` is absent.
         #[arg(long)]
@@ -31,15 +35,15 @@ enum Cmd {
         /// JSON array of {agent, choice}
         #[arg(long)]
         ballots: Option<String>,
-        /// JSON array of {from, to, weight}
+        /// JSON array of `{from, to, weight}` objects or `[from, to, weight]` tuples.
         #[arg(long)]
         trust: Option<String>,
-        /// If set, write Seldon inputs and exec `seldon`. When `seldon` is
-        /// not on PATH, the files are still written and the command that
-        /// runs them is printed.
+        /// Write Seldon inputs under `--out` and exec `seldon`. When `seldon`
+        /// is not on PATH, the files are still written and the command that
+        /// runs them is printed. Without `--out`, nothing is written.
         #[arg(long)]
         seldon: bool,
-        /// Directory for the files `--seldon` writes. Absent, that is the working directory.
+        /// Directory for the files `--seldon` writes. Required with `--seldon`.
         #[arg(long)]
         out: Option<PathBuf>,
         /// A voter's weight on its own ballot when its row does not say:
@@ -79,11 +83,12 @@ enum Cmd {
         #[arg(long, value_enum, default_value_t = Engine::Iterate)]
         engine: Engine,
     },
-    /// How much the voters share their mistakes: the correlation of
-    /// whether each was right, over a project's history. Truth is the
-    /// named outcome, else the Dawid-Skene answer. Prints each voter's
-    /// discount for `settle --discount-of`, and how many independent
-    /// voices the panel holds.
+    /// How much the voters share their mistakes.
+    ///
+    /// The correlation of whether each was right, over a project's history.
+    /// Truth is the named outcome, else the Dawid-Skene answer. Prints each
+    /// voter's discount for `settle --discount-of`, and the count of
+    /// independent voices.
     Correlation {
         /// JSON array of items, each an array of {agent, choice}.
         #[arg(long)]
@@ -116,10 +121,11 @@ enum Cmd {
         #[arg(long, hide = true)]
         min_shared: Option<usize>,
     },
-    /// The surprisingly popular answer (Prelec, Seung and McCoy,
-    /// doi:10.1038/nature21054): ballots plus each voter's forecast of the
-    /// others' shares; the answer is the option whose actual share most
-    /// exceeds its predicted share.
+    /// The surprisingly popular answer.
+    ///
+    /// Prelec, Seung and McCoy (doi:10.1038/nature21054): ballots plus each
+    /// voter's forecast of the others' shares. The answer is the option whose
+    /// actual share most exceeds its predicted share.
     Surprising {
         /// Tracker issue id. Ballots come from `vissue vote ID --json` when `--ballots` is absent.
         #[arg(long)]
@@ -131,23 +137,25 @@ enum Cmd {
         #[arg(long)]
         predictions: String,
     },
-    /// A global standing per voter from the trust rows, by EigenTrust
-    /// (Kamvar, Schlosser and Garcia-Molina, doi:10.1145/775152.775242).
+    /// A global standing per voter from the trust rows.
+    ///
+    /// EigenTrust (Kamvar, Schlosser and Garcia-Molina, doi:10.1145/775152.775242).
     Reputation {
-        /// JSON array of {from, to, weight}
+        /// JSON array of `{from, to, weight}` objects or `[from, to, weight]` tuples.
         #[arg(long)]
         trust: String,
         /// Agents to stand; the rows' names when absent.
         #[arg(long)]
         agents: Option<String>,
         /// Pull toward a uniform pre-trust; the floor a voter nobody weighs keeps.
-        #[arg(long, default_value_t = 0.15, value_parser = finite_alpha)]
+        #[arg(long, default_value_t = 0.15, value_parser = finite_alpha, allow_hyphen_values = true)]
         alpha: f64,
     },
-    /// Estimate each voter's reliability from many settled items with no
-    /// known truth (Dawid and Skene, doi:10.2307/2346806): EM over the
-    /// items' hidden answers and the voters' accuracies. Prints a JSON
-    /// object of voter to accuracy, plus the number of items used.
+    /// Estimate each voter's reliability from many items with no known truth.
+    ///
+    /// Dawid and Skene (doi:10.2307/2346806): EM over the items' hidden
+    /// answers and the voters' accuracies. Prints a JSON object of voter to
+    /// accuracy, plus the number of items used.
     Reliability {
         /// JSON array of items, each an array of {agent, choice}.
         #[arg(long)]
@@ -168,11 +176,12 @@ enum Cmd {
         #[arg(long, default_value_t = 20)]
         rounds: usize,
     },
-    /// The contraction bound of an anchored settle and the round count it
-    /// guarantees: `max s_i` over the voters, and `1 + ceil(ln(tol) /
-    /// ln(bound))` rounds to reach `tol`. A pure DeGroot panel reports no
-    /// count, only the bound of one: size `--max-iter` by judgement, since
-    /// convergence there is asymptotic. See `docs/orgmode/derivation.org`.
+    /// The contraction bound of an anchored settle, and the round count it guarantees.
+    ///
+    /// `max s_i` over the voters, and `1 + ceil(ln(tol) / ln(bound))` rounds
+    /// to reach `tol`. A pure DeGroot panel reports no count, only the bound
+    /// of one: size `--max-iter` by judgement, since convergence there is
+    /// asymptotic. See `docs/orgmode/derivation.org`.
     Rounds {
         /// Comma-separated voters the bound covers. This command reads no trust rows, so the names are given here.
         #[arg(long)]
@@ -292,17 +301,137 @@ fn main() -> ExitCode {
             if let Some(read) = err.downcast_ref::<IssueRead>() {
                 eprintln!("{}", read.line);
                 ExitCode::from(read.code)
+            } else if let Some(missing) = err.downcast_ref::<MissingInput>() {
+                let args: Vec<String> = std::env::args().collect();
+                eprintln!("error: {missing}\n{}", usage_line(&args));
+                ExitCode::from(2)
             } else {
-                // The line `Termination` prints for `Result`, including a caused-by chain.
-                eprintln!("Error: {err:?}");
+                // One line for a usage error. `Debug` would append a stack
+                // when `RUST_BACKTRACE` is set, which buries the reason.
+                eprintln!("Error: {err}");
+                let mut cause = err.source();
+                if cause.is_some() {
+                    eprintln!("Caused by:");
+                }
+                while let Some(src) = cause {
+                    eprintln!("    {src}");
+                    cause = src.source();
+                }
                 ExitCode::FAILURE
             }
         }
     }
 }
 
+/// The command line, with each subcommand taking a negative number as a
+/// value. Clap otherwise reads `--self-weight -1` as a flag named `-1`, and
+/// the range check that says what is wrong with the number never runs.
+fn command() -> clap::Command {
+    Cli::command().mut_subcommands(|sub| sub.allow_negative_numbers(true))
+}
+
+/// A command that needs one of two flags and got neither. It is a usage
+/// error, so it is printed and exits as clap's are: [`usage_exit`].
+#[derive(Debug)]
+struct MissingInput(&'static str);
+
+impl std::fmt::Display for MissingInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl std::error::Error for MissingInput {}
+
+/// A usage clap refused: one `error:` line, then one usage line, exit 2.
+///
+/// Clap's own text adds a hint line, a suggestion paragraph and, for a
+/// required flag, a list under the message. [`usage_message`] folds those
+/// into the one line, and [`usage_line`] names the command the seat typed.
+/// Help and version are not errors and print as clap prints them, and so
+/// does the page a bare `ljos-consensus` prints.
+fn usage_exit(err: clap::Error, args: &[String]) -> ! {
+    use clap::error::ErrorKind;
+    if !err.use_stderr() || err.kind() == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand {
+        err.exit()
+    }
+    eprintln!("{}\n{}", usage_message(&err.to_string()), usage_line(args));
+    std::process::exit(2)
+}
+
+/// The first paragraph of clap's text as one line, with the first
+/// suggestion appended. The hint paragraph is dropped.
+fn usage_message(rendered: &str) -> String {
+    let mut paragraphs = rendered.trim().split("\n\n");
+    let mut lines = paragraphs
+        .next()
+        .unwrap_or("")
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty());
+    let mut message = lines
+        .next()
+        .unwrap_or("error: the arguments were not understood")
+        .to_string();
+    let rest: Vec<&str> = lines.collect();
+    if !rest.is_empty() {
+        let sep = if message.ends_with(':') { ", " } else { " " };
+        message = format!("{message} {}", rest.join(sep));
+    }
+    let tip = paragraphs.find_map(|paragraph| {
+        paragraph
+            .trim()
+            .lines()
+            .next()
+            .and_then(|line| line.trim().strip_prefix("tip: "))
+    });
+    if let Some(tip) = tip {
+        message = format!("{message}; {tip}");
+    }
+    message
+}
+
+/// The usage line of the command the seat typed, from the command itself.
+/// Clap's own line follows the error: for a near miss it lists the flag it
+/// guessed, and for a bad value it has none.
+fn usage_line(args: &[String]) -> String {
+    let mut root = command();
+    root.build();
+    let named = args
+        .iter()
+        .skip(1)
+        .find(|arg| !arg.starts_with('-'))
+        .and_then(|name| root.find_subcommand_mut(name));
+    let usage = match named {
+        Some(sub) => sub.render_usage(),
+        None => root.render_usage(),
+    };
+    let text = usage.to_string();
+    text.lines().next().unwrap_or("").to_string()
+}
+
+/// `prog --help settle` and `prog -h settle` ask for that command's page.
+/// Clap treats the flag as the page for whatever it has parsed so far, which
+/// at that point is the top-level list, so the command name moves in front
+/// of the flag before clap sees the arguments.
+fn command_help_argv(mut args: Vec<String>) -> Vec<String> {
+    if args.len() >= 3 && (args[1] == "--help" || args[1] == "-h") && !args[2].starts_with('-') {
+        let cmd = args.remove(2);
+        args.insert(1, cmd);
+    }
+    args
+}
+
 fn run() -> Result<()> {
-    match Cli::parse().cmd {
+    let args = command_help_argv(std::env::args().collect());
+    let parsed = command()
+        .try_get_matches_from(&args)
+        .and_then(|matches| Cli::from_arg_matches(&matches));
+    let cli = match parsed {
+        Ok(cli) => cli,
+        Err(err) => usage_exit(err, &args),
+    };
+    match cli.cmd {
         Cmd::Surprising {
             issue,
             ballots,
@@ -314,7 +443,7 @@ fn run() -> Result<()> {
                 load_ballots(ballots.as_deref())?
             };
             let predictions = ljos_consensus::predictions_from_json(&predictions)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                .map_err(|e| flag_json("--predictions", PREDICTIONS_SHAPE, &e))?;
             let out = ljos_consensus::surprisingly_popular(&ballots, &predictions);
             for line in &out.ignored {
                 eprintln!("{line}");
@@ -326,7 +455,8 @@ fn run() -> Result<()> {
             agents,
             alpha,
         } => {
-            let rows = trust_from_json(&trust).map_err(|e| anyhow::anyhow!(e))?;
+            let rows =
+                trust_from_json(&trust).map_err(|e| flag_json("--trust", TRUST_SHAPE, &e))?;
             let names: Vec<String> = match agents {
                 Some(raw) => raw
                     .split(',')
@@ -427,7 +557,7 @@ fn run() -> Result<()> {
             project,
             rounds,
         } => {
-            let items = load_items(items.as_deref(), project.as_deref())?;
+            let items = load_items("reliability", items.as_deref(), project.as_deref())?;
             let (accuracy, ran) = ljos_consensus::dawid_skene_with_rounds(&items, rounds);
             let out = serde_json::json!({
                 "items": items.len(),
@@ -454,7 +584,7 @@ fn run() -> Result<()> {
                     (read.items, truths)
                 }
                 None => {
-                    let items = load_items(None, project.as_deref())?;
+                    let items = load_items("correlation", None, project.as_deref())?;
                     let kept: Vec<usize> = (0..items.len()).collect();
                     let truths = align_truths(truths.as_deref(), items.len(), &kept)?;
                     (items, truths)
@@ -477,8 +607,12 @@ fn run() -> Result<()> {
             if names.is_empty() {
                 bail!("rounds: --agents names no voter");
             }
+            if !(0.0..=1.0).contains(&susceptibility) {
+                bail!("--susceptibility must be in [0, 1], got {susceptibility}");
+            }
             let anchors = match susceptibility_of.as_deref() {
-                Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                Some(raw) => anchors_from_json(raw)
+                    .map_err(|e| flag_json("--susceptibility-of", ANCHORS_SHAPE, &e))?,
                 None => std::collections::BTreeMap::new(),
             };
             let out = rounds_report(&names, susceptibility, &anchors, tol);
@@ -518,11 +652,14 @@ fn run() -> Result<()> {
             let (max_iter, tol) = (max_iter.unwrap_or(cap), tol.unwrap_or(derived.tol));
             check_settle_args(self_weight, susceptibility, epsilon, tol)?;
             let anchors = match susceptibility_of.as_deref() {
-                Some(raw) => anchors_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                Some(raw) => anchors_from_json(raw)
+                    .map_err(|e| flag_json("--susceptibility-of", ANCHORS_SHAPE, &e))?,
                 None => std::collections::BTreeMap::new(),
             };
             let trust = match trust.as_deref() {
-                Some(raw) => trust_from_json(raw).map_err(|e| anyhow::anyhow!(e))?,
+                Some(raw) => {
+                    trust_from_json(raw).map_err(|e| flag_json("--trust", TRUST_SHAPE, &e))?
+                }
                 None => Vec::new(),
             };
             if let Some(eps) = epsilon {
@@ -545,6 +682,11 @@ fn run() -> Result<()> {
                 );
             }
             if use_seldon {
+                let Some(dir) = out else {
+                    bail!(
+                        "pass --out DIR; --seldon writes config.toml, network.txt and opinions.txt there"
+                    );
+                };
                 // Seldon writes its own DeGroot files from `--self-weight`.
                 note_ignored(
                     "--seldon",
@@ -557,7 +699,7 @@ fn run() -> Result<()> {
                     susceptibility,
                     max_iter,
                     tol,
-                    out,
+                    &dir,
                 )? {
                     println!("{}", serde_json::to_string_pretty(&outcome)?);
                 }
@@ -701,8 +843,8 @@ fn check_settle_args(
 /// A confidence bound per agent, each an L1 distance in `[0, 2]`: two
 /// opposite ballots are 2 apart.
 fn bounds_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>> {
-    let map: std::collections::BTreeMap<String, f64> =
-        serde_json::from_str(raw).context("--epsilon-of: a JSON object of agent to bound")?;
+    let map: std::collections::BTreeMap<String, f64> = serde_json::from_str(raw)
+        .map_err(|e| flag_json("--epsilon-of", BOUNDS_SHAPE, &e.to_string()))?;
     if let Some((a, e)) = map.iter().find(|(_, e)| !(0.0..=2.0).contains(*e)) {
         bail!("--epsilon-of: {a} must be in [0, 2], got {e}");
     }
@@ -711,8 +853,8 @@ fn bounds_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>
 
 /// A discount per agent, each a share in `[0, 1]`.
 fn discount_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f64>> {
-    let map: std::collections::BTreeMap<String, f64> =
-        serde_json::from_str(raw).context("--discount-of: a JSON object of agent to share")?;
+    let map: std::collections::BTreeMap<String, f64> = serde_json::from_str(raw)
+        .map_err(|e| flag_json("--discount-of", DISCOUNT_SHAPE, &e.to_string()))?;
     if let Some((a, d)) = map.iter().find(|(_, d)| !(0.0..=1.0).contains(*d)) {
         bail!("--discount-of: {a} must be in [0, 1], got {d}");
     }
@@ -723,9 +865,42 @@ fn discount_from_json(raw: &str) -> Result<std::collections::BTreeMap<String, f6
 /// reports the sysexits status documented for that read.
 fn load_ballots(ballots: Option<&str>) -> Result<Vec<Ballot>> {
     let Some(raw) = ballots else {
-        bail!("pass --ballots JSON or --issue");
+        return Err(MissingInput("pass --ballots JSON or --issue").into());
     };
-    ballots_from_json(raw).map_err(|e| anyhow::anyhow!(e))
+    ballots_from_json(raw).map_err(|e| anyhow::anyhow!(ballot_flag_line(&e)))
+}
+
+/// `--ballots` on stderr. A byte the JSON parser refused is not the
+/// message: the line names the flag and the array it expects.
+fn ballot_flag_line(err: &str) -> String {
+    flag_json_line("--ballots", BALLOTS_SHAPE, err)
+}
+
+const BALLOTS_SHAPE: &str = "a JSON array of {\"agent\", \"choice\"}";
+const TRUST_SHAPE: &str = "a JSON array of {from, to, weight} objects or [from, to, weight] tuples";
+const ANCHORS_SHAPE: &str = "a JSON object of agent to susceptibility";
+const BOUNDS_SHAPE: &str = "a JSON object of agent to bound";
+const DISCOUNT_SHAPE: &str = "a JSON object of agent to share";
+const PREDICTIONS_SHAPE: &str = "a JSON array of {agent, expect}";
+const ITEMS_SHAPE: &str = "a JSON array of ballot arrays";
+const TRUTHS_SHAPE: &str = "a JSON array of strings or nulls";
+
+/// One stderr line for a flag whose value is not the JSON it takes.
+///
+/// A parser message carries a line and column of the value, which says
+/// nothing about the flag. When `err` has one, the line says what the flag
+/// expects. Any other reason, such as a weight out of range, is kept
+/// without the library's `trust json:` style prefix.
+fn flag_json_line(flag: &str, shape: &str, err: &str) -> String {
+    if err.contains("at line ") {
+        return format!("{flag}: expected {shape}");
+    }
+    let reason = err.split_once(": ").map_or(err, |(_, rest)| rest);
+    format!("{flag}: {reason}")
+}
+
+fn flag_json(flag: &str, shape: &str, err: &str) -> anyhow::Error {
+    anyhow::anyhow!(flag_json_line(flag, shape, err))
 }
 
 /// An `--issue` read that did not yield ballots. `code` is the `sysexits.h`
@@ -823,7 +998,7 @@ struct ItemRows {
 /// item does not drop the rest.
 fn items_from_json(raw: &str) -> Result<ItemRows> {
     let rows: Vec<Vec<Ballot>> =
-        serde_json::from_str(raw).context("items: not a JSON array of ballot arrays")?;
+        serde_json::from_str(raw).map_err(|e| flag_json("--items", ITEMS_SHAPE, &e.to_string()))?;
     let len = rows.len();
     let mut items = Vec::new();
     let mut kept = Vec::new();
@@ -852,8 +1027,8 @@ fn align_truths(
     let Some(raw) = truths else {
         return Ok(vec![None; kept.len()]);
     };
-    let parsed: Vec<Option<String>> =
-        serde_json::from_str(raw).context("truths: a JSON array of strings or nulls")?;
+    let parsed: Vec<Option<String>> = serde_json::from_str(raw)
+        .map_err(|e| flag_json("--truths", TRUTHS_SHAPE, &e.to_string()))?;
     if parsed.len() != items_len {
         eprintln!("{}", truths_length_line(parsed.len(), items_len));
     }
@@ -871,29 +1046,68 @@ fn truths_length_line(entries: usize, items: usize) -> String {
 }
 
 /// Items for the reliability estimate: `--items` JSON, else every issue of
-/// a tracker project holding two or more ballots.
-fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(String, String)>>> {
+/// a tracker project with two or more ballots. `command` names the
+/// subcommand in every refusal, so a seat that ran one of several can tell
+/// which one stopped.
+fn load_items(
+    command: &str,
+    items: Option<&str>,
+    project: Option<&str>,
+) -> Result<Vec<Vec<(String, String)>>> {
     if let Some(raw) = items {
         return Ok(items_from_json(raw)?.items);
     }
     let Some(project) = project else {
-        bail!("pass --items JSON or --project");
+        return Err(MissingInput("pass --items JSON or --project").into());
+    };
+    let refuse = |what: &str, next: &str, said: &str| {
+        anyhow::anyhow!("{command} --project {project}: {what}; {next}{said}")
     };
     if !which_ok("vissue") {
-        bail!("vissue not on PATH; pass --items JSON");
+        return Err(refuse(
+            "vissue is not on PATH",
+            "install vissue or pass --items JSON",
+            "",
+        ));
     }
     let out = Command::new("vissue")
         .args(["list", "-p", project, "--json"])
+        .stderr(Stdio::piped())
         .output()
-        .context("run vissue list --json")?;
+        .map_err(|_| {
+            refuse(
+                "vissue could not run",
+                "check that it starts, or pass --items JSON",
+                "",
+            )
+        })?;
     if !out.status.success() {
-        bail!(
-            "vissue list -p {project} --json failed\n{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
+        let said = vissue_said(&out.stderr);
+        return Err(if project_not_found(&out.stderr) {
+            refuse(
+                "vissue has no such project",
+                "check the name or pass --items JSON",
+                &said,
+            )
+        } else {
+            let what = match out.status.code() {
+                Some(code) => format!("vissue list exited {code}"),
+                None => "vissue list exited on a signal".to_string(),
+            };
+            refuse(
+                &what,
+                "run vissue list -p by hand, or pass --items JSON",
+                &said,
+            )
+        });
     }
-    let rows: Vec<serde_json::Value> =
-        serde_json::from_slice(&out.stdout).context("vissue list --json: not a JSON array")?;
+    let Ok(rows) = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout) else {
+        return Err(refuse(
+            "vissue list did not print a JSON array",
+            "run vissue list -p by hand, or pass --items JSON",
+            "",
+        ));
+    };
     let mut items = Vec::new();
     for row in rows {
         let Some(id) = row.get("id").and_then(serde_json::Value::as_str) else {
@@ -909,23 +1123,57 @@ fn load_items(items: Option<&str>, project: Option<&str>) -> Result<Vec<Vec<(Str
         }
     }
     if items.is_empty() {
-        bail!("reliability: no issue in {project} holds two or more ballots");
+        return Err(refuse(
+            "no issue has two or more ballots",
+            "check the project or pass --items JSON",
+            "",
+        ));
     }
     Ok(items)
 }
 
+/// The longest `vissue said:` text kept, in characters.
+const VISSUE_SAID_MAX: usize = 120;
+
+/// ` vissue said: ...` with the first line of the tracker's stderr, or
+/// nothing when it wrote none. The rest of what it wrote is dropped, so a
+/// long trace cannot bury the line that names the next step.
+fn vissue_said(stderr: &[u8]) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let Some(line) = text.lines().map(str::trim).find(|line| !line.is_empty()) else {
+        return String::new();
+    };
+    let mut kept: String = line.chars().take(VISSUE_SAID_MAX).collect();
+    if line.chars().count() > VISSUE_SAID_MAX {
+        kept.push_str("...");
+    }
+    format!(". vissue said: {kept}")
+}
+
+/// Whether the tracker's stderr says the project is unknown. Its wording
+/// is not fixed, so this reads for the project and a word that denies it.
+fn project_not_found(stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stderr).to_lowercase();
+    text.contains("project")
+        && ["not found", "no such", "unknown", "does not exist"]
+            .iter()
+            .any(|denial| text.contains(denial))
+}
+
 /// The ballots `vissue vote ID --json` prints, or one line saying why
-/// there are none. vissue's own stderr passes through as it writes it.
+/// there are none. The tracker's stderr is read here, not passed on: its
+/// first line follows `vissue said:` when the read fails.
 fn vote_json(id: &str) -> Result<Vec<Ballot>, String> {
     let out = Command::new("vissue")
         .args(["vote", id, "--json"])
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::piped())
         .output()
-        .map_err(|e| format!("vissue vote {id} --json could not run: {e}"))?;
+        .map_err(|_| format!("vissue vote {id} --json could not run"))?;
     if !out.status.success() {
+        let said = vissue_said(&out.stderr);
         return Err(match out.status.code() {
-            Some(code) => format!("vissue vote {id} --json exited {code}"),
-            None => format!("vissue vote {id} --json exited on a signal"),
+            Some(code) => format!("vissue vote {id} --json exited {code}{said}"),
+            None => format!("vissue vote {id} --json exited on a signal{said}"),
         });
     }
     let raw = String::from_utf8(out.stdout)
@@ -940,15 +1188,14 @@ fn settle_seldon(
     susceptibility: f64,
     max_iter: usize,
     tol: f64,
-    out: Option<PathBuf>,
+    dir: &std::path::Path,
 ) -> Result<Option<ljos_consensus::Outcome>> {
     if (susceptibility - 1.0).abs() > f64::EPSILON {
         bail!("seldon DeGroot has no Friedkin–Johnsen anchor; omit --seldon or set --susceptibility 1");
     }
-    let dir = out.unwrap_or_else(|| PathBuf::from("."));
-    let job = write_seldon_inputs(&dir, ballots, trust, self_weight, max_iter, tol)?;
+    let job = write_seldon_inputs(dir, ballots, trust, self_weight, max_iter, tol)?;
     if !which_ok("seldon") {
-        println!("{}", seldon_absent_line(&dir));
+        println!("{}", seldon_absent_line(dir));
         return Ok(None);
     }
     let config = dir.join("config.toml");
@@ -957,7 +1204,7 @@ fn settle_seldon(
     let st = Command::new("seldon")
         .arg(&config)
         .arg("-o")
-        .arg(&dir)
+        .arg(dir)
         .arg("-n")
         .arg(&network)
         .arg("-a")
@@ -967,7 +1214,7 @@ fn settle_seldon(
     if !st.success() {
         bail!("seldon exited {st}");
     }
-    parse_opinions_dir(&dir, &job.options, max_iter, tol)
+    parse_opinions_dir(dir, &job.options, max_iter, tol)
         .map(Some)
         .map_err(Into::into)
 }
@@ -1017,6 +1264,40 @@ mod tests {
         assert!((out["bound"].as_f64().unwrap() - 0.5).abs() < 1e-12);
         assert_eq!(out["predicted_rounds"], 31);
         assert!(out["note"].is_null());
+    }
+
+    #[test]
+    fn help_flag_before_a_command_names_that_command() {
+        let args: Vec<String> = ["ljos-consensus", "--help", "settle"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            command_help_argv(args),
+            vec!["ljos-consensus", "settle", "--help"]
+        );
+        let short: Vec<String> = ["ljos-consensus", "-h", "correlation"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            command_help_argv(short),
+            vec!["ljos-consensus", "correlation", "-h"]
+        );
+    }
+
+    #[test]
+    fn help_flag_after_a_command_stays_put() {
+        let args: Vec<String> = ["ljos-consensus", "settle", "--help"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(command_help_argv(args.clone()), args);
+        let alone: Vec<String> = ["ljos-consensus", "--help"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(command_help_argv(alone.clone()), alone);
     }
 
     #[test]

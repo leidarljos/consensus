@@ -40,8 +40,9 @@ settles; the shares report where the group's weight ended up.
 $ ljos-consensus settle --issue proj-1a2b | jq -r '.options[.shares | index(max)]'
 #+end_src
 
-=settled= is false when the budget ran out; =engine= says which model
-answered.
+=settled= is false when the leading options are tied or the budget ran
+out. =converged= is false when the budget ran out. =engine= says which
+model answered.
 
 * Cross-check with Seldon
 
@@ -49,7 +50,9 @@ answered.
 $ ljos-consensus settle --issue proj-1a2b --seldon --out run/
 #+end_src
 
-Writes =config.toml=, =network.txt= and =opinions.txt=, runs =seldon= when
-it is on =PATH=, and reads the final opinions back. The parse path does
-not print a residual. When =seldon= is absent the discrete step is the
-settle.
+=--out= names the directory for =config.toml=, =network.txt= and
+=opinions.txt=. Without =--out=, nothing is written and the line says to
+pass =--out DIR=. When =seldon= is not on =PATH= and =--out= is set, the
+files are still written and the command that runs them is printed. The
+parse path does not print a residual. The discrete settle is the same
+command without =--seldon=.

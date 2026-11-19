@@ -2,7 +2,7 @@
 
 Who agrees, weighted by who listens to whom? DeGroot / Friedkin-Johnsen over a trust graph. This crate is the seat model.
 
-**Seldon** ([seldon-code/seldon](https://github.com/seldon-code/seldon)) is the ODE engine. This crate does not link it (GPL). `ljos-consensus settle --seldon` writes a DeGroot TOML plus `network.txt` / `opinions.txt` from ballots and trust, then execs `seldon` when it is on PATH.
+**Seldon** ([seldon-code/seldon](https://github.com/seldon-code/seldon)) is the ODE engine. This crate does not link it (GPL). A build looks for those sources only when `SELDON_SRC` is set. `ljos-consensus settle --seldon` writes a DeGroot TOML plus `network.txt` / `opinions.txt` from ballots and trust, then execs `seldon` when it is on PATH.
 
 `vissue consensus` stays the tracker verb. `ljos consensus` calls this crate first.
 
@@ -19,15 +19,33 @@ The seat that settles through this crate is documented at https://leidarljos.git
 
 ## Install
 
+From this checkout, which is the binary these pages describe:
+
 ```console
+$ cargo install --locked --path .
+```
+
+Cargo puts that binary in `~/.cargo/bin`.
+Add that directory to `PATH` when the shell cannot find `ljos-consensus`.
+`--version` matches `version` in `Cargo.toml`.
+
+The crates.io release is a separate install.
+`cargo binstall` is not a cargo built-in.
+Install that program, then the release:
+
+```console
+$ cargo install --locked cargo-binstall
 $ cargo binstall --locked ljos-consensus
 ```
 
-The crate is on crates.io as `ljos-consensus`.
-The name `consensus` is already a Bitcoin crate.
+`cargo binstall` fetches the current crates.io release.
+That release can be a different version from this checkout, so `--version` may not match these pages.
+The name `consensus` is already a Bitcoin crate, which is why this one is `ljos-consensus`.
 A tag publishes `consensus-v<version>-<target>.tar.gz` and a `.sha256` file, with the `ljos-consensus` binary inside.
 
 ## First minute
+
+The compact sample uses `jq`.
 
 <!-- [[[cog
 import pathlib, sys
@@ -51,7 +69,7 @@ The [tutorial](https://leidarljos.github.io/consensus/getting-started.html) adds
 ```
 ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]'
 ljos-consensus settle --issue ID
-ljos-consensus settle --ballots '[...]' --trust '[{"from":"a","to":"b","weight":1.0}]' --seldon --out dir
+ljos-consensus settle --ballots '[{"agent":"a","choice":"ship"},{"agent":"b","choice":"hold"}]' --trust '[{"from":"a","to":"b","weight":1.0}]' --seldon --out dir
 ```
 
 `--issue` reads `vissue vote ID --json` when that works. Otherwise pass `--ballots`.
@@ -79,5 +97,8 @@ seldon config.toml -o dir -n network.txt -a opinions.txt
 ```
 
 The last `opinions_i.txt` is parsed back into the same `Outcome` the discrete stepper prints. Friedkin-Johnsen (`--susceptibility` below 1) stays on the native `settle()`; Seldon DeGroot has no anchor.
+Without `--out`, nothing is written and the line says to pass `--out DIR`.
+When `seldon` is not on PATH and `--out` is set, the files are still written and the command that runs them is printed.
+The discrete settle is the same command without `--seldon`.
 
 Native `settle()` is the test path. It does not need `seldon` on PATH.

@@ -36,9 +36,9 @@ The code carries the two consequences as functions, not comments:
 =fj_rounds_to_tol= turns it into a round count: the first step moves no
 row by more than the bound (both =W x(0)= and =x(0)= are rows of
 distributions, so their sup distance is at most one), and successive
-differences shrink by the bound, so =err(t) <= bound^t= and
-=t >= ln(tol)/ln(bound)= suffices, plus the first step. A test holds an
-anchored settle to the predicted count. When the bound is not a
+differences shrink by the bound, so =err(t) \le bound^t= and
+=t \ge ln(tol)/ln(bound)= suffices, plus the first step. A test checks an
+anchored settle against the predicted count. When the bound is not a
 contraction (=s_i = 1= everywhere, pure DeGroot), the function returns
 nothing: there is no round count to guarantee, convergence is asymptotic
 under Berger's closed-group conditions
